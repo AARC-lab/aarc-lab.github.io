@@ -1048,11 +1048,9 @@ body {
 
 .contact-homepage
  {
-    font-size: 1em;
-    font-weight: 600;
+    font-size: 0.9em;
+    font-weight: 500;
     color: #2b6cb0;
-    padding: 0.4em 0.8em;
-    transition: all 0.3s ease;
     display: inline-block;
 }
 
