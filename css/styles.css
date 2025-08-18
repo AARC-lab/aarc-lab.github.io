@@ -1050,11 +1050,8 @@ body {
  {
     font-size: 1em;
     font-weight: 600;
-    color: #59a7f0;
-    text-decoration: none;
+    color: #2b6cb0;
     padding: 0.4em 0.8em;
-    border-radius: 6px;
-    background: rgba(89, 167, 240, 0.1);
     transition: all 0.3s ease;
     display: inline-block;
 }
