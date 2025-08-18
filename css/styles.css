@@ -1046,6 +1046,19 @@ body {
     font-weight: 500;
 }
 
+.contact-homepage
+ {
+    font-size: 1em;
+    font-weight: 600;
+    color: #59a7f0;
+    text-decoration: none;
+    padding: 0.4em 0.8em;
+    border-radius: 6px;
+    background: rgba(89, 167, 240, 0.1);
+    transition: all 0.3s ease;
+    display: inline-block;
+}
+
 /* Responsive adjustments for team page */
 @media screen and (max-width: 1024px) and (min-width: 768px) {
     .team-section-title {
