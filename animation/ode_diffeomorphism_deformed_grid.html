@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body { margin: 0; background: transparent; font-family: var(--font-sans, sans-serif); }
+canvas { display: block; border-radius: 8px; }
+.controls {
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  padding: 10px 4px; font-size: 13px; color: var(--color-text-secondary);
+}
+.controls label { display: flex; align-items: center; gap: 6px; }
+input[type=range] { width: 120px; }
+.pill {
+  display: inline-block; padding: 2px 10px; border-radius: 50px; font-size: 11px;
+  font-weight: 500; letter-spacing: .3px;
+}
+.legend { display: flex; gap: 16px; align-items: center; font-size: 12px; color: var(--color-text-secondary); margin-left: auto; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="controls">
+  <label>Time t <input type="range" id="t-slider" min="0" max="3" step="0.01" value="1.2">
+    <span id="t-val" style="min-width:28px">1.2</span></label>
+  <label>Grid <input type="range" id="g-slider" min="6" max="24" step="1" value="14">
+    <span id="g-val" style="min-width:24px">14</span></label>
+  <label style="gap:8px"><input type="checkbox" id="show-both" checked> Show both grids</label>
+  <div class="legend">
+    <span><span class="dot" style="background:#c5ddf7"></span> original</span>
+    <span><span class="dot" style="background:#1a7abf"></span> flow φ_t</span>
+    <span><span class="dot" style="background:#e8833a"></span> particle paths</span>
+  </div>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  const w = canvas.parentElement.clientWidth || 680;
+  canvas.width = w;
+  canvas.height = Math.round(w * 0.72);
+  draw();
+}
+
+// --- ODE: dx/dt = -y + x(1-r²), dy/dt = x + y(1-r²)
+function f(x, y) {
+  const r2 = x*x + y*y;
+  return [-y + x*(1 - r2), x + y*(1 - r2)];
+}
+
+// RK4 integrator
+function rk4(x, y, t, dt=0.02) {
+  let steps = Math.ceil(Math.abs(t) / dt);
+  let h = t / steps;
+  for (let i = 0; i < steps; i++) {
+    let [k1x, k1y] = f(x, y);
+    let [k2x, k2y] = f(x + h/2*k1x, y + h/2*k1y);
+    let [k3x, k3y] = f(x + h/2*k2x, y + h/2*k2y);
+    let [k4x, k4y] = f(x + h*k3x, y + h*k3y);
+    x += h/6*(k1x + 2*k2x + 2*k3x + k4x);
+    y += h/6*(k1y + 2*k2y + 2*k3y + k4y);
+  }
+  return [x, y];
+}
+
+// Map from phase space coords to canvas pixels
+function toCanvas(px, py, cx, cy, scale) {
+  return [cx + px * scale, cy - py * scale];
+}
+
+function draw() {
+  const W = canvas.width, H = canvas.height;
+  const cx = W / 2, cy = H / 2;
+  const scale = Math.min(W, H) / 5.5;
+
+  // Dark/light mode detection
+  const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const bgCol     = isDark ? '#1a1a1e' : '#f6faff';
+  const origCol   = isDark ? 'rgba(180,210,245,0.22)' : 'rgba(150,190,230,0.45)';
+  const warpCol   = isDark ? '#4fa3e8' : '#1a7abf';
+  const dotOrig   = isDark ? 'rgba(180,210,245,0.35)' : 'rgba(100,160,220,0.5)';
+  const dotWarp   = isDark ? '#5ab3f5' : '#1460a0';
+  const pathCol   = isDark ? 'rgba(240,150,80,0.55)' : 'rgba(220,110,30,0.45)';
+  const pathHead  = isDark ? '#f4a261' : '#e8833a';
+  const limitCol  = isDark ? 'rgba(240,100,80,0.5)' : 'rgba(200,60,40,0.45)';
+  const axisCol   = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)';
+
+  ctx.fillStyle = bgCol;
+  ctx.fillRect(0, 0, W, H);
+
+  const t = parseFloat(document.getElementById('t-slider').value);
+  const N = parseInt(document.getElementById('g-slider').value);
+  const showBoth = document.getElementById('show-both').checked;
+
+  // Grid bounds in phase space
+  const RANGE = 2.4;
+  const pts = [];
+  for (let i = 0; i <= N; i++) {
+    pts.push(-RANGE + i * 2*RANGE/N);
+  }
+
+  // Precompute all mapped points
+  const mapped = new Map();
+  for (let i = 0; i <= N; i++) {
+    for (let j = 0; j <= N; j++) {
+      const px = pts[i], py = pts[j];
+      const [mx, my] = rk4(px, py, t);
+      mapped.set(`${i},${j}`, [mx, my]);
+    }
+  }
+
+  // Draw axes
+  ctx.strokeStyle = axisCol;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, cy); ctx.lineTo(W, cy);
+  ctx.moveTo(cx, 0); ctx.lineTo(cx, H);
+  ctx.stroke();
+
+  // Draw limit cycle
+  ctx.beginPath();
+  ctx.setLineDash([5, 5]);
+  ctx.strokeStyle = limitCol;
+  ctx.lineWidth = 1.2;
+  for (let a = 0; a <= 2*Math.PI; a += 0.02) {
+    const [sx, sy] = toCanvas(Math.cos(a), Math.sin(a), cx, cy, scale);
+    if (a === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Draw original grid (light)
+  if (showBoth) {
+    ctx.strokeStyle = origCol;
+    ctx.lineWidth = 0.9;
+    // rows
+    for (let j = 0; j <= N; j++) {
+      ctx.beginPath();
+      for (let i = 0; i <= N; i++) {
+        const [sx, sy] = toCanvas(pts[i], pts[j], cx, cy, scale);
+        i === 0 ? ctx.moveTo(sx, sy) : ctx.lineTo(sx, sy);
+      }
+      ctx.stroke();
+    }
+    // cols
+    for (let i = 0; i <= N; i++) {
+      ctx.beginPath();
+      for (let j = 0; j <= N; j++) {
+        const [sx, sy] = toCanvas(pts[i], pts[j], cx, cy, scale);
+        j === 0 ? ctx.moveTo(sx, sy) : ctx.lineTo(sx, sy);
+      }
+      ctx.stroke();
+    }
+    // original dots
+    ctx.fillStyle = dotOrig;
+    for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
+      const [sx, sy] = toCanvas(pts[i], pts[j], cx, cy, scale);
+      ctx.beginPath(); ctx.arc(sx, sy, 1.5, 0, 2*Math.PI); ctx.fill();
+    }
+  }
+
+  // Draw particle paths (orange arcs from original to mapped)
+  if (showBoth && t > 0.05) {
+    ctx.strokeStyle = pathCol;
+    ctx.lineWidth = 0.7;
+    const step = Math.max(1, Math.floor(N/7));
+    for (let i = 0; i <= N; i += step) {
+      for (let j = 0; j <= N; j += step) {
+        const px0 = pts[i], py0 = pts[j];
+        const [mx, my] = mapped.get(`${i},${j}`);
+        const [sx0, sy0] = toCanvas(px0, py0, cx, cy, scale);
+        const [sx1, sy1] = toCanvas(mx, my, cx, cy, scale);
+        // draw a few intermediate points for curved arc feel
+        ctx.beginPath(); ctx.moveTo(sx0, sy0);
+        let ox = px0, oy = py0;
+        const steps = 8;
+        for (let s = 1; s <= steps; s++) {
+          const [ix, iy] = rk4(px0, py0, t * s / steps);
+          const [six, siy] = toCanvas(ix, iy, cx, cy, scale);
+          ctx.lineTo(six, siy);
+        }
+        ctx.stroke();
+        // arrowhead
+        const dx = sx1 - toCanvas(...rk4(px0, py0, t*0.9), cx, cy, scale)[0];
+        const dy = sy1 - toCanvas(...rk4(px0, py0, t*0.9), cx, cy, scale)[1];
+        const ang = Math.atan2(dy, dx);
+        ctx.fillStyle = pathHead;
+        ctx.beginPath();
+        ctx.moveTo(sx1, sy1);
+        ctx.lineTo(sx1 - 6*Math.cos(ang-0.4), sy1 - 6*Math.sin(ang-0.4));
+        ctx.lineTo(sx1 - 6*Math.cos(ang+0.4), sy1 - 6*Math.sin(ang+0.4));
+        ctx.closePath(); ctx.fill();
+      }
+    }
+  }
+
+  // Draw warped grid (the diffeomorphism image) — the hero
+  // Draw cells as quads for a filled mosaic look (like the reference image)
+  for (let i = 0; i < N; i++) {
+    for (let j = 0; j < N; j++) {
+      const [ax, ay] = mapped.get(`${i},${j}`);
+      const [bx, by] = mapped.get(`${i+1},${j}`);
+      const [cx2, cy2] = mapped.get(`${i+1},${j+1}`);
+      const [dx, dy] = mapped.get(`${i},${j+1}`);
+      const [sax, say] = toCanvas(ax, ay, cx, cy, scale);
+      const [sbx, sby] = toCanvas(bx, by, cx, cy, scale);
+      const [scx, scy] = toCanvas(cx2, cy2, cx, cy, scale);
+      const [sdx, sdy] = toCanvas(dx, dy, cx, cy, scale);
+
+      // Color cells by initial radius gradient (like reference image)
+      const r0 = Math.hypot(pts[i] + RANGE/N, pts[j] + RANGE/N);
+      const hue = 200 + (r0 / (RANGE*1.4)) * 30; // 200..230 blue range
+      const sat = isDark ? 60 : 70;
+      const lig = isDark ? 35 + r0*8 : 72 - r0*8;
+      ctx.fillStyle = `hsla(${hue},${sat}%,${lig}%,0.18)`;
+      ctx.beginPath();
+      ctx.moveTo(sax, say); ctx.lineTo(sbx, sby);
+      ctx.lineTo(scx, scy); ctx.lineTo(sdx, sdy);
+      ctx.closePath(); ctx.fill();
+    }
+  }
+
+  // Warped grid lines (the main blue mesh — hero element)
+  ctx.strokeStyle = warpCol;
+  ctx.lineWidth = 1.4;
+  // rows of warped grid
+  for (let j = 0; j <= N; j++) {
+    ctx.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const [mx, my] = mapped.get(`${i},${j}`);
+      const [sx, sy] = toCanvas(mx, my, cx, cy, scale);
+      i === 0 ? ctx.moveTo(sx, sy) : ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+  }
+  // cols of warped grid
+  for (let i = 0; i <= N; i++) {
+    ctx.beginPath();
+    for (let j = 0; j <= N; j++) {
+      const [mx, my] = mapped.get(`${i},${j}`);
+      const [sx, sy] = toCanvas(mx, my, cx, cy, scale);
+      j === 0 ? ctx.moveTo(sx, sy) : ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+  }
+  // Warped dots
+  ctx.fillStyle = dotWarp;
+  for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
+    const [mx, my] = mapped.get(`${i},${j}`);
+    const [sx, sy] = toCanvas(mx, my, cx, cy, scale);
+    ctx.beginPath(); ctx.arc(sx, sy, 2, 0, 2*Math.PI); ctx.fill();
+  }
+
+  // Label
+  ctx.font = '11px var(--font-sans, sans-serif)';
+  ctx.fillStyle = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.3)';
+  ctx.fillText(`φ_t  t = ${t.toFixed(2)}`, 12, 18);
+}
+
+document.getElementById('t-slider').addEventListener('input', e => {
+  document.getElementById('t-val').textContent = parseFloat(e.target.value).toFixed(2);
+  draw();
+});
+document.getElementById('g-slider').addEventListener('input', e => {
+  document.getElementById('g-val').textContent = e.target.value;
+  draw();
+});
+document.getElementById('show-both').addEventListener('change', draw);
+
+window.addEventListener('resize', resize);
+resize();
+</script>
+</body>
+</html>
