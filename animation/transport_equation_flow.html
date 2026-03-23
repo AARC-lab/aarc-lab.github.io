@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Transport Equation — Flow & Diffeomorphism</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
+
+:root {
+  --bg:       #0a0d14;
+  --surface:  #111520;
+  --border:   rgba(255,255,255,0.07);
+  --blue:     #4a9eff;
+  --blue-dim: rgba(74,158,255,0.18);
+  --teal:     #3ecfb2;
+  --amber:    #f5c842;
+  --coral:    #ff6b6b;
+  --text:     #e8eaf0;
+  --muted:    #6b7280;
+  --card:     rgba(255,255,255,0.03);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 300;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* subtle grid bg */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(74,158,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74,158,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.wrap { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 32px 24px 60px; }
+
+/* ── Header ── */
+header { margin-bottom: 36px; }
+.label-tag {
+  display: inline-block;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--blue);
+  border: 1px solid rgba(74,158,255,0.3);
+  border-radius: 3px;
+  padding: 3px 9px;
+  margin-bottom: 14px;
+}
+h1 {
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(1.6rem, 4vw, 2.6rem);
+  font-weight: 400;
+  line-height: 1.2;
+  color: #fff;
+  margin-bottom: 10px;
+}
+h1 em { font-style: italic; color: var(--blue); }
+.subtitle {
+  font-size: 0.9rem;
+  color: var(--muted);
+  max-width: 640px;
+  line-height: 1.7;
+}
+
+/* ── PDE display ── */
+.pde-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--blue);
+  border-radius: 8px;
+  padding: 18px 24px;
+  margin-bottom: 28px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.pde-eq {
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(1rem, 2.5vw, 1.5rem);
+  color: #fff;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.pde-eq .op  { color: var(--blue); }
+.pde-eq .fn  { color: var(--teal); }
+.pde-eq .vec { color: var(--amber); }
+.pde-desc {
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.9;
+  flex: 1;
+  min-width: 200px;
+}
+.pde-desc span { color: var(--text); font-weight: 400; }
+
+/* ── Main grid ── */
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+@media (max-width: 700px) { .main-grid { grid-template-columns: 1fr; } }
+
+/* ── Canvas panels ── */
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.panel-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.panel-badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: rgba(74,158,255,0.1);
+  color: var(--blue);
+  border: 1px solid rgba(74,158,255,0.2);
+}
+canvas { display: block; width: 100%; }
+
+/* ── Full-width panel ── */
+.panel-wide {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+/* ── Controls ── */
+.controls-bar {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.ctrl-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.ctrl-group label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.08em; color: var(--muted); }
+.ctrl-group .val { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text); min-width: 32px; }
+
+input[type=range] {
+  -webkit-appearance: none;
+  width: 100px; height: 3px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px; outline: none; cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: var(--blue);
+  border: 2px solid var(--bg);
+  cursor: pointer;
+}
+input[type=range]::-moz-range-thumb {
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: var(--blue);
+  border: 2px solid var(--bg);
+  cursor: pointer;
+}
+
+select {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  padding: 4px 8px;
+  cursor: pointer;
+  outline: none;
+}
+
+.btn-play {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--blue);
+  color: #000;
+  border: none;
+  border-radius: 5px;
+  padding: 7px 16px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-play:hover { background: #6db3ff; }
+.btn-reset {
+  display: flex; align-items: center; gap: 6px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 7px 14px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.btn-reset:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+
+.sep { width: 1px; height: 28px; background: var(--border); flex-shrink: 0; }
+
+.legend-row {
+  display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  margin-left: auto;
+}
+.leg-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.leg-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.leg-line { width: 18px; height: 2px; flex-shrink: 0; }
+.leg-dash { width: 18px; height: 2px; background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px); flex-shrink: 0; }
+
+/* ── Explanation section ── */
+.explainer { margin-bottom: 28px; }
+
+.explainer-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+@media (max-width: 700px) { .explainer-grid { grid-template-columns: 1fr; } }
+
+.explainer-full { margin-bottom: 14px; }
+
+.exp-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px 22px;
+}
+.exp-card.accent-blue  { border-left: 3px solid var(--blue); }
+.exp-card.accent-teal  { border-left: 3px solid var(--teal); }
+.exp-card.accent-amber { border-left: 3px solid var(--amber); }
+.exp-card.accent-coral { border-left: 3px solid var(--coral); }
+
+.exp-tag {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.exp-card h3 {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.05rem;
+  font-weight: 400;
+  color: #fff;
+  margin-bottom: 10px;
+  line-height: 1.3;
+}
+.exp-card p {
+  font-size: 0.83rem;
+  color: #9ca3af;
+  line-height: 1.8;
+  margin-bottom: 8px;
+}
+.exp-card p:last-child { margin-bottom: 0; }
+.exp-card strong { color: var(--text); font-weight: 500; }
+.exp-card em { color: var(--teal); font-style: normal; }
+.exp-card code {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.78rem;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: var(--amber);
+}
+
+.exp-formula {
+  font-family: 'DM Serif Display', serif;
+  font-size: 0.95rem;
+  color: #fff;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin: 10px 0;
+  letter-spacing: 0.02em;
+}
+.exp-formula .hi-blue  { color: var(--blue); }
+.exp-formula .hi-teal  { color: var(--teal); }
+.exp-formula .hi-amber { color: var(--amber); }
+.exp-formula .hi-coral { color: var(--coral); }
+
+.steps-list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+  counter-reset: step;
+}
+.steps-list li {
+  font-size: 0.82rem;
+  color: #9ca3af;
+  line-height: 1.75;
+  padding: 7px 0 7px 32px;
+  position: relative;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  counter-increment: step;
+}
+.steps-list li:last-child { border-bottom: none; }
+.steps-list li::before {
+  content: counter(step);
+  position: absolute; left: 0; top: 7px;
+  width: 20px; height: 20px;
+  background: rgba(74,158,255,0.15);
+  border: 1px solid rgba(74,158,255,0.3);
+  border-radius: 50%;
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  color: var(--blue);
+  display: flex; align-items: center; justify-content: center;
+  text-align: center;
+  line-height: 20px;
+}
+.steps-list li strong { color: var(--text); font-weight: 500; }
+
+.field-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  margin-top: 10px;
+}
+.field-table th {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.field-table td {
+  padding: 8px 10px;
+  color: #9ca3af;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  line-height: 1.5;
+}
+.field-table td:first-child { color: var(--amber); font-family: 'DM Mono', monospace; font-size: 0.75rem; }
+.field-table tr:last-child td { border-bottom: none; }
+
+.section-divider {
+  display: flex; align-items: center; gap: 12px;
+  margin: 22px 0 16px;
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.section-divider::before, .section-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+
+/* ── Info strip ── */
+.info-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.info-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.info-card .ic-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.info-card .ic-val {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.5rem;
+  color: #fff;
+  line-height: 1;
+}
+.info-card .ic-sub {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 4px;
+  font-family: 'DM Mono', monospace;
+}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <header>
+    <h1>Transport Equation <em>Flow</em></h1>
+    <p class="subtitle">
+      The linear transport equation ∂<sub>t</sub>u + a(x)·∇u = 0 propagates initial data
+      along <em>characteristic curves</em> — the integral curves of the velocity field a(x).
+      Each characteristic is an orbit of the ODE ẋ = a(x), and the map sending
+      initial positions to positions at time t is a <strong>diffeomorphism</strong>.
+    </p>
+  </header>
+
+  <!-- PDE card -->
+  <div class="pde-card">
+    <div class="pde-eq">
+      <span class="op">∂</span><sub>t</sub><span class="fn">u</span>(t,x)
+      &nbsp;+&nbsp;
+      <span class="vec">a</span>(x) · <span class="op">∇</span><span class="fn">u</span>(t,x)
+      &nbsp;= 0
+    </div>
+    <div class="pde-desc">
+      <span>u(t,x)</span> — scalar field being transported<br>
+      <span>a(x)</span> — velocity field (may be nonlinear)<br>
+      <span>Characteristics:</span> ẋ = a(x(t)),  u(t, x(t)) = const<br>
+      <span>Solution:</span> u(t,x) = u₀(φ<sub>−t</sub>(x)) = u₀ ∘ φ<sub>−t</sub>
+    </div>
+  </div>
+
+  <!-- ══ EXPLANATION SECTION ══ -->
+  <div class="explainer">
+
+    <div class="section-divider">What is the transport equation?</div>
+
+    <!-- Row 1: Intuition + What it models -->
+    <div class="explainer-grid">
+      <div class="exp-card accent-blue">
+        <div class="exp-tag">Core Idea</div>
+        <h3>Moving a quantity without changing its value</h3>
+        <p>
+          Imagine pouring dye into a flowing river. The dye is carried downstream, but the
+          <strong>amount of dye at each fluid particle stays constant</strong> — it just moves
+          to a new location. The transport equation is the mathematical description of exactly this.
+        </p>
+        <p>
+          The scalar field <em>u(t,x)</em> represents the quantity being carried (temperature,
+          concentration, density). The vector field <strong>a(x)</strong> is the velocity that
+          carries it. The PDE says: the total rate of change of <em>u</em> along any moving
+          fluid particle is zero.
+        </p>
+        <div class="exp-formula">
+          <span class="hi-blue">∂<sub>t</sub>u</span> + <span class="hi-amber">a(x)</span> · <span class="hi-blue">∇u</span> = 0
+          &nbsp;&nbsp;⟺&nbsp;&nbsp;
+          <span class="hi-teal">d/dt u(t, x(t)) = 0</span>
+        </div>
+        <p>
+          The left form is the Eulerian view (fixed coordinates). The right form is the
+          Lagrangian view (following the particle) — and they are equivalent.
+        </p>
+      </div>
+
+      <div class="exp-card accent-teal">
+        <div class="exp-tag">Physical Interpretation</div>
+        <h3>What it models in the real world</h3>
+        <p>
+          The transport equation appears whenever a quantity is <strong>passively advected</strong>
+          by a flow, with no diffusion and no sources. Real applications include:
+        </p>
+        <ul class="steps-list">
+          <li><strong>Pollutant transport</strong> — concentration of a contaminant swept by wind or water currents</li>
+          <li><strong>Color / dye advection</strong> — ink carried in a fluid, used to visualise flow fields</li>
+          <li><strong>Kinetic theory</strong> — the Liouville equation governing probability density in phase space</li>
+          <li><strong>Image warping</strong> — deforming a texture by a velocity field, used in computer vision and medical imaging</li>
+          <li><strong>Shallow water / geophysics</strong> — passive scalar transport in ocean and atmosphere models</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Row 2: Method of characteristics + Diffeomorphism -->
+    <div class="explainer-grid">
+      <div class="exp-card accent-amber">
+        <div class="exp-tag">Solution Method</div>
+        <h3>Method of characteristics — solving along curves</h3>
+        <p>
+          The key insight is that the PDE reduces to an <strong>ODE along special curves</strong>
+          called <em>characteristics</em>. These are the trajectories of the velocity field.
+        </p>
+        <div class="exp-formula">
+          Characteristic ODE:&nbsp;&nbsp; <span class="hi-amber">ẋ(t) = a(x(t))</span>,&nbsp; x(0) = x₀<br>
+          Solution formula:&nbsp;&nbsp;&nbsp;&nbsp; <span class="hi-teal">u(t, x(t)) = u₀(x₀)</span>
+        </div>
+        <p>
+          To find <em>u</em> at any point <em>(t, x)</em>, you trace the characteristic backward
+          from <em>x</em> to time 0, arriving at some initial point <em>x₀</em>. The answer
+          is simply <code>u₀(x₀)</code> — the initial data at the foot of the characteristic.
+        </p>
+        <p>
+          This is the <strong>pull-back formula</strong>: <code>u(t,x) = u₀(φ<sub>−t</sub>(x))</code>,
+          where φ<sub>−t</sub> integrates the ODE backward. The animation in Panel 2 computes
+          exactly this for every pixel.
+        </p>
+      </div>
+
+      <div class="exp-card accent-coral">
+        <div class="exp-tag">Diffeomorphism Connection</div>
+        <h3>Why the flow map is a diffeomorphism</h3>
+        <p>
+          The <strong>flow map</strong> φ<sub>t</sub> sends every initial point x₀ to
+          its position x(t) under the ODE ẋ = a(x). For a smooth velocity field a(x),
+          the Picard–Lindelöf theorem guarantees:
+        </p>
+        <ul class="steps-list">
+          <li><strong>Existence & uniqueness</strong> — every point has exactly one characteristic through it</li>
+          <li><strong>Smooth dependence</strong> — φ<sub>t</sub> is C<sup>∞</sup> in both t and x₀</li>
+          <li><strong>Group law</strong> — φ<sub>s</sub> ∘ φ<sub>t</sub> = φ<sub>s+t</sub>, so φ<sub>−t</sub> = (φ<sub>t</sub>)<sup>−1</sup></li>
+        </ul>
+        <p>
+          Together these mean φ<sub>t</sub> is a <strong>bijection with smooth inverse</strong> — a
+          diffeomorphism. The deformed blue grid in Panel 1 shows its image: smooth curves,
+          no crossings, no folding.
+        </p>
+        <div class="exp-formula">
+          <span class="hi-coral">det(Dφ<sub>t</sub>)</span> &gt; 0 everywhere
+          &nbsp;⟺&nbsp; orientation-preserving diffeomorphism
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 3: Conservation + Jacobian (full width) -->
+    <div class="explainer-full">
+      <div class="exp-card accent-blue">
+        <div class="exp-tag">Conservation & Jacobian — What changes, what doesn't</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;flex-wrap:wrap">
+          <div>
+            <h3 style="font-size:0.95rem">L∞ norm is preserved</h3>
+            <p>
+              Because <em>u</em> is constant along each characteristic,
+              its maximum and minimum values never change. The sup-norm
+              <code>‖u(t,·)‖<sub>∞</sub> = ‖u₀‖<sub>∞</sub></code>
+              for all t. The animation shows this: the bright peak neither grows nor fades,
+              it only moves.
+            </p>
+          </div>
+          <div>
+            <h3 style="font-size:0.95rem">L¹ norm and area distortion</h3>
+            <p>
+              The total "mass" <code>∫u dx</code> is preserved <em>only if</em>
+              div a = 0 (incompressible flow). For a general a(x), the Jacobian
+              det(Dφ<sub>t</sub>) ≠ 1, so volumes are distorted and the L¹ norm
+              can change. Panel 6 in the earlier PDF showed exactly this.
+            </p>
+          </div>
+          <div>
+            <h3 style="font-size:0.95rem">Liouville's theorem</h3>
+            <p>
+              The Jacobian satisfies
+              <code>d/dt det(Dφ<sub>t</sub>) = (div a)(φ<sub>t</sub>) · det(Dφ<sub>t</sub>)</code>.
+              For the spiral field, div a = 2(1 − 2r²), which is negative near the limit
+              cycle — the flow contracts area there, as you can see from the compressed
+              grid cells.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 4: Velocity fields table -->
+    <div class="explainer-full">
+      <div class="exp-card accent-teal">
+        <div class="exp-tag">The four velocity fields in this demo</div>
+        <table class="field-table">
+          <thead>
+            <tr><th>Field a(x,y)</th><th>Formula</th><th>Key behaviour</th><th>Characteristics look like</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Spiral / limit cycle</td>
+              <td style="color:#9ca3af">ẋ = −y + x(1−r²)<br>ẏ = x + y(1−r²)</td>
+              <td>Orbits spiral onto the unit circle; angular speed constant. Stable limit cycle at r = 1.</td>
+              <td>Inward/outward spirals that converge to a circle</td>
+            </tr>
+            <tr>
+              <td>Nonlinear shear</td>
+              <td style="color:#9ca3af">ẋ = 1.2 sin(y)<br>ẏ = 0.8 cos(x)</td>
+              <td>Periodic oscillation in both directions; creates cat's-eye vortices. No global attractors.</td>
+              <td>Wavy horizontal bands with closed cat's-eye loops</td>
+            </tr>
+            <tr>
+              <td>Saddle / hyperbolic</td>
+              <td style="color:#9ca3af">ẋ = x(1−x²)<br>ẏ = −y(1−y²)</td>
+              <td>Unstable fixed point at origin; stable manifolds along y-axis, unstable along x-axis. Strong shearing.</td>
+              <td>Hyperbolic curves; strong stretching near origin</td>
+            </tr>
+            <tr>
+              <td>Pure vortex</td>
+              <td style="color:#9ca3af">ẋ = −y/(r+0.3)<br>ẏ = x/(r+0.3)</td>
+              <td>Purely rotational; divergence-free (incompressible). Area is preserved exactly: det(Dφ<sub>t</sub>) = 1.</td>
+              <td>Concentric circles; grid cells keep the same area</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /explainer -->
+
+  <!-- Info strip -->
+  <div class="info-strip">
+    <div class="info-card">
+      <div class="ic-label">Current time</div>
+      <div class="ic-val" id="info-t">0.00</div>
+      <div class="ic-sub">t ∈ [0, 3]</div>
+    </div>
+    <div class="info-card">
+      <div class="ic-label">Max |u| (conservation)</div>
+      <div class="ic-val" id="info-maxu">1.00</div>
+      <div class="ic-sub">L∞ norm preserved along chars.</div>
+    </div>
+    <div class="info-card">
+      <div class="ic-label">Det(Dφ_t) range</div>
+      <div class="ic-val" id="info-det">1.00</div>
+      <div class="ic-sub">min det shown — confirms diffeomorphism</div>
+    </div>
+    <div class="info-card">
+      <div class="ic-label">Velocity field</div>
+      <div class="ic-val" id="info-field" style="font-size:1rem;margin-top:4px">—</div>
+      <div class="ic-sub">a(x) driving the flow</div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls-bar">
+    <button class="btn-play" id="btn-play" onclick="togglePlay()">▶ Play</button>
+    <button class="btn-reset" onclick="resetAnim()">↺ Reset</button>
+    <div class="sep"></div>
+    <div class="ctrl-group">
+      <label>TIME t</label>
+      <input type="range" id="t-slider" min="0" max="3" step="0.01" value="0" oninput="onSlider(this)">
+      <span class="val" id="t-val">0.00</span>
+    </div>
+    <div class="ctrl-group">
+      <label>GRID N</label>
+      <input type="range" id="g-slider" min="8" max="26" step="1" value="18" oninput="draw()">
+      <span class="val" id="g-val">18</span>
+    </div>
+    <div class="ctrl-group">
+      <label>FIELD a(x)</label>
+      <select id="field-sel" onchange="draw()">
+        <option value="spiral">Spiral sink/limit cycle</option>
+        <option value="shear">Nonlinear shear</option>
+        <option value="saddle">Saddle / hyperbolic</option>
+        <option value="vortex">Pure vortex</option>
+      </select>
+    </div>
+    <div class="legend-row">
+      <div class="leg-item"><span class="leg-line" style="background:rgba(100,170,255,0.35)"></span> original grid</div>
+      <div class="leg-item"><span class="leg-line" style="background:#4a9eff"></span> φ_t (flow image)</div>
+      <div class="leg-item"><span class="leg-dash" style="color:#ff6b6b"></span> characteristic</div>
+    </div>
+  </div>
+
+  <!-- Main canvases -->
+  <div class="main-grid">
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Deformed Grid — Diffeomorphism φ_t</span>
+        <span class="panel-badge">GRID</span>
+      </div>
+      <canvas id="c-grid"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Scalar Field u(t,x) transported</span>
+        <span class="panel-badge">FIELD</span>
+      </div>
+      <canvas id="c-field"></canvas>
+    </div>
+  </div>
+
+  <!-- Characteristic curves panel -->
+  <div class="panel-wide">
+    <div class="panel-header">
+      <span class="panel-title">Characteristic curves — ẋ = a(x),  u constant along each curve</span>
+      <span class="panel-badge">CHARACTERISTICS</span>
+    </div>
+    <canvas id="c-chars"></canvas>
+  </div>
+
+</div><!-- /wrap -->
+
+<script>
+// ────────────────────────────────────────────────
+//  VELOCITY FIELDS  a(x,y)
+// ────────────────────────────────────────────────
+const FIELDS = {
+  spiral: {
+    name: 'spiral',
+    label: 'Spiral: -y+x(1-r²), x+y(1-r²)',
+    fn: (x,y) => {
+      const r2 = x*x+y*y;
+      return [-y + x*(1-r2), x + y*(1-r2)];
+    }
+  },
+  shear: {
+    name: 'shear',
+    label: 'Shear: sin(y), cos(x)',
+    fn: (x,y) => [Math.sin(y)*1.2, Math.cos(x)*0.8]
+  },
+  saddle: {
+    name: 'saddle',
+    label: 'Saddle: x(1-x²), -y(1-y²)',
+    fn: (x,y) => [x*(1-x*x)*0.9, -y*(1-y*y)*0.9]
+  },
+  vortex: {
+    name: 'vortex',
+    label: 'Vortex: -y/(r+0.3), x/(r+0.3)',
+    fn: (x,y) => {
+      const r = Math.sqrt(x*x+y*y)+0.3;
+      return [-y/r, x/r];
+    }
+  }
+};
+
+// ────────────────────────────────────────────────
+//  RK4 integrator
+// ────────────────────────────────────────────────
+function rk4(x, y, t, field, dt=0.025) {
+  if (Math.abs(t) < 1e-9) return [x, y];
+  const steps = Math.ceil(Math.abs(t) / dt);
+  const h = t / steps;
+  for (let i = 0; i < steps; i++) {
+    const [k1x,k1y] = field(x, y);
+    const [k2x,k2y] = field(x+h/2*k1x, y+h/2*k1y);
+    const [k3x,k3y] = field(x+h/2*k2x, y+h/2*k2y);
+    const [k4x,k4y] = field(x+h*k3x,   y+h*k3y);
+    x += h/6*(k1x+2*k2x+2*k3x+k4x);
+    y += h/6*(k1y+2*k2y+2*k3y+k4y);
+  }
+  return [x, y];
+}
+
+// Jacobian det via finite differences
+function jacDet(x, y, t, field) {
+  const eps = 0.004;
+  const [f0x,f0y] = rk4(x, y, t, field);
+  const [fex,fey] = rk4(x+eps, y, t, field);
+  const [fyx,fyy] = rk4(x, y+eps, t, field);
+  const J00=(fex-f0x)/eps, J10=(fey-f0y)/eps;
+  const J01=(fyx-f0x)/eps, J11=(fyy-f0y)/eps;
+  return J00*J11 - J01*J10;
+}
+
+// Initial condition u0(x,y) — Gaussian bump
+function u0(x, y) {
+  return Math.exp(-((x-0.5)*(x-0.5) + (y-0.3)*(y-0.3))*3.5)
+       + 0.7*Math.exp(-((x+0.6)*(x+0.6) + (y+0.5)*(y+0.5))*4);
+}
+
+// ────────────────────────────────────────────────
+//  Canvas helpers
+// ────────────────────────────────────────────────
+function toCanvas(px, py, cx, cy, sc) {
+  return [cx + px*sc, cy - py*sc];
+}
+function fromCanvas(sx, sy, cx, cy, sc) {
+  return [(sx-cx)/sc, -(sy-cy)/sc];
+}
+
+// ────────────────────────────────────────────────
+//  State
+// ────────────────────────────────────────────────
+let T = 0;
+let playing = false;
+let lastTime = null;
+let rafId = null;
+const RANGE = 2.3;
+
+function getField() {
+  return FIELDS[document.getElementById('field-sel').value];
+}
+function getT() { return T; }
+function getN() { return parseInt(document.getElementById('g-slider').value); }
+
+// ────────────────────────────────────────────────
+//  PANEL 1 — Deformed grid
+// ────────────────────────────────────────────────
+function drawGrid() {
+  const canvas = document.getElementById('c-grid');
+  const W = canvas.width, H = canvas.height;
+  const cx = W/2, cy = H/2;
+  const sc = Math.min(W,H)/5.2;
+  const ctx = canvas.getContext('2d');
+  const field = getField().fn;
+  const t = getT();
+  const N = getN();
+
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#0a0d14';
+  ctx.fillRect(0,0,W,H);
+
+  // axes
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(W,cy);
+  ctx.moveTo(cx,0); ctx.lineTo(cx,H); ctx.stroke();
+
+  const pts = [];
+  for (let i=0;i<=N;i++) pts.push(-RANGE + i*2*RANGE/N);
+
+  // Precompute mapped
+  const M = [];
+  for (let i=0;i<=N;i++) {
+    M.push([]);
+    for (let j=0;j<=N;j++) M[i].push(rk4(pts[i],pts[j],t,field));
+  }
+
+  // Cell fills
+  for (let i=0;i<N;i++) for (let j=0;j<N;j++) {
+    const corners = [[i,j],[i+1,j],[i+1,j+1],[i,j+1]];
+    const r0 = Math.hypot(pts[i], pts[j]);
+    const hue = 205 + (r0/RANGE)*25;
+    ctx.fillStyle = `hsla(${hue},65%,55%,0.10)`;
+    ctx.beginPath();
+    corners.forEach(([ci,cj],k) => {
+      const [mx,my] = M[ci][cj];
+      const [sx,sy] = toCanvas(mx,my,cx,cy,sc);
+      k===0 ? ctx.moveTo(sx,sy) : ctx.lineTo(sx,sy);
+    });
+    ctx.closePath(); ctx.fill();
+  }
+
+  // Original grid (faint)
+  ctx.strokeStyle = 'rgba(100,160,255,0.2)';
+  ctx.lineWidth = 0.7;
+  for (let j=0;j<=N;j++) {
+    ctx.beginPath();
+    for (let i=0;i<=N;i++) {
+      const [sx,sy] = toCanvas(pts[i],pts[j],cx,cy,sc);
+      i===0 ? ctx.moveTo(sx,sy) : ctx.lineTo(sx,sy);
+    }
+    ctx.stroke();
+  }
+  for (let i=0;i<=N;i++) {
+    ctx.beginPath();
+    for (let j=0;j<=N;j++) {
+      const [sx,sy] = toCanvas(pts[i],pts[j],cx,cy,sc);
+      j===0 ? ctx.moveTo(sx,sy) : ctx.lineTo(sx,sy);
+    }
+    ctx.stroke();
+  }
+
+  // Warped grid (blue mesh — hero)
+  ctx.strokeStyle = '#4a9eff';
+  ctx.lineWidth = 1.2;
+  for (let j=0;j<=N;j++) {
+    ctx.beginPath();
+    for (let i=0;i<=N;i++) {
+      const [mx,my] = M[i][j];
+      const [sx,sy] = toCanvas(mx,my,cx,cy,sc);
+      i===0 ? ctx.moveTo(sx,sy) : ctx.lineTo(sx,sy);
+    }
+    ctx.stroke();
+  }
+  for (let i=0;i<=N;i++) {
+    ctx.beginPath();
+    for (let j=0;j<=N;j++) {
+      const [mx,my] = M[i][j];
+      const [sx,sy] = toCanvas(mx,my,cx,cy,sc);
+      j===0 ? ctx.moveTo(sx,sy) : ctx.lineTo(sx,sy);
+    }
+    ctx.stroke();
+  }
+
+  // Dots on warped grid
+  ctx.fillStyle = '#3a8fd6';
+  for (let i=0;i<=N;i++) for (let j=0;j<=N;j++) {
+    const [mx,my] = M[i][j];
+    const [sx,sy] = toCanvas(mx,my,cx,cy,sc);
+    ctx.beginPath(); ctx.arc(sx,sy,1.8,0,2*Math.PI); ctx.fill();
+  }
+
+  // Jacobian heatmap overlay (small sample)
+  let minDet = Infinity;
+  const sampleStep = Math.max(1, Math.floor(N/6));
+  for (let i=1;i<N;i+=sampleStep) for (let j=1;j<N;j+=sampleStep) {
+    const d = jacDet(pts[i],pts[j],t,field);
+    if (d < minDet) minDet = d;
+  }
+  document.getElementById('info-det').textContent = isFinite(minDet) ? minDet.toFixed(3) : '—';
+
+  // Time overlay
+  ctx.font = '11px DM Mono, monospace';
+  ctx.fillStyle = 'rgba(74,158,255,0.6)';
+  ctx.fillText(`φ_t   t = ${t.toFixed(2)}`, 10, 18);
+}
+
+// ────────────────────────────────────────────────
+//  PANEL 2 — Scalar field u(t,x)
+// ────────────────────────────────────────────────
+function drawField() {
+  const canvas = document.getElementById('c-field');
+  const W = canvas.width, H = canvas.height;
+  const cx = W/2, cy = H/2;
+  const sc = Math.min(W,H)/5.2;
+  const ctx = canvas.getContext('2d');
+  const field = getField().fn;
+  const t = getT();
+
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#0a0d14'; ctx.fillRect(0,0,W,H);
+
+  // Rasterise u(t,x) = u0(φ_{-t}(x)) on a fine pixel grid
+  const STEP = 3;
+  let maxU = 0;
+  for (let sx=0; sx<W; sx+=STEP) {
+    for (let sy=0; sy<H; sy+=STEP) {
+      const [px,py] = fromCanvas(sx+STEP/2, sy+STEP/2, cx, cy, sc);
+      if (Math.abs(px)>RANGE || Math.abs(py)>RANGE) continue;
+      // pull-back: integrate backward
+      const [ox,oy] = rk4(px, py, -t, field);
+      const v = u0(ox,oy);
+      if (v>maxU) maxU=v;
+      if (v < 0.02) continue;
+      const intensity = Math.min(1, v);
+      // teal-to-amber colormap
+      const r = Math.round(62  + intensity*193);
+      const g = Math.round(207 - intensity*107);
+      const b = Math.round(178 - intensity*178);
+      ctx.fillStyle = `rgba(${r},${g},${b},${0.15+intensity*0.85})`;
+      ctx.fillRect(sx, sy, STEP, STEP);
+    }
+  }
+  document.getElementById('info-maxu').textContent = maxU.toFixed(3);
+
+  // Contour lines (iso-lines of u)
+  // Draw a few characteristics as thin overlay
+  ctx.strokeStyle = 'rgba(255,107,107,0.5)';
+  ctx.lineWidth = 0.8;
+  ctx.setLineDash([4,4]);
+  const nChar = 6;
+  for (let k=0;k<nChar;k++) {
+    const x0 = -1.2 + k*0.5;
+    const y0 = -0.4 + k*0.25;
+    ctx.beginPath();
+    let [cx2,cy2] = [x0,y0];
+    for (let s=0; s<=t; s+=0.05) {
+      const [ix,iy] = rk4(x0,y0,s,field);
+      const [sx2,sy2] = toCanvas(ix,iy,cx,cy,sc);
+      s===0 ? ctx.moveTo(sx2,sy2) : ctx.lineTo(sx2,sy2);
+    }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // axes
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(W,cy); ctx.moveTo(cx,0); ctx.lineTo(cx,H); ctx.stroke();
+
+  ctx.font='11px DM Mono, monospace';
+  ctx.fillStyle='rgba(62,207,178,0.7)';
+  ctx.fillText(`u(t,x) = u\u2080 \u2218 \u03c6\u208b\u209c(x)   t = ${t.toFixed(2)}`, 10, 18);
+}
+
+// ────────────────────────────────────────────────
+//  PANEL 3 — Characteristics (wide)
+// ────────────────────────────────────────────────
+function drawChars() {
+  const canvas = document.getElementById('c-chars');
+  const W = canvas.width, H = canvas.height;
+  const ctx = canvas.getContext('2d');
+  const field = getField().fn;
+  const t = getT();
+
+  // Wide panel: x = space (horizontal), y = time (vertical)
+  // Each characteristic is a curve (x(s), s) for s in [0, t]
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#0a0d14'; ctx.fillRect(0,0,W,H);
+
+  const TMAX = 3;
+  const xMin = -RANGE, xMax = RANGE;
+  const toSx = (x) => (x - xMin)/(xMax - xMin) * W;
+  const toSy = (s) => H - s/TMAX * H;    // time grows upward
+
+  // Grid lines (faint)
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth=1;
+  for (let xi=-2;xi<=2;xi++) {
+    const sx = toSx(xi);
+    ctx.beginPath(); ctx.moveTo(sx,0); ctx.lineTo(sx,H); ctx.stroke();
+  }
+  for (let ti=0;ti<=3;ti++) {
+    const sy = toSy(ti);
+    ctx.beginPath(); ctx.moveTo(0,sy); ctx.lineTo(W,sy); ctx.stroke();
+  }
+
+  // Current time line
+  ctx.strokeStyle = 'rgba(74,158,255,0.45)'; ctx.lineWidth = 1.5;
+  ctx.setLineDash([6,4]);
+  const tLine = toSy(t);
+  ctx.beginPath(); ctx.moveTo(0,tLine); ctx.lineTo(W,tLine); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font='10px DM Mono, monospace'; ctx.fillStyle='rgba(74,158,255,0.7)';
+  ctx.fillText(`t = ${t.toFixed(2)}`, 6, tLine - 5);
+
+  // Characteristics: start from a grid of x0 values
+  const NX = 32;
+  const T_STEPS = 80;
+  for (let ki=0; ki<=NX; ki++) {
+    const x0 = xMin + ki*(xMax-xMin)/NX;
+    // Color by u0 value
+    const u = u0(x0, 0);
+    const r2 = Math.round(62 + u*193), g2 = Math.round(207 - u*107), b2 = Math.round(178 - u*178);
+    ctx.strokeStyle = `rgba(${r2},${g2},${b2},${0.3+u*0.6})`;
+    ctx.lineWidth = 0.8 + u*1.0;
+    ctx.beginPath();
+    let curX = x0, curY = 0;
+    ctx.moveTo(toSx(curX), toSy(0));
+    for (let si=1; si<=T_STEPS; si++) {
+      const s = TMAX * si / T_STEPS;
+      const [nx] = rk4(x0, 0, s, field);
+      ctx.lineTo(toSx(nx), toSy(s));
+    }
+    ctx.stroke();
+
+    // Mark current position on each char
+    const [cx2] = rk4(x0, 0, t, field);
+    const dotSx = toSx(cx2), dotSy = toSy(t);
+    ctx.fillStyle = `rgba(${r2},${g2},${b2},0.9)`;
+    ctx.beginPath(); ctx.arc(dotSx, dotSy, 2.5, 0, 2*Math.PI); ctx.fill();
+  }
+
+  // Axes labels
+  ctx.font='10px DM Mono, monospace'; ctx.fillStyle='rgba(255,255,255,0.25)';
+  ctx.fillText('x →', W-28, H-4);
+  ctx.save(); ctx.translate(10, 40); ctx.rotate(-Math.PI/2);
+  ctx.fillText('t →', 0, 0); ctx.restore();
+  for (let xi=-2;xi<=2;xi++) {
+    ctx.fillText(xi, toSx(xi)-4, H-4);
+  }
+  for (let ti=0;ti<=3;ti++) {
+    ctx.fillText(ti, 4, toSy(ti)+4);
+  }
+}
+
+// ────────────────────────────────────────────────
+//  Resize all canvases
+// ────────────────────────────────────────────────
+function resizeAll() {
+  // Grid and field — square-ish
+  ['c-grid','c-field'].forEach(id => {
+    const c = document.getElementById(id);
+    const w = c.parentElement.clientWidth;
+    c.width  = w;
+    c.height = Math.round(w * 0.82);
+  });
+  // Chars — wide, shorter
+  const cc = document.getElementById('c-chars');
+  cc.width  = cc.parentElement.clientWidth;
+  cc.height = Math.round(cc.parentElement.clientWidth * 0.28);
+  cc.height = Math.max(cc.height, 120);
+  draw();
+}
+
+// ────────────────────────────────────────────────
+//  Master draw
+// ────────────────────────────────────────────────
+function draw() {
+  document.getElementById('g-val').textContent = getN();
+  document.getElementById('info-t').textContent = T.toFixed(2);
+  document.getElementById('t-val').textContent  = T.toFixed(2);
+  document.getElementById('t-slider').value     = T;
+  document.getElementById('info-field').textContent = getField().label.split(':')[0];
+  drawGrid();
+  drawField();
+  drawChars();
+}
+
+// ────────────────────────────────────────────────
+//  Animation loop
+// ────────────────────────────────────────────────
+function animate(now) {
+  if (!playing) return;
+  if (!lastTime) lastTime = now;
+  const dt = (now - lastTime) / 1000;
+  lastTime = now;
+  T = Math.min(3, T + dt * 0.5);
+  draw();
+  if (T >= 3) { T = 3; playing = false; document.getElementById('btn-play').textContent = '▶ Play'; return; }
+  rafId = requestAnimationFrame(animate);
+}
+
+function togglePlay() {
+  playing = !playing;
+  document.getElementById('btn-play').textContent = playing ? '⏸ Pause' : '▶ Play';
+  if (playing) { lastTime = null; rafId = requestAnimationFrame(animate); }
+  else if (rafId) cancelAnimationFrame(rafId);
+}
+
+function resetAnim() {
+  playing = false;
+  document.getElementById('btn-play').textContent = '▶ Play';
+  if (rafId) cancelAnimationFrame(rafId);
+  T = 0;
+  draw();
+}
+
+function onSlider(el) {
+  T = parseFloat(el.value);
+  draw();
+}
+
+// ────────────────────────────────────────────────
+//  Init
+// ────────────────────────────────────────────────
+window.addEventListener('resize', resizeAll);
+window.addEventListener('DOMContentLoaded', () => { resizeAll(); draw(); });
+resizeAll();
+</script>
+</body>
+</html>
