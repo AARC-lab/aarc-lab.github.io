@@ -1,7 +1,9 @@
 {
   "app": "deadline-planner",
+  "tab": "proposal",
+  "label": "Proposal Due Dates",
   "version": 2,
-  "exportedAt": "2026-08-21T15:58:04.250Z",
+  "exportedAt": "2026-08-21T16:42:10.217Z",
   "items": [
     {
       "id": "d_mt34fbdd_yeyany",
@@ -29,6 +31,32 @@
       "notes": "https://www.nsf.gov/funding/opportunities/satc-20-security-privacy-trust-cyberspace",
       "done": false,
       "created": 1787327844542
+    },
+    {
+      "id": "d_mt363b0t_f94p5k",
+      "title": "NASA A.15 Biosphere",
+      "due": 1788991200000,
+      "priority": "normal",
+      "labels": [
+        "NASA",
+        "Proposal"
+      ],
+      "notes": "https://nspires.nasaprs.com/external/solicitations/summary.do?solId=%7B3654508F-714C-82AF-71D8-7C551DCEA23B%7D&path=&method=init\n\nSTEP-1 Due on September.\nLater STEP-2 Due",
+      "done": false,
+      "created": 1787329928333
+    },
+    {
+      "id": "d_mt36daji_m22anv",
+      "title": "A.13 Accelerating Earth Solutions",
+      "due": 1792101600000,
+      "priority": "normal",
+      "labels": [
+        "NASA",
+        "Proposal"
+      ],
+      "notes": "https://nspires.nasaprs.com/external/solicitations/summary!init.do?solId={33D1A64A-D7B2-199F-7E02-90E363FB86BC}&path=open",
+      "done": false,
+      "created": 1787330394270
     }
   ]
 }
