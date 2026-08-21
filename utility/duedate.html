@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Proposal Deadline</title>
+<title>Research Deadlines</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -326,6 +326,19 @@
     .sched-head{gap:8px;}
   }
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+
+  /* Tab bar */
+  .tabs{display:flex;gap:0;border-bottom:1.5px solid var(--ink);background:var(--panel);overflow-x:auto;}
+  .tab{position:relative;flex:0 0 auto;display:flex;align-items:center;gap:9px;white-space:nowrap;
+    font-family:var(--font-display);font-weight:600;font-size:13px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--ink-3);background:transparent;border:none;border-right:1.5px solid var(--line);
+    padding:12px 20px;cursor:pointer;transition:color .12s ease,background .12s ease;}
+  .tab:hover{color:var(--ink-2);background:var(--paper-2);}
+  .tab.active{color:var(--ink);background:var(--paper-2);}
+  .tab.active::before{content:"";position:absolute;left:0;right:0;top:-1.5px;height:3px;background:var(--crimson);}
+  .tab-n{font-family:var(--font-mono);font-weight:700;font-size:11px;color:var(--ink-3);background:var(--paper);border:1px solid var(--line);padding:1px 6px;min-width:22px;text-align:center;}
+  .tab.active .tab-n{color:var(--crimson);border-color:var(--crimson);}
+  @media (max-width:520px){ .tab{padding:10px 12px;font-size:11px;letter-spacing:.04em;} }
 </style>
 </head>
 <body>
@@ -336,13 +349,18 @@
       <header class="titleblock">
         <div>
           <div class="eyebrow">Planner</div>
-          <h1 class="appname">Proposal Due Dates</h1>
+          <h1 class="appname" id="appname">Proposal Due Dates</h1>
         </div>
         <div class="tb-right">
           <div class="tb-clock" id="clock">00:00:00</div>
           <div class="tb-date" id="clock-date">&nbsp;</div>
         </div>
       </header>
+
+      <nav class="tabs" id="tabs" role="tablist" aria-label="Deadline categories">
+        <button class="tab active" data-tab="proposal" role="tab" aria-selected="true"><span class="tab-name">Proposal Due Dates</span><span class="tab-n" id="tabn-proposal">0</span></button>
+        <button class="tab" data-tab="conference" role="tab" aria-selected="false"><span class="tab-name">Conference Submissions</span><span class="tab-n" id="tabn-conference">0</span></button>
+      </nav>
 
       <div class="layout">
         <aside class="panel-left">
@@ -450,16 +468,16 @@
       </div>
 
       <footer class="foot">
-        Data is written to this browser under key deadlinePlanner.v1. Editing here changes only this browser until you publish. To publish across computers: press Export JSON, commit the downloaded deadlines.json next to this file in your repository, then open the GitHub Pages URL. The page reads deadlines.json on load and shows it on any machine. The companion file loads over http(s) such as GitHub Pages, not from a bare file:// open. Export .db builds a real SQLite file and loads a small engine from a public CDN on first use. Fonts load from Google when online and fall back to system faces offline.
+        This page has two tabs, each an independent list with its own browser storage and its own companion file. Proposal Due Dates reads proposals.json under key deadlinePlanner.proposals.v1. Conference Submissions reads conferences.json under key deadlinePlanner.conferences.v1. Editing a tab changes only this browser until you publish. To publish: pick the tab, press Export JSON, commit the downloaded file next to this page in your repository, then open the GitHub Pages URL. The companion files load over http(s) such as GitHub Pages, not from a bare file:// open. Export .db builds a real SQLite file. Fonts load from Google when online and fall back to system faces offline.
       </footer>
     </div>
 
     <!-- Upcoming in next 30 days, outside the sheet -->
-    <aside class="upcoming" aria-label="Upcoming in next 30 days">
+    <aside class="upcoming" aria-label="Upcoming in next 60 days">
       <div class="up-head">
-        <div class="up-eyebrow">Window &middot; 30 Days</div>
+        <div class="up-eyebrow">Window &middot; 60 Days</div>
         <div class="up-title">Upcoming <span class="n" id="up-count">0</span></div>
-        <div class="up-sub">Due in the next 30 days</div>
+        <div class="up-sub">Due in the next 60 days</div>
       </div>
       <div class="up-list" id="up-list"></div>
     </aside>
@@ -519,12 +537,30 @@
 (function(){
   "use strict";
 
-  var STORAGE_KEY = "deadlinePlanner.v1";
-  var COMPANION_URL = "deadlines.json"; // committed next to this file, loaded over http(s)
-  var state = { items: [], filter: "all", query: "", editingId: null };
+  // Two independent tabs. Each keeps its own list, storage key, and companion file.
+  var TABS = {
+    proposal: {
+      label: "Proposal Due Dates",
+      storageKey: "deadlinePlanner.proposals.v1",
+      companionUrl: "proposals.json",
+      exportBase: "proposals",
+      items: [], filter: "all", query: "", pendingRemote: null, companionStatus: null, reconcileDismissed: false
+    },
+    conference: {
+      label: "Conference Submissions",
+      storageKey: "deadlinePlanner.conferences.v1",
+      companionUrl: "conferences.json",
+      exportBase: "conferences",
+      items: [], filter: "all", query: "", pendingRemote: null, companionStatus: null, reconcileDismissed: false
+    }
+  };
+  var TAB_ORDER = ["proposal","conference"];
+  var activeTab = "proposal";
+  function cur(){ return TABS[activeTab]; }
+
   var persistOK = true;
   var draftLabels = [];
-  var pendingRemote = null;
+  var editingId = null;
 
   var $ = function(id){ return document.getElementById(id); };
   var timelineEl = $("timeline");
@@ -541,7 +577,6 @@
     var d = new Date(ms);
     return d.toLocaleString(undefined,{weekday:"short",day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
   }
-
   function bucketOf(ms, nowMs){
     if(ms < nowMs) return "over";
     var due=new Date(ms), now=new Date(nowMs);
@@ -550,7 +585,6 @@
     if(ms <= nowMs + 7*24*3600*1000) return "week";
     return "later";
   }
-
   function fmtCountdown(ms, nowMs){
     var diff = ms - nowMs, overdue = diff < 0, s = Math.abs(diff)/1000;
     var d = Math.floor(s/86400); s -= d*86400;
@@ -565,7 +599,6 @@
     return overdue ? (body+" overdue") : ("in "+body);
   }
 
-  // Labels: accept an array, a JSON string, a delimited string, or a legacy category
   function cleanLabels(arr){
     var out=[], seen={};
     for(var i=0;i<arr.length && out.length<5;i++){
@@ -590,53 +623,6 @@
     return cleanLabels(arr);
   }
 
-  function detectPersistence(){
-    try{
-      window.localStorage.setItem("__dp__","1");
-      window.localStorage.removeItem("__dp__");
-      persistOK = true;
-    }catch(e){ persistOK = false; }
-    if(!persistOK) $("persist-notice").classList.add("show");
-  }
-  function load(){
-    try{
-      var raw = window.localStorage.getItem(STORAGE_KEY);
-      if(!raw) return [];
-      var arr = JSON.parse(raw);
-      return Array.isArray(arr) ? arr.map(normalize).filter(Boolean) : [];
-    }catch(e){ return []; }
-  }
-  function save(){
-    if(!persistOK) return;
-    try{ window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.items)); }
-    catch(e){ persistOK = false; $("persist-notice").classList.add("show"); }
-  }
-
-  function normalize(o){
-    if(!o || typeof o!=="object") return null;
-    var due = o.due;
-    if(typeof due==="string"){ var p=Date.parse(due); due=isNaN(p)?null:p; }
-    if(typeof due!=="number" || isNaN(due)) return null;
-    var pri = (o.priority==="high"||o.priority==="low") ? o.priority : "normal";
-    return {
-      id:(typeof o.id==="string"&&o.id)?o.id:uid(),
-      title:String(o.title==null?"":o.title).slice(0,200)||"Untitled",
-      due:due, priority:pri,
-      labels:toLabels(o),
-      notes:String(o.notes==null?"":o.notes).slice(0,1000),
-      done:!!o.done,
-      created:(typeof o.created==="number")?o.created:Date.now()
-    };
-  }
-
-  var toastTimer=null;
-  function toast(msg){
-    toastEl.textContent = msg;
-    toastEl.classList.add("show");
-    if(toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(function(){ toastEl.classList.remove("show"); }, 2600);
-  }
-
   function esc(s){
     return String(s).replace(/[&<>"']/g,function(c){
       return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];
@@ -658,9 +644,75 @@
       return '<a class="i-link" href="'+href+'" target="_blank" rel="noopener noreferrer">'+m+'</a>'+trail;
     });
   }
+
+  function normalize(o){
+    if(!o || typeof o!=="object") return null;
+    var due = o.due;
+    if(typeof due==="string"){ var p=Date.parse(due); due=isNaN(p)?null:p; }
+    if(typeof due!=="number" || isNaN(due)) return null;
+    var pri = (o.priority==="high"||o.priority==="low") ? o.priority : "normal";
+    return {
+      id:(typeof o.id==="string"&&o.id)?o.id:uid(),
+      title:String(o.title==null?"":o.title).slice(0,200)||"Untitled",
+      due:due, priority:pri,
+      labels:toLabels(o),
+      notes:String(o.notes==null?"":o.notes).slice(0,1000),
+      done:!!o.done,
+      created:(typeof o.created==="number")?o.created:Date.now()
+    };
+  }
+
+  function sig(items){
+    return items.map(function(it){
+      return [it.id,it.title,it.due,it.priority,it.labels.join("|"),it.notes,it.done?1:0].join("\u0001");
+    }).sort().join("\u0002");
+  }
+
+  // Storage, per tab
+  function detectPersistence(){
+    try{
+      window.localStorage.setItem("__dp__","1");
+      window.localStorage.removeItem("__dp__");
+      persistOK = true;
+    }catch(e){ persistOK = false; }
+    if(!persistOK) $("persist-notice").classList.add("show");
+  }
+  function migrateLegacy(){
+    // Adopt a pre-tab single list into the Proposal tab, once, without deleting the old key
+    try{
+      var legacy = window.localStorage.getItem("deadlinePlanner.v1");
+      if(legacy && !window.localStorage.getItem(TABS.proposal.storageKey)){
+        window.localStorage.setItem(TABS.proposal.storageKey, legacy);
+      }
+    }catch(e){}
+  }
+  function loadTab(key){
+    try{
+      var raw = window.localStorage.getItem(TABS[key].storageKey);
+      if(!raw) return [];
+      var arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr.map(normalize).filter(Boolean) : [];
+    }catch(e){ return []; }
+  }
+  function saveTab(key){
+    if(!persistOK) return;
+    try{ window.localStorage.setItem(TABS[key].storageKey, JSON.stringify(TABS[key].items)); }
+    catch(e){ persistOK=false; $("persist-notice").classList.add("show"); }
+  }
+  function save(){ saveTab(activeTab); }
+
+  var toastTimer=null;
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    if(toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.classList.remove("show"); }, 2600);
+  }
+
   function passesQuery(it){
-    if(!state.query) return true;
-    var q = state.query.toLowerCase();
+    var q = cur().query;
+    if(!q) return true;
+    q = q.toLowerCase();
     return (it.title+" "+it.labels.join(" ")+" "+it.notes).toLowerCase().indexOf(q)!==-1;
   }
 
@@ -668,15 +720,16 @@
 
   function render(){
     var nowMs = Date.now();
-    var active = state.items.filter(function(it){ return !it.done && passesQuery(it); });
-    var done = state.items.filter(function(it){ return it.done && passesQuery(it); });
+    var t = cur();
+    var active = t.items.filter(function(it){ return !it.done && passesQuery(it); });
+    var done = t.items.filter(function(it){ return it.done && passesQuery(it); });
     active.sort(function(a,b){ return a.due-b.due; });
     done.sort(function(a,b){ return b.due-a.due; });
 
     var byBucket = { over:[], day:[], week:[], later:[] };
     active.forEach(function(it){ byBucket[bucketOf(it.due,nowMs)].push(it); });
 
-    var filter = state.filter;
+    var filter = t.filter;
     var visible = [];
     if(filter==="all"||filter==="upcoming"||filter==="overdue"){
       GROUPS.forEach(function(g){
@@ -690,16 +743,17 @@
 
     updateStats();
     renderUpcoming();
+    updateTabCounts();
 
-    if(state.items.length===0){
+    if(t.items.length===0){
       timelineEl.classList.add("bare");
-      timelineEl.innerHTML = '<div class="empty"><div class="big">No deadlines yet</div>Press Add deadline. Items will list here, sorted by how soon they fall due.</div>';
+      timelineEl.innerHTML = '<div class="empty"><div class="big">No items yet</div>Press Add a due date. Entries will list here, sorted by how soon they fall due.</div>';
       return;
     }
     var nothing = (filter!=="done" && total===0) || (filter==="done" && done.length===0);
     if(nothing){
       timelineEl.classList.add("bare");
-      var label = (filter==="done") ? "Nothing marked done" : (state.query ? "No match" : "Nothing here");
+      var label = (filter==="done") ? "Nothing marked done" : (t.query ? "No match" : "Nothing here");
       timelineEl.innerHTML = '<div class="empty"><div class="big">'+esc(label)+'</div>Adjust the filter or clear the search box.</div>';
       return;
     }
@@ -757,23 +811,29 @@
   }
 
   function updateStats(){
-    var nowMs=Date.now(), o=0,t=0,w=0;
-    state.items.forEach(function(it){
+    var nowMs=Date.now(), o=0,d=0,w=0;
+    cur().items.forEach(function(it){
       if(it.done) return;
       var b=bucketOf(it.due,nowMs);
-      if(b==="over") o++; else if(b==="day") t++; else if(b==="week") w++;
+      if(b==="over") o++; else if(b==="day") d++; else if(b==="week") w++;
     });
-    $("s-over").textContent=o; $("s-day").textContent=t; $("s-week").textContent=w;
+    $("s-over").textContent=o; $("s-day").textContent=d; $("s-week").textContent=w;
   }
 
-  // Upcoming in the next 30 days
+  function updateTabCounts(){
+    TAB_ORDER.forEach(function(k){
+      var n = TABS[k].items.filter(function(it){ return !it.done; }).length;
+      var el = $("tabn-"+k); if(el) el.textContent = n;
+    });
+  }
+
   function renderUpcoming(){
-    var nowMs=Date.now(), horizon=nowMs+30*24*3600*1000;
-    var up = state.items.filter(function(it){ return !it.done && it.due>=nowMs && it.due<=horizon; });
+    var nowMs=Date.now(), horizon=nowMs+60*24*3600*1000;
+    var up = cur().items.filter(function(it){ return !it.done && it.due>=nowMs && it.due<=horizon; });
     up.sort(function(a,b){ return a.due-b.due; });
     $("up-count").textContent = up.length;
     var list=$("up-list");
-    if(up.length===0){ list.innerHTML='<div class="up-empty">Nothing due in the next 30 days</div>'; return; }
+    if(up.length===0){ list.innerHTML='<div class="up-empty">Nothing due in the next 60 days</div>'; return; }
     list.innerHTML = up.map(function(it){
       var b=bucketOf(it.due,nowMs);
       var d=new Date(it.due);
@@ -824,24 +884,24 @@
   function openModal(mode,id){
     lastFocus = document.activeElement;
     if(mode==="edit"){
-      var it = state.items.find(function(x){ return x.id===id; });
+      var it = cur().items.find(function(x){ return x.id===id; });
       if(!it) return;
-      state.editingId=id;
+      editingId=id;
       $("f-title").value=it.title;
       $("f-due").value=msToInput(it.due);
       $("f-priority").value=it.priority;
       $("f-notes").value=it.notes;
       draftLabels = it.labels.slice();
-      $("modal-title").textContent="Edit deadline";
+      $("modal-title").textContent="Edit item";
       submitBtn.textContent="Save changes";
     } else {
-      state.editingId=null;
+      editingId=null;
       form.reset();
       var dt=new Date(Date.now()+3600000); dt.setMinutes(0,0,0);
       $("f-due").value=msToInput(dt.getTime());
       draftLabels = [];
-      $("modal-title").textContent="Add a deadline";
-      submitBtn.textContent="Add deadline";
+      $("modal-title").textContent="Add a due date";
+      submitBtn.textContent="Add";
     }
     $("f-label-input").value="";
     renderChips();
@@ -850,13 +910,104 @@
   }
   function closeModal(){
     backdrop.classList.remove("show");
-    state.editingId=null;
+    editingId=null;
     draftLabels=[];
     form.reset();
     $("f-label-input").value="";
     renderChips();
     if(lastFocus && lastFocus.focus) lastFocus.focus();
   }
+
+  // Tab switching
+  function syncFilterUI(){
+    var f = cur().filter;
+    Array.prototype.forEach.call(document.querySelectorAll("#filters .chip"), function(c){
+      c.classList.toggle("active", c.getAttribute("data-filter")===f);
+    });
+    var sb=$("search"); if(sb) sb.value = cur().query;
+  }
+  function switchTab(key){
+    if(!TABS[key]) return;
+    activeTab = key;
+    Array.prototype.forEach.call(document.querySelectorAll("#tabs .tab"), function(b){
+      var on = b.getAttribute("data-tab")===key;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    var an=$("appname"); if(an) an.textContent = cur().label;
+    syncFilterUI();
+    render();
+    refreshCompanionUI();
+  }
+
+  // Companion JSON, one file per tab
+  function fetchCompanion(url){
+    return fetch(url, {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.json();
+    }).then(function(data){
+      var arr = Array.isArray(data) ? data : (data && Array.isArray(data.items) ? data.items : null);
+      if(!arr) throw new Error("bad shape");
+      return arr.map(normalize).filter(Boolean);
+    });
+  }
+  function setCompanionStatusEl(status){
+    var el=$("companion-status"); if(!el) return;
+    el.className="companion";
+    var file = cur().companionUrl;
+    if(!status){ el.innerHTML="Companion: <b>checking "+file+"</b>"; return; }
+    if(status.kind==="loaded"){ el.classList.add("ok"); el.innerHTML="Companion: <b>"+file+" loaded</b> ("+status.n+")"; }
+    else if(status.kind==="empty"){ el.classList.add("ok"); el.innerHTML="Companion: <b>"+file+" is empty</b>"; }
+    else if(status.kind==="differs"){ el.classList.add("diff"); el.innerHTML="Companion: <b>"+file+" differs</b> from this browser"; }
+    else { el.innerHTML = (location.protocol==="file:") ? "Companion: <b>needs http</b>, using local copy" : "Companion: <b>"+file+" not found</b>, using local copy"; }
+  }
+  function refreshCompanionUI(){
+    var t = cur();
+    setCompanionStatusEl(t.companionStatus);
+    var pj=$("pull-json"); if(pj) pj.textContent = "Pull "+t.companionUrl;
+    if(t.companionStatus && t.companionStatus.kind==="differs" && t.pendingRemote && !t.reconcileDismissed){
+      $("reconcile-msg").textContent = "The published "+t.companionUrl+" ("+t.companionStatus.n+" item"+(t.companionStatus.n===1?"":"s")+") differs from this browser's list ("+t.companionStatus.localN+"). Load the published file, or keep this browser's copy.";
+      $("reconcile").classList.add("show");
+    } else {
+      $("reconcile").classList.remove("show");
+    }
+  }
+  function applyRemote(remote){
+    var t = cur();
+    t.items = remote;
+    saveTab(activeTab);
+    t.pendingRemote = null;
+    t.reconcileDismissed = false;
+    t.companionStatus = {kind: remote.length?"loaded":"empty", n:remote.length};
+    refreshCompanionUI();
+    render();
+  }
+  function fetchAndReconcile(key){
+    var t = TABS[key];
+    fetchCompanion(t.companionUrl).then(function(remote){
+      var local = t.items;
+      if(local.length===0){
+        t.items = remote; saveTab(key);
+        t.companionStatus = {kind: remote.length?"loaded":"empty", n:remote.length};
+      } else if(sig(local)===sig(remote)){
+        t.companionStatus = {kind: remote.length?"loaded":"empty", n:remote.length};
+      } else {
+        t.pendingRemote = remote;
+        t.companionStatus = {kind:"differs", n:remote.length, localN:local.length};
+      }
+      if(key===activeTab){ refreshCompanionUI(); render(); }
+      updateTabCounts();
+    }).catch(function(){
+      t.companionStatus = {kind:"none", n:0};
+      if(key===activeTab){ refreshCompanionUI(); }
+    });
+  }
+
+  // Event wiring
+  $("tabs").addEventListener("click", function(e){
+    var b=e.target.closest(".tab"); if(!b) return;
+    switchTab(b.getAttribute("data-tab"));
+  });
 
   $("open-add").addEventListener("click", function(){ openModal("add"); });
   $("open-add-fab").addEventListener("click", function(){ openModal("add"); });
@@ -865,7 +1016,6 @@
   backdrop.addEventListener("click", function(e){ if(e.target===backdrop) closeModal(); });
   document.addEventListener("keydown", function(e){ if(e.key==="Escape" && backdrop.classList.contains("show")) closeModal(); });
 
-  // Label chip events
   $("chips-input").addEventListener("click", function(e){
     var x=e.target.closest(".chip-x");
     if(x){
@@ -889,48 +1039,47 @@
     var dueMs=new Date(dueRaw).getTime();
     if(isNaN(dueMs)){ toast("That date could not be read"); return; }
     var data={ title:title, due:dueMs, priority:$("f-priority").value, labels:draftLabels.slice(0,5), notes:$("f-notes").value.trim() };
-    if(state.editingId){
-      var it=state.items.find(function(x){ return x.id===state.editingId; });
+    var t=cur();
+    if(editingId){
+      var it=t.items.find(function(x){ return x.id===editingId; });
       if(it){ it.title=data.title; it.due=data.due; it.priority=data.priority; it.labels=data.labels; it.notes=data.notes; }
-      toast("Deadline updated");
+      toast("Item updated");
     } else {
       var item=normalize(data); item.created=Date.now();
-      state.items.push(item);
-      toast("Deadline added");
+      t.items.push(item);
+      toast("Item added");
     }
-    save(); closeModal(); render();
+    saveTab(activeTab); closeModal(); render();
   });
 
-  // Timeline actions
   timelineEl.addEventListener("click", function(e){
     var btn=e.target.closest("[data-act]"); if(!btn) return;
     var art=e.target.closest(".item"); if(!art) return;
     var id=art.getAttribute("data-id"), act=btn.getAttribute("data-act");
+    var t=cur();
     if(act==="toggle"){
-      var it=state.items.find(function(x){ return x.id===id; });
-      if(it){ it.done=!it.done; save(); render(); }
+      var it=t.items.find(function(x){ return x.id===id; });
+      if(it){ it.done=!it.done; saveTab(activeTab); render(); }
     } else if(act==="edit"){
       openModal("edit",id);
     } else if(act==="delete"){
-      var t=state.items.find(function(x){ return x.id===id; });
-      var name=t?t.title:"this item";
+      var target=t.items.find(function(x){ return x.id===id; });
+      var name=target?target.title:"this item";
       if(window.confirm('Delete "'+name+'"? This cannot be undone.')){
-        state.items=state.items.filter(function(x){ return x.id!==id; });
-        save(); render(); toast("Deadline deleted");
+        t.items=t.items.filter(function(x){ return x.id!==id; });
+        saveTab(activeTab); render(); toast("Item deleted");
       }
     }
   });
 
-  // Clicking an upcoming row opens its editor
   $("up-list").addEventListener("click", function(e){
     var row=e.target.closest(".up-item"); if(!row) return;
     openModal("edit", row.getAttribute("data-id"));
   });
 
-  // Filters and search
   $("filters").addEventListener("click", function(e){
     var chip=e.target.closest(".chip"); if(!chip) return;
-    state.filter=chip.getAttribute("data-filter");
+    cur().filter=chip.getAttribute("data-filter");
     Array.prototype.forEach.call(this.querySelectorAll(".chip"), function(c){ c.classList.toggle("active", c===chip); });
     render();
   });
@@ -938,28 +1087,47 @@
   $("search").addEventListener("input", function(e){
     var v=e.target.value;
     if(searchTimer) clearTimeout(searchTimer);
-    searchTimer=setTimeout(function(){ state.query=v.trim(); render(); }, 140);
+    searchTimer=setTimeout(function(){ cur().query=v.trim(); render(); }, 140);
   });
 
   $("clear-done").addEventListener("click", function(){
-    var count=state.items.filter(function(x){ return x.done; }).length;
+    var t=cur();
+    var count=t.items.filter(function(x){ return x.done; }).length;
     if(count===0){ toast("Nothing is marked done"); return; }
-    if(window.confirm("Remove "+count+" completed item(s)?")){
-      state.items=state.items.filter(function(x){ return !x.done; });
-      save(); render(); toast("Cleared "+count+" item(s)");
+    if(window.confirm("Remove "+count+" completed item(s) from "+t.label+"?")){
+      t.items=t.items.filter(function(x){ return !x.done; });
+      saveTab(activeTab); render(); toast("Cleared "+count+" item(s)");
     }
   });
 
-  // Data export and import
+  // Reconcile banner
+  $("rc-load").addEventListener("click", function(){ var t=cur(); if(t.pendingRemote){ applyRemote(t.pendingRemote); toast("Loaded published list"); } });
+  $("rc-keep").addEventListener("click", function(){ cur().reconcileDismissed=true; $("reconcile").classList.remove("show"); });
+  $("pull-json").addEventListener("click", function(){
+    var t=cur();
+    toast("Fetching "+t.companionUrl);
+    fetchCompanion(t.companionUrl).then(function(remote){
+      if(t.items.length>0 && sig(t.items)!==sig(remote)){
+        if(!window.confirm("Replace this browser's "+t.label+" list with the published "+t.companionUrl+" ("+remote.length+" item(s))? Unpublished changes here will be discarded.")) return;
+      }
+      applyRemote(remote);
+      toast("Loaded "+remote.length+" item(s) from "+t.companionUrl);
+    }).catch(function(){
+      toast(location.protocol==="file:" ? "Companion needs http, not a file:// open" : (t.companionUrl+" not found"));
+    });
+  });
+
+  // Data export and import, active tab only
   function download(name,blob){
     var url=URL.createObjectURL(blob), a=document.createElement("a");
     a.href=url; a.download=name; document.body.appendChild(a); a.click();
     document.body.removeChild(a); setTimeout(function(){ URL.revokeObjectURL(url); },1000);
   }
   $("export-json").addEventListener("click", function(){
-    var payload={ app:"deadline-planner", version:2, exportedAt:new Date().toISOString(), items:state.items };
-    download("deadlines.json", new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}));
-    toast("Exported "+state.items.length+" item(s) to JSON");
+    var t=cur();
+    var payload={ app:"deadline-planner", tab:activeTab, label:t.label, version:2, exportedAt:new Date().toISOString(), items:t.items };
+    download(t.companionUrl, new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}));
+    toast("Exported "+t.items.length+" item(s) to "+t.companionUrl);
   });
   $("import-json").addEventListener("click", function(){ $("file-json").click(); });
   $("file-json").addEventListener("change", function(e){
@@ -977,16 +1145,16 @@
     reader.readAsText(file);
   });
   function mergeItems(incoming){
-    var index={}; state.items.forEach(function(it,i){ index[it.id]=i; });
+    var t=cur();
+    var index={}; t.items.forEach(function(it,i){ index[it.id]=i; });
     var added=0,updated=0;
     incoming.forEach(function(it){
-      if(index.hasOwnProperty(it.id)){ state.items[index[it.id]]=it; updated++; }
-      else { state.items.push(it); index[it.id]=state.items.length-1; added++; }
+      if(index.hasOwnProperty(it.id)){ t.items[index[it.id]]=it; updated++; }
+      else { t.items.push(it); index[it.id]=t.items.length-1; added++; }
     });
-    save(); render(); toast(added+" added, "+updated+" updated");
+    saveTab(activeTab); render(); toast(added+" added, "+updated+" updated");
   }
 
-  // SQLite via sql.js, loaded on demand
   var sqlPromise=null;
   function loadScript(src){
     return new Promise(function(res,rej){
@@ -1016,17 +1184,18 @@
     return sqlPromise;
   }
   $("export-db").addEventListener("click", async function(){
+    var t=cur();
     toast("Building SQLite file");
     try{
       var SQL=await loadSql();
       var db=new SQL.Database();
       db.run("CREATE TABLE deadlines (id TEXT PRIMARY KEY, title TEXT, due INTEGER, priority TEXT, labels TEXT, notes TEXT, done INTEGER, created INTEGER);");
       var stmt=db.prepare("INSERT INTO deadlines VALUES (?,?,?,?,?,?,?,?)");
-      state.items.forEach(function(it){ stmt.run([it.id,it.title,it.due,it.priority,JSON.stringify(it.labels),it.notes,it.done?1:0,it.created]); });
+      t.items.forEach(function(it){ stmt.run([it.id,it.title,it.due,it.priority,JSON.stringify(it.labels),it.notes,it.done?1:0,it.created]); });
       stmt.free();
       var bytes=db.export(); db.close();
-      download("deadlines.db", new Blob([bytes],{type:"application/x-sqlite3"}));
-      toast("Exported "+state.items.length+" item(s) to SQLite");
+      download(t.exportBase+".db", new Blob([bytes],{type:"application/x-sqlite3"}));
+      toast("Exported "+t.items.length+" item(s) to SQLite");
     }catch(err){ toast("Engine did not load. JSON export still works offline"); }
   });
   $("import-db").addEventListener("click", function(){ $("file-db").click(); });
@@ -1090,81 +1259,17 @@
     }
   }catch(e){}
 
-  // Companion JSON, committed next to this file
-  function sig(items){
-    return items.map(function(it){
-      return [it.id,it.title,it.due,it.priority,it.labels.join("|"),it.notes,it.done?1:0].join("\u0001");
-    }).sort().join("\u0002");
-  }
-  function fetchCompanion(){
-    return fetch(COMPANION_URL, {cache:"no-store"}).then(function(r){
-      if(!r.ok) throw new Error("http "+r.status);
-      return r.json();
-    }).then(function(data){
-      var arr = Array.isArray(data) ? data : (data && Array.isArray(data.items) ? data.items : null);
-      if(!arr) throw new Error("bad shape");
-      return arr.map(normalize).filter(Boolean);
-    });
-  }
-  function setCompanionStatus(kind, n){
-    var el=$("companion-status"); if(!el) return;
-    el.className="companion";
-    if(kind==="loaded"){ el.classList.add("ok"); el.innerHTML="Companion: <b>deadlines.json loaded</b> ("+n+")"; }
-    else if(kind==="empty"){ el.classList.add("ok"); el.innerHTML="Companion: <b>deadlines.json is empty</b>"; }
-    else if(kind==="differs"){ el.classList.add("diff"); el.innerHTML="Companion: <b>deadlines.json differs</b> from this browser"; }
-    else { el.innerHTML = (location.protocol==="file:") ? "Companion: <b>needs http</b>, using local copy" : "Companion: <b>deadlines.json not found</b>, using local copy"; }
-  }
-  function applyRemote(remote){
-    state.items = remote;
-    save();
-    pendingRemote = null;
-    $("reconcile").classList.remove("show");
-    setCompanionStatus(remote.length ? "loaded" : "empty", remote.length);
-    render();
-  }
-  function initData(){
-    var local = load();
-    state.items = local;
-    render(); // show local at once, so the page works while the fetch is pending or offline
-    fetchCompanion().then(function(remote){
-      if(local.length===0){
-        applyRemote(remote);
-      } else if(sig(local)===sig(remote)){
-        setCompanionStatus(remote.length ? "loaded" : "empty", remote.length);
-      } else {
-        pendingRemote = remote;
-        setCompanionStatus("differs", remote.length);
-        $("reconcile-msg").textContent = "The published deadlines.json ("+remote.length+" item"+(remote.length===1?"":"s")+") differs from this browser's list ("+local.length+"). Load the published file, or keep this browser's copy.";
-        $("reconcile").classList.add("show");
-      }
-    }).catch(function(){
-      setCompanionStatus("none", 0);
-    });
-  }
-
-  $("rc-load").addEventListener("click", function(){ if(pendingRemote){ applyRemote(pendingRemote); toast("Loaded published list"); } });
-  $("rc-keep").addEventListener("click", function(){ $("reconcile").classList.remove("show"); });
-  $("pull-json").addEventListener("click", function(){
-    toast("Fetching deadlines.json");
-    fetchCompanion().then(function(remote){
-      if(state.items.length>0 && sig(state.items)!==sig(remote)){
-        if(!window.confirm("Replace this browser's list with the published deadlines.json ("+remote.length+" item(s))? Unpublished changes here will be discarded.")) return;
-      }
-      applyRemote(remote);
-      toast("Loaded "+remote.length+" item(s) from deadlines.json");
-    }).catch(function(){
-      toast(location.protocol==="file:" ? "Companion needs http, not a file:// open" : "deadlines.json not found");
-    });
-  });
-
   // Init
   detectPersistence();
+  migrateLegacy();
   buildTicks();
-  initData();
+  TAB_ORDER.forEach(function(k){ TABS[k].items = loadTab(k); });
+  switchTab(activeTab);
   tickClock();
   setInterval(tickClock, 1000);
   setInterval(refreshCountdowns, 15000);
   setInterval(function(){ if(!backdrop.classList.contains("show")) render(); }, 60000);
+  TAB_ORDER.forEach(function(k){ fetchAndReconcile(k); });
 
 })();
 </script>
