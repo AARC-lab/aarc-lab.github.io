@@ -1,0 +1,34 @@
+{
+  "app": "deadline-planner",
+  "version": 2,
+  "exportedAt": "2026-08-21T15:58:04.250Z",
+  "items": [
+    {
+      "id": "d_mt34fbdd_yeyany",
+      "title": "NSF Future Core",
+      "due": 1789164000000,
+      "priority": "normal",
+      "labels": [
+        "NSF",
+        "Proposal",
+        "Target"
+      ],
+      "notes": "https://www.nsf.gov/funding/opportunities/future-core-computer-information-science-engineering-future-computing/nsf25-543/solicitation",
+      "done": false,
+      "created": 1787327129425
+    },
+    {
+      "id": "d_mt34un5q_nxfu30",
+      "title": "Security, Privacy, and Trust in Cyberspace (SaTC 2.0)",
+      "due": 1790632800000,
+      "priority": "normal",
+      "labels": [
+        "NSF",
+        "Proposal"
+      ],
+      "notes": "https://www.nsf.gov/funding/opportunities/satc-20-security-privacy-trust-cyberspace",
+      "done": false,
+      "created": 1787327844542
+    }
+  ]
+}
