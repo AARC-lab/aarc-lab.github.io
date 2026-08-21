@@ -3,13 +3,13 @@
   "tab": "proposal",
   "label": "Proposal Due Dates",
   "version": 2,
-  "exportedAt": "2026-08-21T16:42:10.217Z",
+  "exportedAt": "2026-08-21T17:07:49.998Z",
   "items": [
     {
       "id": "d_mt34fbdd_yeyany",
       "title": "NSF Future Core",
       "due": 1789164000000,
-      "priority": "normal",
+      "priority": "high",
       "labels": [
         "NSF",
         "Proposal",
@@ -57,6 +57,106 @@
       "notes": "https://nspires.nasaprs.com/external/solicitations/summary!init.do?solId={33D1A64A-D7B2-199F-7E02-90E363FB86BC}&path=open",
       "done": false,
       "created": 1787330394270
+    },
+    {
+      "id": "d_mt36kcky_a0y9dv",
+      "title": "NASA B.2 Heliophysics Foundational Research",
+      "due": 1790373600000,
+      "priority": "normal",
+      "labels": [
+        "NASA",
+        "PROPOSAL"
+      ],
+      "notes": "https://nspires.nasaprs.com/external/solicitations/summary!init.do?solId={5F466EEA-6FC5-A5A1-F556-943DE971E17B}&path=open",
+      "done": false,
+      "created": 1787330723506
+    },
+    {
+      "id": "d_mt36nbyd_7lzd8f",
+      "title": "NASA C.2 Solar System Science",
+      "due": 1794506400000,
+      "priority": "normal",
+      "labels": [
+        "NASA",
+        "PROPOSAL",
+        "TARGET"
+      ],
+      "notes": "https://nspires.nasaprs.com/external/solicitations/summary!init.do?solId={C92A28D2-9E30-4149-24B7-8A40ED4F564B}&path=open",
+      "done": false,
+      "created": 1787330862661
+    },
+    {
+      "id": "d_mt36tv8h_n7y7hx",
+      "title": "NASA Unsolicited Proposals",
+      "due": 1790787600000,
+      "priority": "normal",
+      "labels": [
+        "NASA"
+      ],
+      "notes": "Your unsolicited proposal must be submitted via the NASA Front Door (NFD) at https://frontdoor.nasa.gov/s/\n\nhttps://nspires.nasaprs.com/external/solicitations/summary!init.do?solId={006B4304-ADC2-FFD7-6287-D2F2C1BCF1B4}&path=open",
+      "done": false,
+      "created": 1787331167586
+    },
+    {
+      "id": "d_mt36xgat_r100q6",
+      "title": "NASA A.4 Rapid Response and Novel Research in Earth Science",
+      "due": 1798758000000,
+      "priority": "normal",
+      "labels": [
+        "NASA",
+        "TARGET"
+      ],
+      "notes": "This program element does not have a proposal\ndue date. Proposals may be submitted at any time.\n\nhttps://nspires.nasaprs.com/external/solicitations/summary!init.do?solId={F2C85D95-15CF-AB33-C8A7-2BF14ADA5A8A}&path=open",
+      "done": false,
+      "created": 1787331334853
+    },
+    {
+      "id": "d_mt371bs0_rsrpku",
+      "title": "Computational and Data-Enabled Science and Engineering (CDS&E)",
+      "due": 1789491600000,
+      "priority": "normal",
+      "labels": [
+        "NSF"
+      ],
+      "notes": "https://www.nsf.gov/funding/opportunities/cdse-computational-data-enabled-science-engineering",
+      "done": false,
+      "created": 1787331515616
+    },
+    {
+      "id": "d_mt373yv8_5anewj",
+      "title": "EDU Core Research (ECR:Core)",
+      "due": 1790892000000,
+      "priority": "normal",
+      "labels": [
+        "NSF"
+      ],
+      "notes": "https://www.nsf.gov/funding/opportunities/ecrcore-edu-core-research",
+      "done": false,
+      "created": 1787331638852
+    },
+    {
+      "id": "d_mt374mzi_huzv0c",
+      "title": "Mathematical Foundations of Artificial Intelligence (MFAI)",
+      "due": 1791583200000,
+      "priority": "normal",
+      "labels": [
+        "NSF"
+      ],
+      "notes": "https://www.nsf.gov/funding/opportunities/mfai-mathematical-foundations-artificial-intelligence",
+      "done": false,
+      "created": 1787331670110
+    },
+    {
+      "id": "d_mt37cuy0_2bsn57",
+      "title": "Engineering Research Initiation (ERI)",
+      "due": 1791583200000,
+      "priority": "high",
+      "labels": [
+        "NSF"
+      ],
+      "notes": "https://www.nsf.gov/funding/opportunities/eri-engineering-research-initiation",
+      "done": false,
+      "created": 1787332053672
     }
   ]
 }
