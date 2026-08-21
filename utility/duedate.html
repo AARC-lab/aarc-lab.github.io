@@ -162,6 +162,7 @@
   /* Schedule header */
   .sched-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;}
   .sched-title{font-family:var(--font-display);font-weight:600;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2);margin-right:auto;}
+  .sched-controls{display:flex;align-items:center;gap:0;flex-wrap:wrap;}
   .search{border:1.5px solid var(--ink);background:var(--panel);display:flex;align-items:center;}
   .search input{border:none;background:transparent;font-family:var(--font-mono);font-size:12.5px;padding:7px 10px;width:190px;color:var(--ink);}
   .search input:focus{outline:none;}
@@ -230,9 +231,56 @@
   .ibtn:hover{border-color:var(--ink);color:var(--ink);}
   .ibtn.del:hover{border-color:var(--crimson);color:var(--crimson);background:var(--crimson-t);}
 
+  /* High-priority inverted scheme */
+  .item.high-pri{
+    background:var(--ink)!important;
+    border-color:var(--crimson)!important;
+    border-left-color:var(--crimson)!important;
+    color:var(--paper-2)!important;
+  }
+  .item.high-pri .node{background:var(--crimson)!important;border-color:var(--paper-2)!important;}
+  .item.high-pri .i-title{color:var(--paper-2)!important;}
+  .item.high-pri .i-date{color:var(--line-2)!important;}
+  .item.high-pri .i-notes{color:var(--line-2)!important;}
+  .item.high-pri .tag.cat{border-color:var(--paper-2)!important;color:var(--paper-2)!important;background:rgba(255,255,255,.08)!important;}
+  .item.high-pri .tag.lo{color:var(--ink-3)!important;border-color:var(--ink-3)!important;background:transparent!important;}
+  .item.high-pri .ibtn{border-color:var(--ink-3)!important;color:var(--paper-2)!important;background:transparent!important;}
+  .item.high-pri .ibtn.del:hover{border-color:var(--crimson)!important;color:var(--crimson)!important;background:var(--crimson-t)!important;}
+  .item.high-pri .check{border-color:var(--paper-2)!important;background:transparent!important;}
+  .item.high-pri .check:checked{background:var(--sage)!important;}
+  .item.high-pri .i-link{color:var(--amber)!important;}
+  .item.high-pri:hover{box-shadow:-4px 4px 0 rgba(190,40,80,.3)!important;}
+
   .item.done{opacity:.55;border-left-color:var(--line)!important;}
   .item.done .node{background:var(--sage)!important;}
   .item.done .i-title{text-decoration:line-through;color:var(--ink-2);}
+
+  /* Clickable label filter */
+  .tag.cat{cursor:pointer;transition:background .12s ease,color .12s ease,border-color .12s ease;}
+  .tag.cat:hover{background:var(--steel)!important;color:#fff!important;border-color:var(--steel)!important;}
+  .label-filter-bar{display:none;align-items:center;gap:9px;padding:8px 13px;margin-bottom:10px;border:1.5px solid var(--steel);background:var(--steel-t);font-family:var(--font-mono);font-size:11.5px;color:var(--ink-2);}
+  .label-filter-bar.show{display:flex;}
+  .label-filter-bar .lf-label{font-weight:700;color:var(--steel);text-transform:uppercase;letter-spacing:.06em;}
+  .label-filter-bar .lf-clear{margin-left:auto;border:1px solid var(--steel);background:transparent;color:var(--steel);font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;padding:3px 8px;cursor:pointer;text-transform:uppercase;}
+  .label-filter-bar .lf-clear:hover{background:var(--steel);color:#fff;}
+
+  /* View toggle */
+  .view-toggle{display:flex;border:1.5px solid var(--ink);margin-left:0;}
+  .view-btn{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;background:var(--panel);color:var(--ink-2);
+    border:none;border-right:1px solid var(--line);padding:7px 11px;cursor:pointer;transition:background .12s ease,color .12s ease;}
+  .view-btn:last-child{border-right:none;}
+  .view-btn:hover{background:var(--paper);color:var(--ink);}
+  .view-btn.active{background:var(--ink);color:#fff;}
+
+  /* Tile view */
+  .timeline.tile-view{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;padding-left:0;}
+  .timeline.tile-view::before{display:none;}
+  .timeline.tile-view .group-head{grid-column:1/-1;}
+  .timeline.tile-view .now-row{grid-column:1/-1;}
+  .timeline.tile-view .label-filter-bar{grid-column:1/-1;}
+  .timeline.tile-view .item{margin:0;}
+  .timeline.tile-view .item .node{display:none;}
+  .timeline.tile-view .empty{grid-column:1/-1;}
 
   /* Empty */
   .empty{border:1.5px dashed var(--ink);background:var(--panel);padding:40px 22px;text-align:center;color:var(--ink-2);}
@@ -448,12 +496,18 @@
         <main class="panel-right">
           <div class="sched-head">
             <span class="sched-title">Schedule</span>
-            <div class="search"><input type="text" id="search" placeholder="search"></div>
-            <div class="filters" id="filters">
-              <button class="chip active" data-filter="all">All</button>
-              <button class="chip" data-filter="upcoming">Ahead</button>
-              <button class="chip" data-filter="overdue">Overdue</button>
-              <button class="chip" data-filter="done">Done</button>
+            <div class="sched-controls">
+              <div class="view-toggle" id="view-toggle">
+                <button class="view-btn active" data-view="list">List</button>
+                <button class="view-btn" data-view="tile">Tile</button>
+              </div>
+              <div class="search"><input type="text" id="search" placeholder="search"></div>
+              <div class="filters" id="filters">
+                <button class="chip active" data-filter="all">All</button>
+                <button class="chip" data-filter="upcoming">Ahead</button>
+                <button class="chip" data-filter="overdue">Overdue</button>
+                <button class="chip" data-filter="done">Done</button>
+              </div>
             </div>
           </div>
           <div class="reconcile" id="reconcile">
@@ -544,14 +598,14 @@
       storageKey: "deadlinePlanner.proposals.v1",
       companionUrl: "proposals.json",
       exportBase: "proposals",
-      items: [], filter: "all", query: "", pendingRemote: null, companionStatus: null, reconcileDismissed: false
+      items: [], filter: "all", query: "", labelFilter: "", viewMode: "list", pendingRemote: null, companionStatus: null, reconcileDismissed: false
     },
     conference: {
       label: "Conference Submissions",
       storageKey: "deadlinePlanner.conferences.v1",
       companionUrl: "conferences.json",
       exportBase: "conferences",
-      items: [], filter: "all", query: "", pendingRemote: null, companionStatus: null, reconcileDismissed: false
+      items: [], filter: "all", query: "", labelFilter: "", viewMode: "list", pendingRemote: null, companionStatus: null, reconcileDismissed: false
     }
   };
   var TAB_ORDER = ["proposal","conference"];
@@ -710,7 +764,12 @@
   }
 
   function passesQuery(it){
-    var q = cur().query;
+    var t = cur();
+    if(t.labelFilter){
+      var match = it.labels.some(function(l){ return l.toLowerCase()===t.labelFilter.toLowerCase(); });
+      if(!match) return false;
+    }
+    var q = t.query;
     if(!q) return true;
     q = q.toLowerCase();
     return (it.title+" "+it.labels.join(" ")+" "+it.notes).toLowerCase().indexOf(q)!==-1;
@@ -745,6 +804,9 @@
     renderUpcoming();
     updateTabCounts();
 
+    // Apply tile view class
+    timelineEl.classList.toggle("tile-view", t.viewMode === "tile");
+
     if(t.items.length===0){
       timelineEl.classList.add("bare");
       timelineEl.innerHTML = '<div class="empty"><div class="big">No items yet</div>Press Add a due date. Entries will list here, sorted by how soon they fall due.</div>';
@@ -753,13 +815,19 @@
     var nothing = (filter!=="done" && total===0) || (filter==="done" && done.length===0);
     if(nothing){
       timelineEl.classList.add("bare");
-      var label = (filter==="done") ? "Nothing marked done" : (t.query ? "No match" : "Nothing here");
+      var label = (filter==="done") ? "Nothing marked done" : ((t.query || t.labelFilter) ? "No match" : "Nothing here");
       timelineEl.innerHTML = '<div class="empty"><div class="big">'+esc(label)+'</div>Adjust the filter or clear the search box.</div>';
       return;
     }
     timelineEl.classList.remove("bare");
 
-    var html = [];
+    // Label filter bar
+    var lfBar = "";
+    if(t.labelFilter){
+      lfBar = '<div class="label-filter-bar show"><span>Filtered by label:</span> <span class="lf-label">'+esc(t.labelFilter)+'</span><button class="lf-clear" id="lf-clear">Clear</button></div>';
+    }
+
+    var html = [lfBar];
     if(filter==="done"){
       html.push(groupHead("later","Done",done.length));
       done.forEach(function(it){ html.push(itemHtml(it,"later",nowMs,true)); });
@@ -792,10 +860,11 @@
     var cd = fmtCountdown(it.due,nowMs);
     var pri = it.priority==="high" ? '<span class="tag hi">High</span>'
             : it.priority==="low" ? '<span class="tag lo">Low</span>' : "";
-    var labelTags = it.labels.map(function(l){ return '<span class="tag cat">'+esc(l)+'</span>'; }).join("");
+    var labelTags = it.labels.map(function(l){ return '<span class="tag cat" data-label-filter="'+esc(l)+'">'+esc(l)+'</span>'; }).join("");
     var tags = (pri||labelTags) ? '<div class="tags">'+pri+labelTags+'</div>' : "";
     var notes = it.notes ? '<div class="i-notes">'+linkify(it.notes)+'</div>' : "";
-    return '<article class="item b-'+bucket+(isDone?' done':'')+'" data-id="'+it.id+'">'
+    var highPriClass = it.priority==="high" ? ' high-pri' : '';
+    return '<article class="item b-'+bucket+(isDone?' done':'')+highPriClass+'" data-id="'+it.id+'">'
       +'<span class="node"></span>'
       +'<input type="checkbox" class="check" '+(isDone?'checked':'')+' aria-label="Mark done" data-act="toggle">'
       +'<div class="body">'
@@ -925,6 +994,10 @@
       c.classList.toggle("active", c.getAttribute("data-filter")===f);
     });
     var sb=$("search"); if(sb) sb.value = cur().query;
+    // Sync view toggle
+    Array.prototype.forEach.call(document.querySelectorAll("#view-toggle .view-btn"), function(b){
+      b.classList.toggle("active", b.getAttribute("data-view")===cur().viewMode);
+    });
   }
   function switchTab(key){
     if(!TABS[key]) return;
@@ -1082,6 +1155,32 @@
     cur().filter=chip.getAttribute("data-filter");
     Array.prototype.forEach.call(this.querySelectorAll(".chip"), function(c){ c.classList.toggle("active", c===chip); });
     render();
+  });
+
+  // View toggle (list / tile)
+  $("view-toggle").addEventListener("click", function(e){
+    var btn=e.target.closest(".view-btn"); if(!btn) return;
+    cur().viewMode = btn.getAttribute("data-view");
+    Array.prototype.forEach.call(this.querySelectorAll(".view-btn"), function(b){ b.classList.toggle("active", b===btn); });
+    render();
+  });
+
+  // Label click filter
+  timelineEl.addEventListener("click", function(e){
+    var labelTag = e.target.closest("[data-label-filter]");
+    if(labelTag){
+      e.stopPropagation();
+      var labelName = labelTag.getAttribute("data-label-filter");
+      cur().labelFilter = (cur().labelFilter === labelName) ? "" : labelName;
+      render();
+      return;
+    }
+    var clearBtn = e.target.closest("#lf-clear");
+    if(clearBtn){
+      cur().labelFilter = "";
+      render();
+      return;
+    }
   });
   var searchTimer=null;
   $("search").addEventListener("input", function(e){
