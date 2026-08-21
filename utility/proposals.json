@@ -3,7 +3,7 @@
   "tab": "proposal",
   "label": "Proposal Due Dates",
   "version": 2,
-  "exportedAt": "2026-08-21T19:53:44.466Z",
+  "exportedAt": "2026-08-21T21:08:30.024Z",
   "items": [
     {
       "id": "d_mt34fbdd_yeyany",
@@ -331,6 +331,124 @@
       "notes": "https://simpler.grants.gov/opportunity/b1489614-88c5-4534-a1ef-ffafdd1ba9d0?_hsmi=433208330",
       "done": false,
       "created": 1787336728008
+    },
+    {
+      "id": "d_mt3e4511_81gty6",
+      "title": "Science Track Award for Research Transition (START) Program (R03)",
+      "due": 1792184400000,
+      "priority": "high",
+      "labels": [
+        "NIH"
+      ],
+      "notes": "https://simpler.grants.gov/opportunity/48b76af5-fee6-4257-92cd-60ba5adc4d73\n\nhttps://files.simpler.grants.gov/opportunities/48b76af5-fee6-4257-92cd-60ba5adc4d73/attachments/345f6574-cb9f-4f2f-b30e-bf281227f43f/PAS-27-028-Full-Announcement.html",
+      "done": false,
+      "created": 1787343404149
+    },
+    {
+      "id": "d_mt3f2474_8qii08",
+      "title": "DARPA Information Processing Techniques Office Office-Wid",
+      "due": 1813698000000,
+      "priority": "normal",
+      "labels": [
+        "DARPA"
+      ],
+      "notes": "https://simpler.grants.gov/opportunity/4ec76651-17d7-47fd-ac5e-377e8673b3a4",
+      "done": false,
+      "created": 1787344989376
+    },
+    {
+      "id": "d_mt3flnlk_hvv18t",
+      "title": "Computational Approaches to Curation at Scale for Biomedical Research Assets (R01)",
+      "due": 1789506000000,
+      "priority": "normal",
+      "labels": [
+        "NIH"
+      ],
+      "notes": "https://simpler.grants.gov/opportunity/bb697296-f13f-454c-bf67-a7a0077da134",
+      "done": false,
+      "created": 1787345900984
+    },
+    {
+      "id": "d_mt3fnjba_mpz9u8",
+      "title": "Investigator Initiated Innovation in Computational Genomics and Data Science (R01)",
+      "due": 1801864800000,
+      "priority": "normal",
+      "labels": [],
+      "notes": "https://simpler.grants.gov/opportunity/3534db2c-f130-4af8-9ef7-48d31c15cff1",
+      "done": false,
+      "created": 1787345988742
+    },
+    {
+      "id": "d_mt3fpf2m_3kxsmn",
+      "title": "Advancing Bioinformatics, Translational Bioinformatics and Computational Biology Research (R01)",
+      "due": 1791237600000,
+      "priority": "normal",
+      "labels": [
+        "NIH"
+      ],
+      "notes": "https://simpler.grants.gov/opportunity/ca108e77-69f6-4d3a-9723-a1353076a4ad",
+      "done": false,
+      "created": 1787346076558
+    },
+    {
+      "id": "d_mt3fqp7g_xs1fdk",
+      "title": "Research Grants in Clinical Informatics (R01)",
+      "due": 1791237600000,
+      "priority": "normal",
+      "labels": [
+        "NIH"
+      ],
+      "notes": "https://files.simpler.grants.gov/opportunities/131fabad-5506-431b-b87a-e564f1d8dcc4/attachments/61b6dce0-ffe6-4f50-b863-07b2ce70c1bf/PAR-26-042-Full-Announcement.html",
+      "done": false,
+      "created": 1787346136348
+    },
+    {
+      "id": "d_mt3frub3_8fcb61",
+      "title": "Secondary Analysis and Integration of Existing Data to Elucidate Cancer Risk and Related Outcomes (R01)",
+      "due": 1791237600000,
+      "priority": "normal",
+      "labels": [
+        "NIH"
+      ],
+      "notes": "https://simpler.grants.gov/opportunity/72610d49-3969-4f3f-8018-48f186c2c4dc",
+      "done": false,
+      "created": 1787346189615
+    },
+    {
+      "id": "d_mt3ft3a5_iwnds9",
+      "title": "Developing novel theory and methods for understanding the genetic architecture of complex human traits (R01)",
+      "due": 1791237600000,
+      "priority": "normal",
+      "labels": [
+        "NIH"
+      ],
+      "notes": "https://simpler.grants.gov/opportunity/e7274f1f-6c35-4794-b86f-38504861afbc",
+      "done": false,
+      "created": 1787346247901
+    },
+    {
+      "id": "d_mt3fuiaz_csukte",
+      "title": "Transformative Research Award",
+      "due": 1788472800000,
+      "priority": "normal",
+      "labels": [
+        "NIH"
+      ],
+      "notes": "https://files.simpler.grants.gov/opportunities/a71fb2f3-0d3a-477b-8b20-2451cf35cc7f/attachments/8ccde07e-c051-4507-9290-1f7bdf20b555/RFA-RM-27-003-Full-Announcement.html",
+      "done": false,
+      "created": 1787346314027
+    },
+    {
+      "id": "d_mt3fy8wi_btirpc",
+      "title": "NIH Research Project Grant (Parent R01)",
+      "due": 1791237600000,
+      "priority": "normal",
+      "labels": [
+        "NIH"
+      ],
+      "notes": "https://simpler.grants.gov/opportunity/17223aaa-4ddf-44ef-a26e-d995578c2cb9",
+      "done": false,
+      "created": 1787346488466
     }
   ]
 }
