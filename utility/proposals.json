@@ -3,7 +3,7 @@
   "tab": "proposal",
   "label": "Proposal Due Dates",
   "version": 2,
-  "exportedAt": "2026-08-21T17:07:49.998Z",
+  "exportedAt": "2026-08-21T19:53:44.466Z",
   "items": [
     {
       "id": "d_mt34fbdd_yeyany",
@@ -62,7 +62,7 @@
       "id": "d_mt36kcky_a0y9dv",
       "title": "NASA B.2 Heliophysics Foundational Research",
       "due": 1790373600000,
-      "priority": "normal",
+      "priority": "high",
       "labels": [
         "NASA",
         "PROPOSAL"
@@ -157,6 +157,180 @@
       "notes": "https://www.nsf.gov/funding/opportunities/eri-engineering-research-initiation",
       "done": false,
       "created": 1787332053672
+    },
+    {
+      "id": "d_mt37fhx4_sxfj0l",
+      "title": "State and Regional Artificial Intelligence Infrastructure Hubs:",
+      "due": 1793833200000,
+      "priority": "normal",
+      "labels": [
+        "NSF"
+      ],
+      "notes": "https://www.nsf.gov/funding/opportunities/us-national-science-foundation-state-regional-artificial",
+      "done": false,
+      "created": 1787332176760
+    },
+    {
+      "id": "d_mt37g9r4_iwntew",
+      "title": "Unlocking Dataset Value for AI-Enabled Scientific Discovery (AI Datasets)",
+      "due": 1793833200000,
+      "priority": "normal",
+      "labels": [
+        "NSF"
+      ],
+      "notes": "https://www.nsf.gov/funding/opportunities/ai-datasets-unlocking-dataset-value-ai-enabled-scientific-discovery",
+      "done": false,
+      "created": 1787332212832
+    },
+    {
+      "id": "d_mt37hefz_2n8foc",
+      "title": "MPS Astro",
+      "due": 1794855600000,
+      "priority": "normal",
+      "labels": [
+        "NSF"
+      ],
+      "notes": "https://www.nsf.gov/funding/opportunities/mps-astro-mps-astronomical-sciences-research-programs",
+      "done": false,
+      "created": 1787332265567
+    },
+    {
+      "id": "d_mt37s2mk_2idht2",
+      "title": "NSF Finders Foundary",
+      "due": 1795042800000,
+      "priority": "normal",
+      "labels": [
+        "NSF"
+      ],
+      "notes": "https://www.nsf.gov/funding/opportunities/nsf-finders-foundry-national-science-foundation-fostering-interdisciplinary",
+      "done": false,
+      "created": 1787332763468
+    },
+    {
+      "id": "d_mt37vzge_62qvz9",
+      "title": "Expeditions in Computing (Expeditions)",
+      "due": 1796238000000,
+      "priority": "high",
+      "labels": [
+        "NSF"
+      ],
+      "notes": "https://www.nsf.gov/funding/opportunities/expeditions-expeditions-computing",
+      "done": false,
+      "created": 1787332945982
+    },
+    {
+      "id": "d_mt37x1s5_e4y2tc",
+      "title": "EPSCoR Research Infrastructure Improvement Program",
+      "due": 1797361200000,
+      "priority": "high",
+      "labels": [
+        "NSF"
+      ],
+      "notes": "https://www.nsf.gov/funding/opportunities/epscor-research-infrastructure-improvement-program-focused",
+      "done": false,
+      "created": 1787332995653
+    },
+    {
+      "id": "d_mt37yx28_0lszj6",
+      "title": "Solar, Heliospheric, and INterplanetary Environment (SHINE)",
+      "due": 1791410400000,
+      "priority": "normal",
+      "labels": [
+        "NSF"
+      ],
+      "notes": "https://www.nsf.gov/funding/opportunities/shine-solar-heliospheric-interplanetary-environment/nsf22-570/solicitation",
+      "done": false,
+      "created": 1787333082848
+    },
+    {
+      "id": "d_mt381il4_phgwgi",
+      "title": "NSF Geosciences Core Research: Atmospheric, Geospace, Earth and Ocean Sciences",
+      "due": 1795028400000,
+      "priority": "normal",
+      "labels": [
+        "NSF",
+        "ANYTIME"
+      ],
+      "notes": "https://www.nsf.gov/funding/opportunities/geo-core-geosciences-core-research-atmospheric-geospace-earth-ocean/nsf26-516/solicitation",
+      "done": false,
+      "created": 1787333204056
+    },
+    {
+      "id": "d_mt382p46_8jjinj",
+      "title": "Geospace Cluster (AGS-GC)",
+      "due": 1795302000000,
+      "priority": "normal",
+      "labels": [
+        "NSF",
+        "ANYTIME"
+      ],
+      "notes": "https://www.nsf.gov/funding/opportunities/ags-gc-geospace-cluster",
+      "done": false,
+      "created": 1787333259174
+    },
+    {
+      "id": "d_mt38436t_lberyw",
+      "title": "Atmosphere Cluster (AGS-AC)",
+      "due": 1796065200000,
+      "priority": "normal",
+      "labels": [
+        "NSF",
+        "ANYTIME"
+      ],
+      "notes": "https://www.nsf.gov/funding/opportunities/ags-ac-atmosphere-cluster",
+      "done": false,
+      "created": 1787333324069
+    },
+    {
+      "id": "d_mt384qgf_6fll1g",
+      "title": "Infrastructure Cluster (AGS-IC)",
+      "due": 1796497200000,
+      "priority": "normal",
+      "labels": [
+        "NSF",
+        "ANYTIME"
+      ],
+      "notes": "https://www.nsf.gov/funding/opportunities/ags-ic-infrastructure-cluster",
+      "done": false,
+      "created": 1787333354223
+    },
+    {
+      "id": "d_mt3868rz_in2w6p",
+      "title": "Coupling, Energetics, and Dynamics of Atmospheric Regions (CEDAR",
+      "due": 1804114800000,
+      "priority": "normal",
+      "labels": [
+        "NSF"
+      ],
+      "notes": "https://www.nsf.gov/funding/opportunities/cedar-coupling-energetics-dynamics-atmospheric-regions",
+      "done": false,
+      "created": 1787333424623
+    },
+    {
+      "id": "d_mt38axp2_4sz831",
+      "title": "SONY RESEARCH AWARD PROGRAM",
+      "due": 1789509600000,
+      "priority": "normal",
+      "labels": [
+        "SONY",
+        "CORPORATE"
+      ],
+      "notes": "https://www.sony.com/en/SonyInfo/research-award-program/",
+      "done": false,
+      "created": 1787333643542
+    },
+    {
+      "id": "d_mt3a51oo_e6isai",
+      "title": "(DEPSCoR) – RESEARCH COLLABORATION (RC)",
+      "due": 1791838800000,
+      "priority": "high",
+      "labels": [
+        "DoD",
+        "WHITEPAPER"
+      ],
+      "notes": "https://simpler.grants.gov/opportunity/b1489614-88c5-4534-a1ef-ffafdd1ba9d0?_hsmi=433208330",
+      "done": false,
+      "created": 1787336728008
     }
   ]
 }
