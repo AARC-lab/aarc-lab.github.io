@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unit Pulse → Unit Impulse δ(t) · Interactive Demo</title>
+<style>
+  :root{
+    --bg:#070a18; --bg2:#0b1024;
+    --panel:rgba(255,255,255,.045);
+    --stroke:rgba(148,163,184,.16);
+    --txt:#e2e8f0; --mut:#94a3b8; --dim:#64748b;
+    --cyan:#22d3ee; --amber:#fbbf24; --violet:#a78bfa; --green:#34d399;
+    --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  .hiddenEl{display:none!important}
+  html,body{height:100%}
+  body{
+    font-family:var(--sans);color:var(--txt);
+    background:
+      radial-gradient(1200px 700px at 20% -10%, rgba(34,211,238,.09), transparent 60%),
+      radial-gradient(1000px 600px at 90% 110%, rgba(167,139,250,.08), transparent 60%),
+      linear-gradient(160deg,var(--bg2),var(--bg));
+    min-height:100vh;padding:28px 16px 60px;
+  }
+  .wrap{max-width:1060px;margin:0 auto}
+  header{text-align:center;margin-bottom:22px}
+  .badge{
+    display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--cyan);border:1px solid rgba(34,211,238,.35);
+    background:rgba(34,211,238,.07);padding:5px 14px;border-radius:999px;margin-bottom:14px;
+  }
+  h1{font-size:clamp(24px,3.6vw,38px);font-weight:800;letter-spacing:-.01em}
+  h1 .lim{display:inline-flex;flex-direction:column;align-items:center;line-height:1;vertical-align:middle;margin:0 6px;font-weight:700;font-size:.62em}
+  h1 .lim .op{letter-spacing:.02em}
+  h1 .lim .under{font-size:.62em;color:var(--amber);margin-top:2px}
+  h1 .arrow{color:var(--amber)}
+  .sub{color:var(--mut);max-width:720px;margin:12px auto 0;line-height:1.65;font-size:15px}
+  .sub b{color:var(--txt)}
+
+  /* Tabs */
+  .tabs{display:flex;justify-content:center;gap:10px;margin:26px 0 16px;flex-wrap:wrap}
+  .tab{
+    font-family:var(--mono);font-size:13px;color:var(--mut);cursor:pointer;
+    background:var(--panel);border:1px solid var(--stroke);border-radius:999px;
+    padding:9px 20px;transition:all .25s ease;
+  }
+  .tab:hover{color:var(--txt);border-color:rgba(148,163,184,.4)}
+  .tab.active{color:#06202a;background:linear-gradient(135deg,var(--cyan),#67e8f9);border-color:transparent;font-weight:700;box-shadow:0 4px 18px rgba(34,211,238,.35)}
+
+  /* Stage */
+  .stage{
+    position:relative;background:var(--panel);border:1px solid var(--stroke);
+    border-radius:18px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.35);
+  }
+  .canvas-wrap{display:block;width:100%;aspect-ratio:16/8.2;min-height:330px}
+  .canvas-wrap.hiddenEl{display:none!important}
+  canvas{display:block;width:100%;height:100%}
+
+  .status-chip{
+    position:absolute;top:14px;right:14px;pointer-events:none;
+    font-family:var(--mono);font-size:12px;color:var(--amber);
+    background:rgba(8,12,28,.78);border:1px solid rgba(251,191,36,.4);
+    border-radius:999px;padding:7px 14px;backdrop-filter:blur(6px);
+    transition:all .3s ease;white-space:nowrap;z-index:5;
+  }
+  .status-chip.converged{
+    color:var(--green);border-color:rgba(52,211,153,.55);
+    box-shadow:0 0 0 0 rgba(52,211,153,.5);animation:pulseRing 1.6s ease-out infinite;
+  }
+  @keyframes pulseRing{
+    0%{box-shadow:0 0 0 0 rgba(52,211,153,.45)}
+    70%{box-shadow:0 0 0 12px rgba(52,211,153,0)}
+    100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}
+  }
+
+  /* Controls */
+  .controls{
+    margin-top:14px;background:var(--panel);border:1px solid var(--stroke);
+    border-radius:16px;padding:14px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  }
+  .btn{
+    font-family:var(--mono);font-size:13px;font-weight:700;cursor:pointer;border-radius:10px;
+    border:1px solid rgba(34,211,238,.45);color:#06202a;background:linear-gradient(135deg,var(--cyan),#67e8f9);
+    padding:9px 18px;transition:transform .15s ease,box-shadow .2s ease;white-space:nowrap;
+  }
+  .btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(34,211,238,.35)}
+  .btn.ghost{background:transparent;color:var(--mut);border-color:var(--stroke);font-weight:500}
+  .btn.ghost:hover{color:var(--txt);border-color:rgba(148,163,184,.45);box-shadow:none;transform:none}
+  .btn.nudge{animation:nudge 1.4s ease-in-out infinite}
+  @keyframes nudge{0%,100%{box-shadow:0 0 0 0 rgba(34,211,238,.5)}50%{box-shadow:0 0 0 9px rgba(34,211,238,0)}}
+
+  input[type=range]{flex:1;min-width:170px;accent-color:var(--cyan);cursor:pointer;height:4px}
+  .dlab{font-family:var(--mono);font-size:12px;color:var(--dim);white-space:nowrap}
+  .dlab b{color:var(--cyan)}
+
+  .chk{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--mut);cursor:pointer;user-select:none;white-space:nowrap}
+  .chk input{accent-color:var(--amber);width:15px;height:15px;cursor:pointer}
+
+  /* Cards */
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:14px}
+  .cards.hiddenEl{display:none!important}
+  .card{
+    background:var(--panel);border:1px solid var(--stroke);border-radius:14px;
+    padding:14px 16px;position:relative;overflow:hidden;
+  }
+  .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--ac,var(--cyan))}
+  .card .k{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:6px;font-family:var(--mono)}
+  .card .v{font-family:var(--mono);font-size:21px;font-weight:700;color:var(--txt)}
+  .card .v small{font-size:12px;color:var(--mut);font-weight:400;margin-left:4px}
+  .card .note{font-size:11.5px;color:var(--mut);margin-top:5px;line-height:1.5}
+  .bar{height:5px;background:rgba(148,163,184,.15);border-radius:99px;margin-top:9px;overflow:hidden}
+  .bar i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--amber),var(--green));border-radius:99px;transition:width .12s linear}
+
+  /* Notes */
+  .notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:20px}
+  .notes.hiddenEl{display:none!important}
+  .note-card{background:var(--panel);border:1px solid var(--stroke);border-radius:16px;padding:20px 22px}
+  .note-card h3{font-size:14.5px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .note-card h3 .dot{width:8px;height:8px;border-radius:99px;background:var(--ac,var(--cyan));box-shadow:0 0 10px var(--ac,var(--cyan))}
+  .note-card p{color:var(--mut);font-size:13.5px;line-height:1.75}
+  .note-card p+p{margin-top:9px}
+  .note-card b{color:var(--txt)}
+  .formula{
+    font-family:var(--mono);background:rgba(8,12,28,.6);border:1px solid var(--stroke);
+    border-radius:10px;padding:11px 14px;margin:10px 0;font-size:13.5px;color:var(--cyan);
+    overflow-x:auto;white-space:nowrap;text-align:center;
+  }
+  .formula.amberF{color:var(--amber)}
+  .formula.violetF{color:var(--violet)}
+  kbd{
+    font-family:var(--mono);font-size:11px;background:rgba(148,163,184,.12);
+    border:1px solid var(--stroke);border-bottom-width:2px;border-radius:6px;padding:2px 7px;color:var(--txt);
+  }
+  footer{margin-top:26px;text-align:center;color:var(--dim);font-size:12px;line-height:1.9}
+  footer .sep{margin:0 8px;opacity:.4}
+  @media(max-width:640px){
+    .canvas-wrap{aspect-ratio:auto;height:340px}
+    .controls{gap:10px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="badge">Signals &amp; Systems · Interactive Demo</div>
+    <h1>
+      Unit Pulse
+      <span class="arrow">→</span>
+      <span class="lim"><span class="op">lim</span><span class="under">Δ → 0</span></span>
+      Unit Impulse δ(t)
+    </h1>
+    <p class="sub">
+      A rectangular pulse of <b>width Δ</b> and <b>height 1/Δ</b> always encloses an area of exactly
+      <b>1</b>. Squeeze its width toward zero and the height must blow up — watch the pulse concentrate
+      into a single instant and become the <b>unit impulse (Dirac delta) function</b>.
+    </p>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" id="tabPulse">① The unit-area pulse</button>
+    <button class="tab" id="tabSift">② Why it matters · sifting property</button>
+  </nav>
+
+  <!-- ============ VIEW 1 : PULSE ============ -->
+  <section class="stage" id="stagePulse">
+    <div class="canvas-wrap" id="vwPulse"><canvas id="cv"></canvas></div>
+    <div class="status-chip" id="chipPulse">wide pulse</div>
+  </section>
+
+  <section class="cards" id="cardsPulse">
+    <div class="card" style="--ac:#22d3ee">
+      <div class="k">Pulse width</div>
+      <div class="v"><span id="statW">–</span><small>seconds</small></div>
+      <div class="note">Rectangular support: |t| ≤ Δ/2</div>
+    </div>
+    <div class="card" style="--ac:#a78bfa">
+      <div class="k">Pulse height</div>
+      <div class="v"><span id="statH">–</span><small>= 1/Δ</small></div>
+      <div class="note">Grows without bound as Δ → 0</div>
+    </div>
+    <div class="card" style="--ac:#fbbf24">
+      <div class="k">Enclosed area</div>
+      <div class="v"><span id="statA">1.000000</span><small>= Δ · 1/Δ</small></div>
+      <div class="note">Invariant — locked at unity for every Δ</div>
+    </div>
+    <div class="card" style="--ac:#34d399">
+      <div class="k">Convergence to δ(t)</div>
+      <div class="v"><span id="statPct">0.0%</span></div>
+      <div class="bar"><i id="statBar"></i></div>
+      <div class="note">Measured on a log scale: Δ ∈ [2 → 0.02]</div>
+    </div>
+  </section>
+
+  <!-- ============ VIEW 2 : SIFTING ============ -->
+  <section class="stage hiddenEl" id="stageSift">
+    <div class="canvas-wrap" id="vwSift"><canvas id="cvs"></canvas></div>
+    <div class="status-chip" id="chipSift">windowed average</div>
+  </section>
+
+  <section class="cards hiddenEl" id="cardsSift">
+    <div class="card" style="--ac:#22d3ee">
+      <div class="k">Averaging window</div>
+      <div class="v"><span id="sfW">–</span><small>width Δ</small></div>
+      <div class="note">Only f(t) inside |t| &lt; Δ/2 contributes</div>
+    </div>
+    <div class="card" style="--ac:#fbbf24">
+      <div class="k">Weighted integral I<sub>Δ</sub> = ∫ f·p<sub>Δ</sub> dt</div>
+      <div class="v"><span id="sfI">–</span></div>
+      <div class="note">Trapezoid estimate over [−Δ/2, +Δ/2]</div>
+    </div>
+    <div class="card" style="--ac:#34d399">
+      <div class="k">Target value f(0)</div>
+      <div class="v"><span id="sfT">1.0000</span></div>
+      <div class="note">Sifting limit: I<sub>Δ</sub> → f(0) = ∫ f(t)δ(t)dt</div>
+    </div>
+    <div class="card" style="--ac:#a78bfa">
+      <div class="k">Absolute error |I<sub>Δ</sub> − f(0)|</div>
+      <div class="v"><span id="sfErr">–</span></div>
+      <div class="bar"><i id="sfBar"></i></div>
+      <div class="note">Shrinks toward 0 as O(Δ²)</div>
+    </div>
+  </section>
+
+  <!-- ============ CONTROLS ============ -->
+  <section class="controls">
+    <button class="btn nudge" id="btnPlay">▶&nbsp;Animate Δ→0</button>
+    <span class="dlab">Δ = <b id="dNow">2.00</b>&nbsp;s</span>
+    <input type="range" id="slider" min="0" max="1000" step="1" value="0" aria-label="pulse width Delta">
+    <button class="btn ghost" id="btnReset">⟲&nbsp;Reset</button>
+    <label class="chk"><input type="checkbox" id="cbFit" checked>Auto-fit Y axis</label>
+    <label class="chk"><input type="checkbox" id="cbTrails" checked>Ghost trails</label>
+  </section>
+
+  <!-- ============ NOTES ============ -->
+  <section class="notes" id="notesPulse">
+    <div class="note-card">
+      <h3><span class="dot"></span>Definition of the unit pulse</h3>
+      <p>For every positive width Δ we build a rectangular pulse centered at the origin:</p>
+      <div class="formula">p<sub>Δ</sub>(t) = { 1/Δ&nbsp;&nbsp;for |t| ≤ Δ/2 ;&nbsp;&nbsp;0 otherwise }</div>
+      <p>The rectangle is <b>Δ</b> wide and <b>1/Δ</b> tall, so its area is Δ·(1/Δ) = <b>1</b> no matter how we
+      choose Δ. This is why it is called a <b>unit</b> pulse. The two parameters trade off against each
+      other: making the pulse narrower forces it to become taller by exactly the reciprocal factor, and
+      that compensation is precisely what keeps the total area pinned at unity.</p>
+    </div>
+    <div class="note-card" style="--ac:#fbbf24">
+      <h3><span class="dot" style="--ac:#fbbf24"></span>The limiting process</h3>
+      <p>Now imagine squeezing the pulse: as Δ shrinks, the height 1/Δ grows. The pulse becomes a thinner
+      and taller spike, yet the enclosed area never changes. In the limit the pulse is concentrated at a
+      single point t = 0:</p>
+      <div class="formula amberF">δ(t) = lim<sub>Δ→0</sub> p<sub>Δ</sub>(t)</div>
+      <p>The result cannot be an ordinary function: for t ≠ 0 it equals 0, while at t = 0 it would have to
+      be infinite so that the area stays 1. It is therefore treated as a <b>distribution</b>, defined by what
+      it does under an integral rather than by point values.</p>
+    </div>
+    <div class="note-card" style="--ac:#34d399">
+      <h3><span class="dot" style="--ac:#34d399"></span>Properties inherited from the pulse</h3>
+      <p>Every useful property of δ(t) is simply the limiting version of a property of p<sub>Δ</sub>(t):</p>
+      <p>• <b>Unit area:</b> ∫ p<sub>Δ</sub>dt = 1 &nbsp;⟹&nbsp; ∫ δ(t)dt = 1<br>
+         • <b>Sifting:</b> ∫ f(t)p<sub>Δ</sub>(t)dt ≈ f(0) &nbsp;⟹&nbsp; ∫ f(t)δ(t)dt = f(0)<br>
+         • <b>Causality shift:</b> p<sub>Δ</sub>(t−t₀) &nbsp;⟹&nbsp; δ(t−t₀), a spike located at t₀</p>
+      <p>Switch to tab ② to see the sifting property converge live with your own eyes.</p>
+    </div>
+  </section>
+
+  <section class="notes hiddenEl" id="notesSift">
+    <div class="note-card" style="--ac:#a78bfa">
+      <h3><span class="dot" style="--ac:#a78bfa"></span>The sifting property</h3>
+      <p>Multiply any smooth test signal f(t) by the pulse and integrate. Since p<sub>Δ</sub> vanishes outside
+      a tiny window, only the behaviour of f near zero matters:</p>
+      <div class="formula violetF">I<sub>Δ</sub> = ∫ f(t)·p<sub>Δ</sub>(t) dt = (1/Δ)∫<sub>|t|≤Δ/2</sub> f(t) dt ≈ f(0)</div>
+      <p>The expression (1/Δ)∫f dt is exactly the <b>average of f over the window</b>. As Δ → 0 the average of a
+      continuous function over a shrinking interval locks onto its central value f(0). In this demo
+      f(t) = e<sup>−t²</sup>cos(2t), so the target is f(0) = 1, and the measured error decays proportionally
+      to Δ².</p>
+    </div>
+    <div class="note-card" style="--ac:#fbbf24">
+      <h3><span class="dot" style="--ac:#fbbf24"></span>Reading the plot</h3>
+      <p>The grey curve is the test signal f(t). The violet shaded strip is the averaging window of current
+      width Δ, and the cyan dashed segment marks the windowed average value I<sub>Δ</sub>. The amber dotted
+      line is the destination f(0). As you animate Δ toward zero the strip tightens around the origin and
+      the cyan line slides down onto the amber one — a literal picture of "the delta samples the signal at
+      a single point".</p>
+    </div>
+    <div class="note-card" style="--ac:#34d399">
+      <h3><span class="dot" style="--ac:#34d399"></span>Why engineers care</h3>
+      <p>This construction is not a trick — it is how sampling, weighting and system analysis are made
+      rigorous. Sampling a signal uses δ(t−nT); a system's impulse response h(t) is precisely what the LTI
+      system outputs when fed this limiting spike; convolution with δ(t) returns the signal unchanged,
+      because the delta carries unit area but zero duration. Every impulse in practice (a hammer tap, a
+      voltage spike, a radar ping) is finite in time and power — i.e., one of these pulses — and the ideal
+      δ(t) is the clean mathematical model obtained when the duration becomes negligible compared with the
+      system's response time.</p>
+    </div>
+  </section>
+
+  <footer>
+    Drag the slider or press <kbd>Space</kbd> to animate · <kbd>R</kbd> reset · <kbd>F</kbd> toggle Y-fit ·
+    <kbd>←</kbd>/<kbd>→</kbd> fine-tune Δ<span class="sep">|</span>Single-file demo · vanilla HTML5 Canvas · works offline
+  </footer>
+
+</div>
+
+<script>
+/* ============================================================
+   Unit Pulse → Unit Impulse  ·  interactive demonstration
+   Single-file, dependency-free, vanilla Canvas 2D.
+   ============================================================ */
+'use strict';
+
+/* ---------- constants ---------- */
+const D_MIN   = 0.02;                 // smallest pulse width shown
+const D_MAX   = 2.0;                  // widest pulse width shown
+const LOG_MIN = Math.log10(D_MIN);
+const LOG_MAX = Math.log10(D_MAX);
+const X_MIN   = -1.7, X_MAX = 1.7;    // world x-range
+const SPEED   = (LOG_MAX - LOG_MIN) / 9;   // decades per second while animating
+
+const C = {
+  txt:'#e2e8f0', mut:'#94a3b8', dim:'#64748b', grid:'rgba(148,163,184,.08)',
+  zero:'rgba(148,163,184,.38)', cyan:'#22d3ee', amber:'#fbbf24',
+  violet:'#a78bfa', green:'#34d399'
+};
+
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+
+/* ---------- state ---------- */
+const S = {
+  ld: LOG_MAX,            // log10(current width) — the single source of truth
+  d : D_MAX,              // derived linear width, refreshed each frame
+  playing:false,
+  fit:true,
+  trails:true,
+  trail:[],               // recent log-widths for ghost effect
+  lastTrail:0,
+  ymax:2.6,               // smoothed auto-fit value
+  tab:'pulse',
+  convAt:0                // timestamp when convergence happened (glow fx)
+};
+
+/* ---------- elements ---------- */
+const cv=$('cv'), cts=cv.getContext('2d');
+const cvs=$('cvs'), sts=cvs.getContext('2d');
+const slider=$('slider'), btnPlay=$('btnPlay');
+
+/* ---------- helpers ---------- */
+const prog = ()=> (LOG_MAX - S.ld)/(LOG_MAX - LOG_MIN);      // 0 … 1
+function fmt(v){
+  if(!isFinite(v)) return '∞';
+  const a=Math.abs(v);
+  if(a>=100)   return v.toFixed(0);
+  if(a>=10)    return v.toFixed(1);
+  if(a>=0.001) return v.toFixed(3);
+  return v.toExponential(1);
+}
+function niceStep(span,n){
+  const raw=span/n, mag=Math.pow(10,Math.floor(Math.log10(raw)));
+  const nrm=raw/mag;
+  return mag*(nrm<1.5?1:nrm<3?2:nrm<7?5:10);
+}
+function arrowHead(g,x,y,dir,size,color){ // dir=-1 up, +1 down
+  g.fillStyle=color; g.beginPath();
+  g.moveTo(x,y);
+  g.lineTo(x-size*.62, y+dir*size);
+  g.lineTo(x+size*.62, y+dir*size);
+  g.closePath(); g.fill();
+}
+
+/* ---------- canvas sizing ---------- */
+function sizeCanvas(c,g){
+  const box=c.parentElement;
+  const w=box.clientWidth, h=box.clientHeight;
+  if(!w||!h) return false;
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const W=Math.round(w*dpr), H=Math.round(h*dpr);
+  if(c.width!==W||c.height!==H){c.width=W;c.height=H;}
+  g.setTransform(dpr,0,0,dpr,0,0);
+  return true;
+}
+
+/* ---------- shared frame + grid ---------- */
+function frame(g,c,mR){
+  const w=c.clientWidth,h=c.clientHeight;
+  const mL=50,r=mR||96,mT=30,mB=46;
+  const pw=w-mL-r, ph=h-mT-mB;
+  return {w,h,mL,mT,pw,ph,ox:mL,oy:mT};
+}
+function grid(g,F,X,Y,yMax){
+  g.clearRect(0,0,F.w,F.h);
+  /* horizontal */
+  const ys=niceStep(yMax,5);
+  g.strokeStyle=C.grid; g.lineWidth=1;
+  g.font='500 10.5px ui-monospace,Menlo,monospace'; g.fillStyle=C.dim;
+  for(let v=ys;v<=yMax+ys*0.01;v+=ys){
+    const yy=Y(v);
+    g.beginPath();g.moveTo(F.ox,yy);g.lineTo(F.ox+F.pw,yy);g.stroke();
+    g.textAlign='left'; g.fillText(fmt(+v.toFixed(6)), F.ox+F.pw+6, yy+3.5);
+  }
+  /* vertical */
+  g.beginPath();
+  for(let vx=-1.5;vx<=1.51;vx+=0.5){
+    const xx=X(vx); g.moveTo(xx,F.oy);g.lineTo(xx,F.oy+F.ph);
+  }
+  g.stroke();
+  g.fillStyle=C.dim; g.textAlign='center';
+  for(let vx=-1.5;vx<=1.51;vx+=0.5){
+    const lbl=vx===0?'0':vx.toFixed(1).replace('-','\u2212');
+    g.fillText(lbl, X(vx), F.oy+F.ph+16);
+  }
+  /* axes emphasised */
+  g.strokeStyle=C.zero; g.lineWidth=1.4;
+  g.beginPath();g.moveTo(F.ox,Y(0));g.lineTo(F.ox+F.pw,Y(0));g.stroke();
+  g.beginPath();g.moveTo(X(0),F.oy);g.lineTo(X(0),F.oy+F.ph);g.stroke();
+  g.fillStyle=C.mut; g.textAlign='left';
+  g.font='600 11px ui-monospace,Menlo,monospace';
+  g.fillText('t', F.ox+F.pw-4, Y(0)-8);
+  g.fillText('amplitude', F.ox+8, F.oy+12);
+}
+
+/* ============================================================
+   VIEW 1 — the unit-area pulse
+   ============================================================ */
+function drawPulse(now){
+  sizeCanvas(cv,cts);
+  const F=frame(cts,cv,100);
+
+  /* smooth the visible amplitude range */
+  const h=1/S.d;
+  const yt = S.fit ? clamp(h*1.22, 1.4, 560) : 1.6;
+  S.ymax += (yt-S.ymax)*0.15;
+  const yMax=S.ymax;
+
+  const X=v=>F.ox+(v-X_MIN)/(X_MAX-X_MIN)*F.pw;
+  const Y=v=>F.oy+F.ph-(v/yMax)*F.ph;
+
+  grid(cts,F,X,Y,yMax);
+
+  const xp=X(0);
+  const yb=Y(0), ytPx=Y(h);
+  const half=Math.max(X(S.d/2)-xp,0.95);          // never thinner than visible
+  const xl=xp-half, xr=xp+half;
+  const wpx=xr-xl;
+  const P=prog();
+
+  /* everything shape-related stays inside the plotting rectangle */
+  cts.save();
+  cts.beginPath(); cts.rect(F.ox,F.oy,F.pw,F.ph); cts.clip();
+
+  /* ---- ghost trails ---- */
+  if(S.trails){
+    for(let i=0;i<S.trail.length;i++){
+      const td=Math.pow(10,S.trail[i]), th=Math.min(1/td,yMax)/yMax*F.ph;
+      cts.strokeStyle=`rgba(34,211,238,${0.05+(i/S.trail.length)*0.22})`;
+      cts.lineWidth=1.2;
+      cts.strokeRect(X(-td/2), yb-th, X(td/2)-X(-td/2), th);
+    }
+  }
+
+  /* ---- pulse body (fill = its AREA) ---- */
+  const grad=cts.createLinearGradient(0,ytPx,0,yb);
+  grad.addColorStop(0,'rgba(251,191,36,.42)');
+  grad.addColorStop(1,'rgba(251,191,36,.10)');
+  cts.save();
+  cts.shadowColor='rgba(34,211,238,.55)'; cts.shadowBlur=14;
+  cts.fillStyle=grad;
+  cts.fillRect(xl,ytPx,wpx,yb-ytPx);
+  cts.strokeStyle=C.cyan; cts.lineWidth=2;
+  cts.strokeRect(xl,ytPx,wpx,yb-ytPx);
+  cts.restore();   /* pop shadow glow */
+
+  /* ---- height guide ---- */
+  cts.save();
+  cts.setLineDash([4,4]);
+  cts.strokeStyle='rgba(167,139,250,.5)'; cts.lineWidth=1;
+  cts.beginPath();cts.moveTo(xl,ytPx);cts.lineTo(xl+wpx+26,ytPx);cts.stroke();
+  cts.restore();
+  cts.fillStyle=C.violet; cts.font='700 11px ui-monospace,Menlo,monospace'; cts.textAlign='right';
+  cts.fillText('h = '+fmt(h), F.ox+F.pw-8, ytPx-7);
+
+  /* ---- width bracket ---- */
+  if(wpx>24){
+    const by=yb-13;
+    cts.strokeStyle='rgba(203,213,225,.75)'; cts.lineWidth=1.3;
+    cts.beginPath();
+    cts.moveTo(xl,by);cts.lineTo(xr,by);
+    cts.moveTo(xl,by-4);cts.lineTo(xl,by+4);
+    cts.moveTo(xr,by-4);cts.lineTo(xr,by+4);
+    cts.stroke();
+    cts.fillStyle='#cbd5e1'; cts.font='600 11.5px ui-monospace,Menlo,monospace';
+    cts.textAlign='center';
+    cts.fillText('Δ',xp,by-7);
+  }
+
+  /* ---- AREA label ---- */
+  cts.font='700 13px ui-monospace,Menlo,monospace';
+  if(wpx>=70){
+    cts.textAlign='center'; cts.fillStyle='#3b2b04';
+    cts.fillText('AREA = 1',xp,(ytPx+yb)/2+4);
+  }else{
+    const lx=Math.min(xp+120,F.ox+F.pw-130), ly=F.oy+52;
+    cts.strokeStyle='rgba(251,191,36,.55)'; cts.lineWidth=1;
+    cts.beginPath();cts.moveTo(xp,Y(h/2));cts.lineTo(lx-8,ly+4);cts.stroke();
+    cts.fillStyle=C.amber; cts.beginPath();cts.arc(xp,Y(Math.min(h/2,yMax)),3,0,7);cts.fill();
+    cts.textAlign='left';
+    cts.fillText('AREA = 1  (constant!)',lx,ly);
+  }
+
+  /* ---- function name watermark ---- */
+  if(P<0.6){
+    cts.fillStyle='rgba(226,232,240,.55)';
+    cts.font='italic 600 16px Georgia,serif'; cts.textAlign='left';
+    cts.fillText('p',xl-26,Math.max(ytPx,F.oy)+22);
+    cts.font='italic 600 11px Georgia,serif';
+    cts.fillText('Δ',xl-18,Math.max(ytPx,F.oy)+27);
+    cts.font='italic 600 11px ui-monospace,Menlo,monospace';
+    cts.fillText('(t)',xl-11,Math.max(ytPx,F.oy)+22);
+  }
+
+  cts.restore();   /* end plot-area clip */
+
+  /* ---- limiting behaviour decoration ---- */
+  const phase=now/1000;
+  if(!S.fit && h>yMax){
+    /* spike ran off a FIXED view: pin an escape arrow to the ceiling */
+    const glow=.5+.4*Math.sin(phase*5);
+    cts.save();
+    cts.shadowColor=C.violet; cts.shadowBlur=16*glow+6;
+    cts.strokeStyle=C.violet; cts.lineWidth=2.6;
+    cts.beginPath();cts.moveTo(xp,F.oy+38);cts.lineTo(xp,F.oy+8);cts.stroke();
+    cts.restore();
+    arrowHead(cts,xp,F.oy+6,-1,11,C.violet);
+    cts.fillStyle=C.violet; cts.font='700 12.5px ui-monospace,Menlo,monospace';
+    cts.textAlign='right';
+    cts.fillText('1/Δ → ∞',xp-14,F.oy+22);
+  }
+  if(S.fit && P>0.82){
+    /* approaching the limit: dashed δ preview grows */
+    const k=(P-0.82)/0.18;
+    cts.save();
+    cts.globalAlpha=k;
+    cts.setLineDash([5,5]);
+    cts.strokeStyle=C.violet; cts.lineWidth=1.6;
+    cts.beginPath();cts.moveTo(xp,ytPx);cts.lineTo(xp,ytPx-k*(yb-ytPx)*0.28);cts.stroke();
+    cts.restore();
+  }
+  if(P>=0.9995){
+    /* CONVERGED: full-blown delta arrow with radiating rings */
+    if(!S.convAt) S.convAt=now;
+    const ry=(now-S.convAt)/1000;
+    for(let i=0;i<2;i++){
+      const rr=((ry+i*0.55)%1.1);
+      cts.strokeStyle=`rgba(167,139,250,${(1-rr/1.1)*0.5})`;
+      cts.lineWidth=1.5;
+      cts.beginPath();cts.arc(xp,yb-4,rr*46+6,Math.PI,2*Math.PI);cts.stroke();
+    }
+    cts.save();
+    cts.shadowColor=C.violet; cts.shadowBlur=18;
+    cts.strokeStyle=C.violet; cts.lineWidth=3;
+    cts.beginPath();cts.moveTo(xp,yb-2);cts.lineTo(xp,F.oy+F.ph*0.10);cts.stroke();
+    cts.restore();
+    arrowHead(cts,xp,F.oy+F.ph*0.09,-1,13,C.violet);
+    cts.fillStyle='#ddd6fe'; cts.font='italic 800 17px Georgia,serif';
+    cts.textAlign='left';
+    cts.fillText('δ(t)',xp+14,F.oy+F.ph*0.16);
+    cts.fillStyle=C.green; cts.font='700 11.5px ui-monospace,Menlo,monospace';
+    cts.fillText('area still = 1',xp+14,F.oy+F.ph*0.16+16);
+  } else {
+    S.convAt=0;
+  }
+}
+
+/* ============================================================
+   Status cards + chip
+   ============================================================ */
+function chipFor(p){
+  if(p>=0.9995) return ['CONVERGED → δ(t)','converged'];
+  if(p>0.80)    return ['spike forming…',''];
+  if(p>0.33)    return ['narrowing · height ∝ 1/Δ',''];
+  return ['wide pulse · plain rectangle',''];
+}
+let cardTick=0;
+function updateCards(){
+  const p=prog(), h=1/S.d;
+  $('statW').textContent=fmt(S.d);
+  $('statH').textContent=fmt(h);
+  $('statA').textContent='1.000000';
+  $('statPct').textContent=(p*100).toFixed(1)+'%';
+  $('statBar').style.width=(p*100)+'%';
+  $('dNow').textContent=fmt(S.d);
+  if(cardTick%3===0 || S.playing===false){
+    const [txt,cls]=chipFor(p);
+    const ch=$('chipPulse');
+    ch.textContent=txt; ch.className='status-chip'+(cls?' '+cls:'');
+  }
+
+  /* ---- sifting tab live values ---- */
+  $('sfW').textContent=fmt(S.d);
+  const I=curI(), err=Math.abs(I-F_ZERO);
+  $('sfI').textContent=fmt(I);
+  $('sfErr').textContent=fmt(err);
+  $('sfBar').style.width=clamp(err/(ERR_MAX||1)*100,1,100)+'%';
+  const sc=$('chipSift');
+  if(p>=0.9995){sc.textContent='sifted → f(0) sampled';sc.className='status-chip converged';}
+  else if(p>0.55){sc.textContent='locking onto f(0)';sc.className='status-chip';}
+  else{sc.textContent='windowed average';sc.className='status-chip';}
+}
+
+/* ============================================================
+   Animation loop (part 1 – mechanics)
+   ============================================================ */
+function tick(now){
+  const dt=Math.min((now-window.__last||16)/1000,0.05);
+  window.__last=now;
+
+  if(S.playing){
+    S.ld-=SPEED*dt;
+    if(S.ld<=LOG_MIN){
+      S.ld=LOG_MIN; S.playing=false;
+      btnPlay.innerHTML='↻&nbsp;Replay';
+      btnPlay.classList.add('nudge');
+    }
+    if(now-S.lastTrail>60 && S.trails){
+      S.trail.push(S.ld);
+      if(S.trail.length>14) S.trail.shift();
+      S.lastTrail=now;
+    }
+    slider.value=Math.round(prog()*1000);       // keep slider synced
+  }
+
+  S.d=Math.pow(10,S.ld);                        // derived linear width
+
+  /* record sifting-integral history while animating */
+  if(S.tab==='sift' && S.playing && now-(window.__lastHist||0)>75){
+    window.__lastHist=now;
+    HIST.push(curI());
+    if(HIST.length>26) HIST.shift();
+  }
+
+  updateCards();
+
+  if(S.tab==='pulse') drawPulse(now);
+  else                drawSift(now);
+
+  requestAnimationFrame(tick);
+}
+
+/* ============================================================
+   Controls
+   ============================================================ */
+function setFromSlider(){
+  const u=slider.value/1000;
+  S.ld=LOG_MAX-u*(LOG_MAX-LOG_MIN);
+}
+slider.addEventListener('input',()=>{
+  S.playing=false; btnPlay.innerHTML='▶&nbsp;Animate Δ→0';
+  btnPlay.classList.remove('nudge');
+  setFromSlider();
+});
+btnPlay.addEventListener('click',()=>{
+  if(S.ld<=LOG_MIN+1e-6){        // restart sweep
+    S.ld=LOG_MAX; S.trail=[];
+    $('cbTrails').checked=true; S.trails=true;
+  }
+  S.playing=!S.playing;
+  btnPlay.innerHTML=S.playing?'⏸&nbsp;Pause':'▶&nbsp;Animate Δ→0';
+  btnPlay.classList.toggle('nudge',false);
+});
+$('btnReset').addEventListener('click',()=>{
+  S.ld=LOG_MAX; S.playing=false; S.trail=[]; S.convAt=0;
+  btnPlay.innerHTML='▶&nbsp;Animate Δ→0';
+  slider.value=0;
+});
+$('cbFit').addEventListener('change',e=>{S.fit=e.target.checked;});
+$('cbTrails').addEventListener('change',e=>{
+  S.trails=e.target.checked;
+  if(!S.trails) S.trail=[];
+});
+window.addEventListener('keydown',e=>{
+  if(/INPUT|TEXTAREA/.test(e.target.tagName)&&e.target.type==='text')return;
+  if(e.code==='Space'){
+    e.preventDefault();
+    if(document.activeElement&&document.activeElement.tagName==='BUTTON'&&document.activeElement!==btnPlay)return;
+    btnPlay.click();
+  }
+  else if(e.key==='r'||e.key==='R') $('btnReset').click();
+  else if(e.key==='f'||e.key==='F'){const cb=$('cbFit');cb.checked=!cb.checked;S.fit=cb.checked;}
+  else if(e.key==='ArrowLeft'||e.key==='ArrowDown'){
+    e.preventDefault(); S.playing=false;
+    S.ld=clamp(S.ld-(LOG_MAX-LOG_MIN)/300,LOG_MIN,LOG_MAX);
+    slider.value=Math.round(prog()*1000);
+  }
+  else if(e.key==='ArrowRight'||e.key==='ArrowUp'){
+    e.preventDefault(); S.playing=false;
+    S.ld=clamp(S.ld+(LOG_MAX-LOG_MIN)/300,LOG_MIN,LOG_MAX);
+    slider.value=Math.round(prog()*1000);
+  }
+});
+
+/*__PART2__*/
+/* ============================================================
+   VIEW 2 — sifting property:  IΔ = ∫ f·pΔ dt → f(0)
+   ============================================================ */
+const F_T    = t => Math.exp(-t*t)*Math.cos(2*t);   // test signal, f(0)=1
+const F_ZERO = F_T(0);
+let   ERR_MAX=0, HIST=[];
+
+function curI(){                     // IΔ = ∫ f·pΔ dt = (1/Δ)∫f over [−Δ/2,Δ/2]
+  const d=Math.pow(10,S.ld);
+  const a=-d/2,b=d/2,N=400,st=(b-a)/N;
+  let s=F_T(a)+F_T(b);
+  for(let i=1;i<N;i++) s+=2*F_T(a+i*st);
+  return s*st/(2*d);                 // composite trapezoid ÷ width
+}
+
+function drawSift(now){
+  sizeCanvas(cvs,sts);
+  const F=frame(sts,cvs,70);
+
+  /* vertical mapping includes a small negative-margin strip below zero */
+  const yLo=-0.34,yHi=1.32;
+  const XX=v=>F.ox+(v-X_MIN)/(X_MAX-X_MIN)*F.pw;
+  const YY=v=>F.oy+F.ph-(v-yLo)/(yHi-yLo)*F.ph;
+
+  /* backdrop */
+  sts.clearRect(0,0,F.w,F.h);
+
+  /* grid rows */
+  sts.strokeStyle=C.grid;sts.lineWidth=1;
+  sts.font='500 10.5px ui-monospace,Menlo,monospace';sts.fillStyle=C.dim;
+  for(let v=Math.ceil(yLo*2)/2; v<=yHi+1e-9; v+=0.25){
+    const yy=YY(v);
+    sts.beginPath();sts.moveTo(F.ox,yy);sts.lineTo(F.ox+F.pw,yy);sts.stroke();
+    sts.textAlign='left';
+    sts.fillText(v.toFixed(2),F.ox+F.pw+6,yy+3.5);
+  }
+  sts.beginPath();
+  for(let vx=-1.5;vx<=1.51;vx+=0.5){const xx=XX(vx);sts.moveTo(xx,F.oy);sts.lineTo(xx,F.oy+F.ph);}
+  sts.stroke();
+
+  /* zero axis */
+  sts.strokeStyle=C.zero;sts.lineWidth=1.4;
+  sts.beginPath();sts.moveTo(F.ox,YY(0));sts.lineTo(F.ox+F.pw,YY(0));sts.stroke();
+  sts.beginPath();sts.moveTo(XX(0),F.oy);sts.lineTo(XX(0),F.oy+F.ph);sts.stroke();
+  sts.fillStyle=C.mut;sts.font='600 11px ui-monospace,Menlo,monospace';sts.textAlign='left';
+
+  const P=prog(),d=S.d,xl=XX(-d/2),xr=XX(d/2),x0=XX(0);
+  const I=curI(),err=Math.abs(I-F_ZERO);
+
+  /* window shading */
+  sts.fillStyle='rgba(167,139,250,.14)';
+  sts.fillRect(xl,F.oy,xr-xl,F.ph);
+  sts.setLineDash([4,4]);
+  sts.strokeStyle='rgba(167,139,250,.65)';
+  sts.beginPath();sts.moveTo(xl,F.oy);sts.lineTo(xl,F.oy+F.ph);
+  sts.moveTo(xr,F.oy);sts.lineTo(xr,F.oy+F.ph);sts.stroke();
+  sts.setLineDash([]);
+
+  /* f(t) curve */
+  sts.save();
+  sts.shadowColor='rgba(226,232,240,.35)';sts.shadowBlur=8;
+  sts.strokeStyle='#e2e8f0';sts.lineWidth=1.9;
+  sts.beginPath();
+  for(let i=0;i<=420;i++){
+    const t=X_MIN+(X_MAX-X_MIN)*i/420,vv=F_T(t);
+    i?sts.lineTo(XX(t),YY(vv)):sts.moveTo(XX(t),YY(vv));
+  }
+  sts.stroke();sts.restore();
+
+  /* f label */
+  sts.fillStyle='rgba(226,232,240,.85)';
+  sts.font='italic 700 15px Georgia,serif';sts.textAlign='left';
+  sts.fillText('f(t)',XX(0.62),YY(F_T(0.62))-12);
+
+  /* target f(0) dotted line + dot */
+  sts.setLineDash([2,5]);
+  sts.strokeStyle=C.amber;sts.lineWidth=1.6;
+  sts.beginPath();sts.moveTo(F.ox,YY(F_ZERO));sts.lineTo(F.ox+F.pw,YY(F_ZERO));sts.stroke();
+  sts.setLineDash([]);
+  sts.fillStyle=C.amber;
+  sts.beginPath();sts.arc(x0,YY(F_ZERO),4.4,0,7);sts.fill();
+  sts.font='700 11.5px ui-monospace,Menlo,monospace';sts.textAlign='left';
+  sts.fillText('f(0) = '+fmt(F_ZERO)+'  · target',F.ox+F.pw-168,YY(F_ZERO)-10);
+
+  /* moving windowed-average marker */
+  const yI=clamp(YY(I),F.oy,F.oy+F.ph);
+  sts.setLineDash([6,4]);
+  sts.strokeStyle=C.cyan;sts.lineWidth=2;
+  sts.beginPath();sts.moveTo(xl,yI);sts.lineTo(xr,yI);sts.stroke();
+  sts.setLineDash([]);
+  hollowDot(sts,x0,yI,C.cyan);
+  sts.fillStyle=C.cyan;
+  sts.font='700 11px ui-monospace,Menlo,monospace';sts.textAlign='center';
+  if(I>yLo+0.08) sts.fillText('avg = '+fmt(I),x0,yI-8);
+  else           sts.fillText('avg = '+fmt(I),x0+52,yI+4);
+
+  /* history strip of past integral estimates */
+  const hx=F.ox+12,hy=F.oy+12,hw=170,hh=58;
+  sts.fillStyle='rgba(8,12,28,.68)';
+  roundRect(sts,hx,hy,hw,hh,9);sts.fill();
+  sts.strokeStyle='rgba(148,163,184,.22)';sts.lineWidth=1;
+  roundRect(sts,hx,hy,hw,hh,9);sts.stroke();
+  sts.fillStyle=C.dim;sts.font='500 9.5px ui-monospace,Menlo,monospace';sts.textAlign='left';
+  sts.fillText('HISTORY of I'+String.fromCharCode(0x394),hx+9,hy+14);
+  const n=HIST.length,maxN=26;
+  for(let i=0;i<n;i++){
+    const e=Math.abs(HIST[i]-F_ZERO);
+    const kErr=ERR_MAX?clamp(e/ERR_MAX,0,1):1;
+    const bh=clamp((hh-24)*(HIST[i]/1.45),3,hh-26);
+    const bx=hx+9+i*((hw-18)/maxN), bw=Math.max(2,(hw-18)/maxN-2.5);
+    const cr=Math.round(34+(167-34)*(kErr)), cgC=Math.round(211+(139-211)*kErr), cb=Math.round(238+(250-238)*kErr);
+    sts.fillStyle=`rgba(${cr},${cgC},${cb},.95)`;
+    sts.fillRect(bx,hy+hh-6-bh,bw,bh);
+  }
+
+  /* converged flourish: ring pulse on the target dot */
+  if(P>=0.9995){
+    const ry=(now/1000)%1.1;
+    sts.strokeStyle=`rgba(52,211,153,${(1-ry/1.1)*0.65})`;
+    sts.lineWidth=2;
+    sts.beginPath();sts.arc(x0,YY(F_ZERO),6+ry*20,0,7);sts.stroke();
+  }
+
+  /* labels bottom */
+  sts.fillStyle=C.dim;sts.font='500 10.5px ui-monospace,Menlo,monospace';
+  sts.textAlign='right';
+  sts.fillText('window Δ = '+fmt(S.d)+', area under pΔ stays 1 → IΔ is the mean of f in the strip',F.ox+F.pw,F.oy+F.ph+16);
+}
+function hollowDot(g,x,y,col){
+  g.save();g.fillStyle='#0b1024';
+  g.beginPath();g.arc(x,y,5,0,7);g.fill();
+  g.strokeStyle=col;g.lineWidth=2;
+  g.beginPath();g.arc(x,y,5,0,7);g.stroke();g.restore();
+}
+function roundRect(g,x,y,w,h,r){
+  g.beginPath();
+  g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);
+  g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();
+}
+
+/* ============================================================
+   Tabs
+   ============================================================ */
+function setTab(name){
+  S.tab=name;
+  $('tabPulse').classList.toggle('active',name==='pulse');
+  $('tabSift').classList.toggle('active',name==='sift');
+  $('stagePulse').classList.toggle('hiddenEl',name!=='pulse');
+  $('stageSift').classList.toggle('hiddenEl',name!=='sift');
+  $('cardsPulse').classList.toggle('hiddenEl',name!=='pulse');
+  $('cardsSift').classList.toggle('hiddenEl',name!=='sift');
+  $('notesPulse').classList.toggle('hiddenEl',name!=='pulse');
+  $('notesSift').classList.toggle('hiddenEl',name!=='sift');
+  requestAnimationFrame(()=>{sizeCanvas(cv,cts);sizeCanvas(cvs,sts);});
+}
+$('tabPulse').addEventListener('click',()=>setTab('pulse'));
+$('tabSift').addEventListener('click',()=>setTab('sift'));
+
+/* ============================================================
+   Boot
+   ============================================================ */
+(function init(){
+  /* worst-case error used to colour the history bars */
+  const save=S.ld; S.ld=LOG_MAX;
+  ERR_MAX=Math.abs(curI()-F_ZERO)||0.001;
+  S.ld=save;
+
+  const trySize=n=>{
+    const ok=sizeCanvas(cv,cts)&sizeCanvas(cvs,sts);
+    if(!ok&&n>0) setTimeout(()=>trySize(n-1),60);
+  };
+  trySize(4);
+
+  if(window.ResizeObserver){
+    new ResizeObserver(()=>{sizeCanvas(cv,cts);sizeCanvas(cvs,sts);})
+      .observe($('vwPulse'));
+    new ResizeObserver(()=>{sizeCanvas(cv,cts);sizeCanvas(cvs,sts);})
+      .observe($('vwSift'));
+  }else{
+    window.addEventListener('resize',()=>{sizeCanvas(cv,cts);sizeCanvas(cvs,sts);});
+  }
+
+  // reset also clears the history strip
+  $('btnReset').addEventListener('click',()=>{HIST=[];});
+
+  requestAnimationFrame(function first(now){
+    window.__last=now;
+    requestAnimationFrame(tick);
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cubic Spline Interpolation — Interactive Demo</title>
+<style>
+  :root {
+    --bg: #FFFFFF;
+    --grid: #E8E8E8;
+    --axes: #808080;
+    --ticks: #191970;          /* midnight blue */
+    --axis-label: #00008B;     /* dark blue */
+    --knot-fill: #FF1493;      /* red-pink */
+    --knot-border: #20B2AA;    /* green-blue (teal) */
+    --spline: #6F4E37;         /* brown-cola */
+    --font: #0D1B2A;           /* blackblue */
+    --panel-bg: #FAFAFA;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 24px 12px;
+    background: var(--bg);
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    color: var(--font);
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 920px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 18px;
+  }
+
+  h1 {
+    margin: 0 0 6px 0;
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    color: var(--font);
+  }
+
+  .subtitle {
+    margin: 0;
+    font-size: 13px;
+    opacity: 0.78;
+    color: var(--font);
+  }
+
+  .plot-wrap {
+    background: var(--bg);
+    border: 1px solid #E5E5E5;
+    border-radius: 8px;
+    padding: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+
+  .legend {
+    display: flex;
+    gap: 22px;
+    justify-content: center;
+    margin: 14px 0 6px;
+    font-size: 12.5px;
+    flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; color: var(--font); }
+  .swatch-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--knot-fill);
+    border: 2.5px solid var(--knot-border);
+  }
+  .swatch-line {
+    width: 26px; height: 3px; border-radius: 1px;
+    background: var(--spline);
+  }
+
+  .toolbar {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+
+  button {
+    background: #F5F5F5;
+    border: 1px solid var(--axes);
+    color: var(--font);
+    padding: 8px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+    transition: background .15s, transform .05s;
+  }
+  button:hover  { background: #ECECEC; }
+  button:active { transform: translateY(1px); }
+
+  .readout {
+    margin-top: 12px;
+    text-align: center;
+    font-size: 12.5px;
+    min-height: 18px;
+    color: var(--font);
+    opacity: 0.85;
+    font-variant-numeric: tabular-nums;
+  }
+  .readout b { color: var(--spline); font-weight: 600; }
+
+  .footnote {
+    margin-top: 14px;
+    text-align: center;
+    font-size: 11.5px;
+    opacity: 0.55;
+    color: var(--font);
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Cubic Spline Interpolation</h1>
+      <p class="subtitle">Drag any red-pink knot point — the brown-cola cubic spline re-fits in real time.</p>
+    </header>
+
+    <div class="plot-wrap">
+      <svg id="plot" viewBox="0 0 820 520" preserveAspectRatio="xMidYMid meet" aria-label="Cubic spline plot"></svg>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><span class="swatch-line"></span><span>Fitted cubic spline</span></div>
+      <div class="legend-item"><span class="swatch-dot"></span><span>Knot point (draggable)</span></div>
+    </div>
+
+    <div class="toolbar">
+      <button id="resetBtn">Reset knots</button>
+      <button id="addBtn">Add knot</button>
+      <button id="removeBtn">Remove last knot</button>
+      <button id="toggleSlopesBtn">Show slopes</button>
+    </div>
+
+    <div class="readout" id="readout"></div>
+
+    <div class="footnote">
+      Natural cubic spline — second derivative is zero at both endpoints. Each segment is a cubic polynomial, joined C²-continuous at every knot.
+    </div>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const svg = document.getElementById('plot');
+
+  // ---- Palette (matches user spec) ----
+  const COL = {
+    bg:         '#FFFFFF',
+    grid:       '#E8E8E8',     // light gray
+    axes:       '#808080',     // mid gray
+    ticks:      '#191970',     // midnight blue
+    axisLabel:  '#00008B',     // dark blue
+    knotFill:   '#FF1493',     // red-pink
+    knotBorder: '#20B2AA',     // green-blue
+    spline:     '#6F4E37',     // brown-cola
+    slope:      '#8D6E63',     // lighter brown for tangent indicators
+    font:       '#0D1B2A'      // blackblue
+  };
+
+  // ---- Geometry ----
+  const W = 820, H = 520;
+  const M = { top: 32, right: 32, bottom: 62, left: 72 };
+  const PW = W - M.left - M.right;
+  const PH = H - M.top  - M.bottom;
+
+  // ---- Data domain ----
+  const T_MIN = 0, T_MAX = 10;
+  const Y_MIN = -1.6, Y_MAX = 1.6;
+
+  const xScale = t => M.left + (t - T_MIN) / (T_MAX - T_MIN) * PW;
+  const yScale = y => M.top  + (1 - (y - Y_MIN) / (Y_MAX - Y_MIN)) * PH;
+  const xUnscale = px => T_MIN + (px - M.left) / PW * (T_MAX - T_MIN);
+  const yUnscale = py => Y_MIN + (1 - (py - M.top) / PH) * (Y_MAX - Y_MIN);
+
+  // ---- Initial knot set (a noisy-looking signal) ----
+  function makeInitialKnots() {
+    return [
+      { t: 0.0,  y:  0.05 },
+      { t: 1.3,  y:  1.10 },
+      { t: 2.7,  y: -0.85 },
+      { t: 4.0,  y:  0.95 },
+      { t: 5.4,  y: -1.20 },
+      { t: 6.9,  y:  0.65 },
+      { t: 8.4,  y: -0.35 },
+      { t: 10.0, y:  0.30 }
+    ];
+  }
+
+  // knots array kept sorted by t at all times
+  let knots = makeInitialKnots();
+  let dragIndex = null;
+  let showSlopes = false;
+  const readout = document.getElementById('readout');
+
+  // ============================================================
+  // Natural cubic spline (second derivative = 0 at both ends)
+  // ============================================================
+  function buildSpline(xs, ys) {
+    const n = xs.length - 1;
+    if (n < 1) return null;
+
+    const h = new Array(n);
+    for (let i = 0; i < n; i++) h[i] = xs[i + 1] - xs[i];
+
+    const M2 = new Array(n + 1).fill(0);  // second derivatives M_0..M_n, natural => 0 at ends
+
+    if (n >= 2) {
+      // Thomas algorithm on the interior unknowns M_1..M_{n-1}
+      const a = new Array(n + 1);  // lower diagonal
+      const b = new Array(n + 1);  // main diagonal
+      const c = new Array(n + 1);  // upper diagonal
+      const d = new Array(n + 1);  // RHS
+
+      for (let i = 1; i <= n - 1; i++) {
+        a[i] = h[i - 1];
+        b[i] = 2 * (h[i - 1] + h[i]);
+        c[i] = h[i];
+        d[i] = 6 * ((ys[i + 1] - ys[i]) / h[i] - (ys[i] - ys[i - 1]) / h[i - 1]);
+      }
+
+      const cp = new Array(n + 1);
+      const dp = new Array(n + 1);
+      cp[1] = c[1] / b[1];
+      dp[1] = d[1] / b[1];
+      for (let i = 2; i <= n - 1; i++) {
+        const denom = b[i] - a[i] * cp[i - 1];
+        cp[i] = c[i] / denom;
+        dp[i] = (d[i] - a[i] * dp[i - 1]) / denom;
+      }
+      M2[n - 1] = dp[n - 1];
+      for (let i = n - 2; i >= 1; i--) {
+        M2[i] = dp[i] - cp[i] * M2[i + 1];
+      }
+    }
+
+    return { xs, ys, h, M: M2, n };
+  }
+
+  function evalSpline(sp, x) {
+    const { xs, ys, h, M, n } = sp;
+
+    // locate interval
+    let i;
+    if (x <= xs[0])         i = 0;
+    else if (x >= xs[n])    i = n - 1;
+    else {
+      i = 0;
+      while (i < n - 1 && xs[i + 1] < x) i++;
+    }
+
+    const hi = h[i];
+    const dx1 = xs[i + 1] - x;   // x_{i+1} - x
+    const dx2 = x - xs[i];       // x - x_i
+
+    const term1 = M[i]     * dx1 * dx1 * dx1 / (6 * hi);
+    const term2 = M[i + 1] * dx2 * dx2 * dx2 / (6 * hi);
+    const term3 = (ys[i]     - M[i]     * hi * hi / 6) * dx1 / hi;
+    const term4 = (ys[i + 1] - M[i + 1] * hi * hi / 6) * dx2 / hi;
+    return term1 + term2 + term3 + term4;
+  }
+
+  function evalSplineDeriv(sp, x) {
+    const { xs, ys, h, M, n } = sp;
+    let i;
+    if (x <= xs[0])         i = 0;
+    else if (x >= xs[n])    i = n - 1;
+    else {
+      i = 0;
+      while (i < n - 1 && xs[i + 1] < x) i++;
+    }
+    const hi = h[i];
+    const dx1 = xs[i + 1] - x;
+    const dx2 = x - xs[i];
+    // dS/dx
+    return -M[i] * dx1 * dx1 / (2 * hi)
+         +  M[i + 1] * dx2 * dx2 / (2 * hi)
+         - (ys[i]     - M[i]     * hi * hi / 6) / hi
+         + (ys[i + 1] - M[i + 1] * hi * hi / 6) / hi;
+  }
+
+  // ============================================================
+  // SVG helpers
+  // ============================================================
+  function el(tag, attrs, text) {
+    const e = document.createElementNS(SVG_NS, tag);
+    if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function clear() { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+
+  // ============================================================
+  // Render
+  // ============================================================
+  function render() {
+    clear();
+
+    // Background
+    svg.appendChild(el('rect', {
+      x: 0, y: 0, width: W, height: H, fill: COL.bg
+    }));
+
+    // ---- Grid ----
+    const tStep = 1, yStep = 0.5;
+    for (let t = T_MIN; t <= T_MAX + 1e-9; t += tStep) {
+      const px = xScale(t);
+      svg.appendChild(el('line', {
+        x1: px, y1: M.top, x2: px, y2: M.top + PH,
+        stroke: COL.grid, 'stroke-width': 1
+      }));
+    }
+    for (let y = Y_MIN; y <= Y_MAX + 1e-9; y += yStep) {
+      const py = yScale(y);
+      svg.appendChild(el('line', {
+        x1: M.left, y1: py, x2: M.left + PW, y2: py,
+        stroke: COL.grid, 'stroke-width': 1
+      }));
+    }
+
+    // ---- Axes ----
+    svg.appendChild(el('line', {
+      x1: M.left, y1: M.top + PH, x2: M.left + PW, y2: M.top + PH,
+      stroke: COL.axes, 'stroke-width': 1.5
+    }));
+    svg.appendChild(el('line', {
+      x1: M.left, y1: M.top, x2: M.left, y2: M.top + PH,
+      stroke: COL.axes, 'stroke-width': 1.5
+    }));
+
+    // ---- Tick marks + tick labels ----
+    for (let t = T_MIN; t <= T_MAX + 1e-9; t += tStep) {
+      const px = xScale(t);
+      svg.appendChild(el('line', {
+        x1: px, y1: M.top + PH, x2: px, y2: M.top + PH + 6,
+        stroke: COL.ticks, 'stroke-width': 1.5
+      }));
+      svg.appendChild(el('text', {
+        x: px, y: M.top + PH + 20,
+        'text-anchor': 'middle',
+        'font-size': 12,
+        fill: COL.ticks,
+        'font-family': 'Segoe UI, sans-serif'
+      }, t.toFixed(0)));
+    }
+    for (let y = Y_MIN; y <= Y_MAX + 1e-9; y += yStep) {
+      const py = yScale(y);
+      svg.appendChild(el('line', {
+        x1: M.left - 6, y1: py, x2: M.left, y2: py,
+        stroke: COL.ticks, 'stroke-width': 1.5
+      }));
+      svg.appendChild(el('text', {
+        x: M.left - 10, y: py + 4,
+        'text-anchor': 'end',
+        'font-size': 12,
+        fill: COL.ticks,
+        'font-family': 'Segoe UI, sans-serif'
+      }, y.toFixed(1)));
+    }
+
+    // ---- Axis titles ----
+    svg.appendChild(el('text', {
+      x: M.left + PW / 2, y: H - 18,
+      'text-anchor': 'middle',
+      'font-size': 16, 'font-weight': 'bold',
+      fill: COL.axisLabel,
+      'font-family': 'Segoe UI, sans-serif'
+    }, 'Time (s)'));
+
+    const yLabelX = 22;
+    const yLabelY = M.top + PH / 2;
+    svg.appendChild(el('text', {
+      x: yLabelX, y: yLabelY,
+      'text-anchor': 'middle',
+      'font-size': 16, 'font-weight': 'bold',
+      fill: COL.axisLabel,
+      'font-family': 'Segoe UI, sans-serif',
+      transform: 'rotate(-90 ' + yLabelX + ' ' + yLabelY + ')'
+    }, 'x(t)'));
+
+    // ---- Spline curve ----
+    const xs = knots.map(k => k.t);
+    const ys = knots.map(k => k.y);
+    const sp = buildSpline(xs, ys);
+
+    if (sp) {
+      const SAMPLES = 400;
+      let d = '';
+      for (let i = 0; i <= SAMPLES; i++) {
+        const t = T_MIN + (T_MAX - T_MIN) * i / SAMPLES;
+        const y = evalSpline(sp, t);
+        const px = xScale(t);
+        const py = yScale(Math.max(Y_MIN, Math.min(Y_MAX, y)));
+        d += (i === 0 ? 'M' : 'L') + px.toFixed(2) + ' ' + py.toFixed(2) + ' ';
+      }
+      svg.appendChild(el('path', {
+        d, fill: 'none',
+        stroke: COL.spline,
+        'stroke-width': 2.6,
+        'stroke-linecap': 'round',
+        'stroke-linejoin': 'round'
+      }));
+
+      // ---- Optional slope indicators at knots ----
+      if (showSlopes) {
+        const SLOPE_LEN = 0.45; // half-length in t units
+        knots.forEach((k, i) => {
+          const slope = evalSplineDeriv(sp, k.t);
+          const t1 = k.t - SLOPE_LEN;
+          const t2 = k.t + SLOPE_LEN;
+          const y1 = k.y - slope * SLOPE_LEN;
+          const y2 = k.y + slope * SLOPE_LEN;
+          svg.appendChild(el('line', {
+            x1: xScale(t1), y1: yScale(y1),
+            x2: xScale(t2), y2: yScale(y2),
+            stroke: COL.slope,
+            'stroke-width': 1.4,
+            'stroke-dasharray': '4 3',
+            opacity: 0.7
+          }));
+        });
+      }
+    }
+
+    // ---- Knot markers ----
+    knots.forEach((k, i) => {
+      const cx = xScale(k.t);
+      const cy = yScale(k.y);
+      const isDragging = (i === dragIndex);
+      const r = isDragging ? 11 : 9;
+
+      // Halo while dragging
+      if (isDragging) {
+        svg.appendChild(el('circle', {
+          cx, cy, r: r + 6,
+          fill: 'none',
+          stroke: COL.knotBorder,
+          'stroke-width': 1,
+          opacity: 0.35
+        }));
+      }
+
+      const c = el('circle', {
+        cx, cy, r,
+        fill: COL.knotFill,
+        stroke: COL.knotBorder,
+        'stroke-width': 2.6,
+        'data-index': i,
+        style: 'cursor: ' + (isDragging ? 'grabbing' : 'grab') + ';'
+      });
+      c.addEventListener('pointerdown', startDrag);
+      svg.appendChild(c);
+    });
+
+    updateReadout();
+  }
+
+  function updateReadout() {
+    if (dragIndex !== null && knots[dragIndex]) {
+      const k = knots[dragIndex];
+      readout.innerHTML =
+        'Knot #' + (dragIndex + 1) +
+        ' — t = <b>' + k.t.toFixed(3) + '</b> s,' +
+        ' x(t) = <b>' + k.y.toFixed(3) + '</b>';
+    } else {
+      readout.innerHTML = knots.length + ' knots · drag any red-pink marker to refit the spline';
+    }
+  }
+
+  // ============================================================
+  // Pointer interaction (drag knot points)
+  // ============================================================
+  function svgPoint(evt) {
+    const pt = svg.createSVGPoint();
+    pt.x = evt.clientX;
+    pt.y = evt.clientY;
+    return pt.matrixTransform(svg.getScreenCTM().inverse());
+  }
+
+  function startDrag(evt) {
+    evt.preventDefault();
+    const target = evt.currentTarget;
+    dragIndex = parseInt(target.getAttribute('data-index'), 10);
+    target.style.cursor = 'grabbing';
+    render();
+
+    window.addEventListener('pointermove', onDrag);
+    window.addEventListener('pointerup',   endDrag);
+    window.addEventListener('pointercancel', endDrag);
+  }
+
+  function onDrag(evt) {
+    if (dragIndex === null) return;
+    evt.preventDefault();
+
+    const p = svgPoint(evt);
+    let newT = xUnscale(p.x);
+    let newY = yUnscale(p.y);
+
+    // Clamp to plot bounds
+    newT = Math.max(T_MIN, Math.min(T_MAX, newT));
+    newY = Math.max(Y_MIN, Math.min(Y_MAX, newY));
+
+    // Keep knot order with a minimum gap
+    const minGap = 0.05;
+    if (dragIndex > 0)                  newT = Math.max(newT, knots[dragIndex - 1].t + minGap);
+    if (dragIndex < knots.length - 1)   newT = Math.min(newT, knots[dragIndex + 1].t - minGap);
+
+    knots[dragIndex].t = newT;
+    knots[dragIndex].y = newY;
+    render();
+  }
+
+  function endDrag() {
+    dragIndex = null;
+    window.removeEventListener('pointermove', onDrag);
+    window.removeEventListener('pointerup',   endDrag);
+    window.removeEventListener('pointercancel', endDrag);
+    render();
+  }
+
+  // ============================================================
+  // Toolbar handlers
+  // ============================================================
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    knots = makeInitialKnots();
+    render();
+  });
+
+  document.getElementById('addBtn').addEventListener('click', () => {
+    if (knots.length >= 24) return;
+    // Find widest gap and insert a knot at its midpoint
+    let bestI = 0, bestGap = -1;
+    for (let i = 0; i < knots.length - 1; i++) {
+      const gap = knots[i + 1].t - knots[i].t;
+      if (gap > bestGap) { bestGap = gap; bestI = i; }
+    }
+    const t = (knots[bestI].t + knots[bestI + 1].t) / 2;
+    const sp = buildSpline(knots.map(k => k.t), knots.map(k => k.y));
+    const y = sp ? evalSpline(sp, t) : 0;
+    knots.splice(bestI + 1, 0, { t, y });
+    render();
+  });
+
+  document.getElementById('removeBtn').addEventListener('click', () => {
+    if (knots.length <= 2) return;
+    knots.pop();
+    render();
+  });
+
+  document.getElementById('toggleSlopesBtn').addEventListener('click', (e) => {
+    showSlopes = !showSlopes;
+    e.target.textContent = showSlopes ? 'Hide slopes' : 'Show slopes';
+    render();
+  });
+
+  // Initial paint
+  render();
+})();
+</script>
+</body>
+</html>
