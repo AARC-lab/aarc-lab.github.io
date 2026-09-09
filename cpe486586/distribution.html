@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Common families of distributions</title>
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23183e4b'/%3E%3Cpath d='M6 50C20 50 20 15 32 15s12 35 26 35' fill='none' stroke='%23fcf1ef' stroke-width='6' stroke-linecap='round'/%3E%3Crect x='27' y='27' width='10' height='23' fill='%23d74a49'/%3E%3C/svg%3E">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --red:#d74a49;
+  --ink:#183e4b;
+  --ink2:#1b4552;
+  --mute:#8ba0a4;
+  --grey:#eaeaea;
+  --blush:#fcf1ef;
+  --sand:#e8d8c9;
+  --stone:#ced3d7;
+}
+
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  background:var(--blush);
+  color:var(--ink);
+  font-family:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  font-variant-numeric:tabular-nums;
+  font-size:16px;
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+
+.wrap{max-width:1240px;margin:0 auto;padding:26px 22px 0}
+
+header{
+  display:flex;align-items:flex-end;gap:18px;
+  padding-bottom:16px;border-bottom:2px solid var(--ink);
+}
+header h1{
+  margin:0;font-size:clamp(23px,3.2vw,38px);font-weight:800;
+  font-stretch:92%;letter-spacing:-.02em;line-height:1.05;
+}
+header p{margin:6px 0 0;max-width:64ch;color:var(--ink2);font-size:15px}
+header .tag{
+  margin-left:auto;align-self:flex-start;
+  background:var(--ink);color:var(--blush);
+  font-size:12px;font-weight:600;padding:5px 10px;border-radius:2px;white-space:nowrap;
+}
+
+.board{display:grid;grid-template-columns:274px 1fr;gap:20px;margin-top:20px;align-items:start}
+.rail{display:flex;flex-direction:column;gap:14px}
+
+.panel{background:var(--grey);border:1px solid var(--stone);padding:14px 16px}
+.panel.sand{background:var(--sand)}
+.panel h2{
+  margin:0 0 10px;font-size:13px;font-weight:700;color:var(--ink2);
+  letter-spacing:.01em;
+}
+
+/* Picker */
+.group{margin-bottom:12px}
+.group:last-child{margin-bottom:0}
+.group .glabel{font-size:12px;color:var(--ink2);margin-bottom:6px}
+.chips{display:flex;flex-direction:column;gap:4px}
+.chip{
+  display:flex;align-items:baseline;gap:9px;
+  font-family:inherit;font-size:14px;font-weight:600;text-align:left;
+  padding:7px 10px;border:1px solid transparent;background:transparent;color:var(--ink);
+  cursor:pointer;border-radius:2px;transition:background .12s,border-color .12s;
+}
+.chip:hover{background:var(--stone)}
+.chip .num{font-size:12px;color:var(--mute);min-width:14px}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--blush);border-color:var(--ink)}
+.chip[aria-pressed="true"] .num{color:var(--sand)}
+.chip:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+
+/* Parameters */
+.prow{margin-bottom:12px}
+.prow:last-child{margin-bottom:0}
+.phead{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}
+.phead .sym{font-weight:700}
+.phead .val{font-weight:800;color:var(--red)}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:22px;background:transparent;cursor:pointer;
+}
+input[type=range]::-webkit-slider-runnable-track{height:6px;background:var(--blush);border:1px solid var(--ink)}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;width:18px;height:18px;margin-top:-7px;border-radius:50%;
+  background:var(--red);border:3px solid var(--blush);box-shadow:0 0 0 1px var(--ink);
+}
+input[type=range]::-moz-range-track{height:6px;background:var(--blush);border:1px solid var(--ink)}
+input[type=range]::-moz-range-thumb{
+  width:16px;height:16px;border-radius:50%;background:var(--red);
+  border:3px solid var(--blush);box-shadow:0 0 0 1px var(--ink);
+}
+input[type=range]:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+
+/* Statistics table */
+.stat{display:grid;grid-template-columns:1fr auto auto;gap:6px 10px;font-size:13.5px;align-items:baseline}
+.stat .hd{font-size:11.5px;color:var(--ink2);font-weight:700;border-bottom:1px solid var(--stone);padding-bottom:4px}
+.stat .lb{color:var(--ink2)}
+.stat .th{font-weight:700;text-align:right}
+.stat .sm{font-weight:700;text-align:right;color:var(--red)}
+.stat .sm.off{color:var(--mute)}
+
+/* Charts */
+.charts{background:var(--grey);border:1px solid var(--stone);padding:12px 14px 8px}
+#main{width:100%;height:400px;display:block}
+#cdf{width:100%;height:150px;display:block;margin-top:6px}
+.legend{
+  display:flex;flex-wrap:wrap;gap:15px;font-size:13px;color:var(--ink2);
+  padding-top:8px;border-top:1px solid var(--stone);margin-top:6px;
+}
+.legend i{display:inline-block;width:20px;height:10px;vertical-align:-1px;margin-right:6px}
+.k1{background:rgba(215,74,73,.22);border:2px solid var(--red);height:8px}
+.k2{background:var(--mute);opacity:.55}
+.k3{border-top:2px dashed var(--ink);height:0}
+
+.tools{
+  margin-top:14px;background:var(--sand);border:1px solid var(--stone);
+  padding:12px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+}
+button{
+  font-family:inherit;font-size:14px;font-weight:600;padding:8px 14px;border-radius:2px;
+  cursor:pointer;border:1px solid var(--ink);background:var(--blush);color:var(--ink);
+  transition:background .15s,color .15s;
+}
+button:hover{background:var(--stone)}
+button.primary{background:var(--ink);color:var(--blush)}
+button.primary:hover{background:var(--ink2)}
+button:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+.toggle{display:flex;align-items:center;gap:7px;font-size:14px;color:var(--ink2)}
+.toggle input{width:16px;height:16px;accent-color:var(--red)}
+.count{margin-left:auto;font-size:14px;color:var(--ink2)}
+.count b{color:var(--ink);font-weight:800}
+
+/* Formula card */
+.formula{
+  grid-column:1 / -1;background:var(--grey);border:1px solid var(--stone);
+  padding:16px 18px;display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:22px;
+}
+.formula .cell h3{margin:0 0 8px;font-size:12.5px;font-weight:700;color:var(--ink2)}
+.eq{font-size:17px;line-height:2.1;color:var(--ink)}
+.eq .cond{font-size:14px;color:var(--ink2);margin-left:8px}
+.numeric{margin-top:8px;font-size:14px;color:var(--ink2)}
+.numeric b{color:var(--red);font-weight:800}
+
+.frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;margin:0 3px;line-height:1.15}
+.frac .num{border-bottom:1.5px solid var(--ink);padding:0 5px}
+.frac .den{padding:0 5px}
+.chs{display:inline-flex;align-items:center;margin:0 1px}
+.chs .par{font-size:2em;font-weight:300;line-height:.72;color:var(--ink2)}
+.stk{display:inline-flex;flex-direction:column;line-height:1.06;font-size:.86em;text-align:center;padding:0 2px}
+sup,sub{font-size:.68em}
+
+.remark{margin:16px 0 0;font-size:14px;color:var(--ink2);max-width:82ch}
+.remark b{color:var(--ink)}
+
+footer{margin-top:28px;border-top:2px solid var(--ink)}
+footer .inner{
+  max-width:1240px;margin:0 auto;padding:15px 22px 26px;
+  display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:14px;color:var(--ink2);
+}
+footer b{color:var(--ink);font-weight:700}
+
+@media (max-width:940px){
+  .board{grid-template-columns:1fr}
+  .formula{grid-template-columns:1fr}
+  #main{height:320px}
+  header{flex-wrap:wrap}
+  header .tag{margin-left:0}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <svg width="52" height="52" viewBox="0 0 64 64" aria-hidden="true">
+      <rect width="64" height="64" rx="12" fill="#183e4b"/>
+      <path d="M6 50C20 50 20 15 32 15s12 35 26 35" fill="none" stroke="#fcf1ef" stroke-width="6" stroke-linecap="round"/>
+      <rect x="27" y="27" width="10" height="23" fill="#d74a49"/>
+    </svg>
+    <div>
+      <h1>Common families of distributions</h1>
+      <p>Pick a family, move its parameters, and draw samples from it. The theoretical mass function or density is red, the sample histogram is grey, and the panel below shows the cumulative distribution function.</p>
+    </div>
+    <div class="tag">Chapter 4</div>
+  </header>
+
+  <div class="board">
+
+    <div class="rail">
+      <div class="panel">
+        <h2>Family</h2>
+        <div class="group">
+          <div class="glabel">Discrete</div>
+          <div class="chips" id="chipsD"></div>
+        </div>
+        <div class="group">
+          <div class="glabel">Continuous</div>
+          <div class="chips" id="chipsC"></div>
+        </div>
+      </div>
+
+      <div class="panel sand">
+        <h2>Parameters</h2>
+        <div id="params"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Theory against samples</h2>
+        <div class="stat">
+          <div class="hd">&nbsp;</div><div class="hd" style="text-align:right">theory</div><div class="hd" style="text-align:right">samples</div>
+          <div class="lb">mean</div><div class="th" id="thMean">0</div><div class="sm off" id="smMean">&mdash;</div>
+          <div class="lb">variance</div><div class="th" id="thVar">0</div><div class="sm off" id="smVar">&mdash;</div>
+          <div class="lb">draws</div><div class="th">&mdash;</div><div class="sm off" id="smN">0</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="charts">
+        <canvas id="main"></canvas>
+        <canvas id="cdf"></canvas>
+        <div class="legend">
+          <span><i class="k1"></i><span id="lgTheory">density</span></span>
+          <span><i class="k2"></i>sample histogram</span>
+          <span><i class="k3"></i>mean and one standard deviation</span>
+        </div>
+      </div>
+
+      <div class="tools">
+        <button class="primary" id="stream">Stream samples</button>
+        <button id="draw1">Draw 1</button>
+        <button id="draw100">Draw 100</button>
+        <button id="clear">Clear samples</button>
+        <label class="toggle"><input type="checkbox" id="showMoments" checked> mean and deviation</label>
+        <span class="count">drawn <b id="ncount">0</b></span>
+      </div>
+    </div>
+
+    <div class="formula">
+      <div class="cell">
+        <h3 id="fkind">Probability density function</h3>
+        <div class="eq" id="fpdf"></div>
+      </div>
+      <div class="cell">
+        <h3>Expectation</h3>
+        <div class="eq" id="fmean"></div>
+        <div class="numeric">at these parameters, <b id="nmean">0</b></div>
+      </div>
+      <div class="cell">
+        <h3>Variance</h3>
+        <div class="eq" id="fvar"></div>
+        <div class="numeric">at these parameters, <b id="nvar">0</b></div>
+      </div>
+    </div>
+
+  </div>
+
+  <p class="remark" id="remark"></p>
+  <p class="remark">Samples are cleared whenever a parameter or a family changes, so the histogram always belongs to one fixed parameter set. Sample mean and sample variance are computed from every draw, including draws that fall outside the plotted range.</p>
+
+</div>
+
+<footer>
+  <div class="inner">
+    <span><b>CPE 486/586: Machine Learning for Engineering Applications</b></span>
+    <span>University of Alabama in Huntsville</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+"use strict";
+
+var COL = {
+  red:"#d74a49", ink:"#183e4b", ink2:"#1b4552", mute:"#8ba0a4",
+  grey:"#eaeaea", blush:"#fcf1ef", sand:"#e8d8c9", stone:"#ced3d7"
+};
+
+/* ---------- numerical helpers ---------- */
+
+function lgamma(z){
+  var g = [676.5203681218851, -1259.1392167224028, 771.32342877765313,
+           -176.61502916214059, 12.507343278686905, -0.13857109526572012,
+           9.9843695780195716e-6, 1.5056327351493116e-7];
+  if(z < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * z)) - lgamma(1 - z);
+  z -= 1;
+  var x = 0.99999999999980993;
+  for(var i = 0; i < 8; i++) x += g[i] / (z + i + 1);
+  var t = z + 7.5;
+  return 0.5 * Math.log(2 * Math.PI) + (z + 0.5) * Math.log(t) - t + Math.log(x);
+}
+function gammaFn(z){ return Math.exp(lgamma(z)); }
+function lchoose(n, k){
+  if(k < 0 || k > n) return -Infinity;
+  return lgamma(n + 1) - lgamma(k + 1) - lgamma(n - k + 1);
+}
+function erf(x){
+  var s = x < 0 ? -1 : 1;
+  x = Math.abs(x);
+  var t = 1 / (1 + 0.3275911 * x);
+  var y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+  return s * y;
+}
+/* Regularized lower incomplete gamma, series below the transition and a
+   continued fraction above it. */
+function gammp(a, x){
+  if(x <= 0) return 0;
+  var i;
+  if(x < a + 1){
+    var ap = a, sum = 1 / a, del = sum;
+    for(i = 1; i < 300; i++){
+      ap++; del *= x / ap; sum += del;
+      if(Math.abs(del) < Math.abs(sum) * 1e-13) break;
+    }
+    return sum * Math.exp(-x + a * Math.log(x) - lgamma(a));
+  }
+  var b = x + 1 - a, c = 1e300, d = 1 / b, h = d;
+  for(i = 1; i < 300; i++){
+    var an = -i * (i - a);
+    b += 2;
+    d = an * d + b; if(Math.abs(d) < 1e-300) d = 1e-300;
+    c = b + an / c;  if(Math.abs(c) < 1e-300) c = 1e-300;
+    d = 1 / d;
+    var dl = d * c;
+    h *= dl;
+    if(Math.abs(dl - 1) < 1e-13) break;
+  }
+  return 1 - Math.exp(-x + a * Math.log(x) - lgamma(a)) * h;
+}
+
+function uni(){ return Math.random(); }
+function gauss(){
+  var u = 1 - uni(), v = uni();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+/* Marsaglia and Tsang, shape a, unit scale. */
+function gammaDev(a){
+  if(a < 1) return gammaDev(a + 1) * Math.pow(uni(), 1 / a);
+  var d = a - 1 / 3, c = 1 / Math.sqrt(9 * d), x, v, u;
+  for(;;){
+    do { x = gauss(); v = 1 + c * x; } while(v <= 0);
+    v = v * v * v;
+    u = uni();
+    if(u < 1 - 0.0331 * x * x * x * x) return d * v;
+    if(Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v;
+  }
+}
+function poissonDev(lam){
+  var L = Math.exp(-lam), k = 0, p = 1;
+  do { k++; p *= uni(); } while(p > L);
+  return k - 1;
+}
+function binomDev(n, p){
+  var s = 0;
+  for(var i = 0; i < n; i++) if(uni() < p) s++;
+  return s;
+}
+function hyperDev(N, M, K){
+  var m = M, n = N, x = 0;
+  for(var i = 0; i < K; i++){
+    if(uni() < m / n){ x++; m--; }
+    n--;
+  }
+  return x;
+}
+
+/* ---------- markup helpers ---------- */
+
+function fr(a, b){
+  return '<span class="frac"><span class="num">' + a + '</span><span class="den">' + b + '</span></span>';
+}
+function ch(a, b){
+  return '<span class="chs"><span class="par">(</span><span class="stk"><span>' + a +
+         '</span><span>' + b + '</span></span><span class="par">)</span></span>';
+}
+function f2(v){
+  if(!isFinite(v)) return "\u2014";
+  var a = Math.abs(v);
+  if(a >= 1000) return v.toFixed(0);
+  if(a >= 100) return v.toFixed(1);
+  if(a >= 1) return v.toFixed(3);
+  return v.toFixed(4);
+}
+
+/* ---------- the families ---------- */
+
+var E = "\u03B2", ALPHA = "\u03B1", GAM = "\u03B3", LAM = "\u03BB", MU = "\u03BC", SG = "\u03C3";
+
+var FAM = {
+
+dunif: {
+  no:1, kind:"discrete", name:"Discrete uniform",
+  params:[{k:"N", sym:"N", min:2, max:24, step:1, v:6}],
+  sup: function(p){ return [1, p.N]; },
+  pmf: function(x, p){ return (x >= 1 && x <= p.N) ? 1 / p.N : 0; },
+  mean: function(p){ return (1 + p.N) / 2; },
+  vari: function(p){ return (p.N + 1) * (p.N - 1) / 12; },
+  dev: function(p){ return 1 + Math.floor(uni() * p.N); },
+  eq: function(){ return "P(X = x | N) = " + fr("1", "N") + '<span class="cond">x = 1, 2, ..., N</span>'; },
+  eqm: function(){ return fr("1 + N", "2"); },
+  eqv: function(){ return fr("(N + 1)(N &minus; 1)", "12"); },
+  remark: "Every value on the support carries the same mass. A fair die is the case N = 6."
+},
+
+hyper: {
+  no:2, kind:"discrete", name:"Hypergeometric",
+  params:[
+    {k:"N", sym:"N", min:4, max:60, step:1, v:40},
+    {k:"M", sym:"M", min:0, max:60, step:1, v:15},
+    {k:"K", sym:"K", min:1, max:60, step:1, v:10}
+  ],
+  fix: function(p){
+    if(p.M > p.N) p.M = p.N;
+    if(p.K > p.N) p.K = p.N;
+    if(p.K < 1) p.K = 1;
+    return {M:{max:p.N}, K:{max:p.N}};
+  },
+  sup: function(p){ return [Math.max(0, p.K - (p.N - p.M)), Math.min(p.K, p.M)]; },
+  pmf: function(x, p){
+    var lo = Math.max(0, p.K - (p.N - p.M)), hi = Math.min(p.K, p.M);
+    if(x < lo || x > hi) return 0;
+    return Math.exp(lchoose(p.M, x) + lchoose(p.N - p.M, p.K - x) - lchoose(p.N, p.K));
+  },
+  mean: function(p){ return p.K * p.M / p.N; },
+  vari: function(p){
+    if(p.N < 2) return 0;
+    return p.K * (p.M / p.N) * ((p.N - p.M) / p.N) * ((p.N - p.K) / (p.N - 1));
+  },
+  dev: function(p){ return hyperDev(p.N, p.M, p.K); },
+  eq: function(){
+    return "P(X = x | M, N, K) = " + fr(ch("M", "x") + ch("N &minus; M", "K &minus; x"), ch("N", "K"));
+  },
+  eqm: function(){ return fr("KM", "N"); },
+  eqv: function(){ return "K " + fr("M", "N") + " " + fr("(N &minus; M)(N &minus; K)", "N(N &minus; 1)"); },
+  remark: "An urn holds N balls, M of them red. Draw K balls without replacement and count the red ones. Drawing with replacement instead gives the binomial family. The slide writes the variance with (M &minus; K) in the numerator, and the value used here is (N &minus; K)."
+},
+
+binom: {
+  no:3, kind:"discrete", name:"Binomial",
+  params:[
+    {k:"n", sym:"n", min:1, max:60, step:1, v:20},
+    {k:"p", sym:"p", min:0, max:1, step:0.01, v:0.5}
+  ],
+  sup: function(p){ return [0, p.n]; },
+  pmf: function(x, p){
+    if(x < 0 || x > p.n) return 0;
+    if(p.p <= 0) return x === 0 ? 1 : 0;
+    if(p.p >= 1) return x === p.n ? 1 : 0;
+    return Math.exp(lchoose(p.n, x) + x * Math.log(p.p) + (p.n - x) * Math.log(1 - p.p));
+  },
+  mean: function(p){ return p.n * p.p; },
+  vari: function(p){ return p.n * p.p * (1 - p.p); },
+  dev: function(p){ return binomDev(p.n, p.p); },
+  eq: function(){
+    return "P(X = x) = " + ch("n", "x") + " p<sup>x</sup>(1 &minus; p)<sup>n&minus;x</sup>" +
+           '<span class="cond">x = 0, 1, ..., n</span>';
+  },
+  eqm: function(){ return "np"; },
+  eqv: function(){ return "np(1 &minus; p)"; },
+  remark: "Count the successes in n independent Bernoulli trials with common success probability p. The mass function is symmetric when p equals one half."
+},
+
+pois: {
+  no:4, kind:"discrete", name:"Poisson",
+  params:[{k:"lam", sym:LAM, min:0.1, max:30, step:0.1, v:4}],
+  sup: function(p){
+    var hi = Math.ceil(p.lam + 4 * Math.sqrt(p.lam) + 6);
+    return [0, hi];
+  },
+  pmf: function(x, p){
+    if(x < 0) return 0;
+    return Math.exp(-p.lam + x * Math.log(p.lam) - lgamma(x + 1));
+  },
+  mean: function(p){ return p.lam; },
+  vari: function(p){ return p.lam; },
+  dev: function(p){ return poissonDev(p.lam); },
+  eq: function(){
+    return "P(X = x) = " + fr("e<sup>&minus;" + LAM + "</sup>" + LAM + "<sup>x</sup>", "x!") +
+           '<span class="cond">x = 0, 1, 2, ...</span>';
+  },
+  eqm: function(){ return LAM; },
+  eqv: function(){ return LAM; },
+  remark: "Counts of events over a large number of observations, each with small probability. The mean and the variance are equal, which is a strong assumption when the family is fitted to count data."
+},
+
+cunif: {
+  no:5, kind:"continuous", name:"Continuous uniform",
+  params:[
+    {k:"a", sym:"a", min:-6, max:6, step:0.1, v:-1},
+    {k:"b", sym:"b", min:-6, max:6, step:0.1, v:3}
+  ],
+  fix: function(p){
+    if(p.b < p.a + 0.1){
+      if(p.a <= 5.9) p.b = p.a + 0.1;
+      else { p.b = 6; p.a = 5.9; }
+    }
+    return null;
+  },
+  rng: function(p){ var w = p.b - p.a; return [p.a - 0.35 * w, p.b + 0.35 * w]; },
+  pdf: function(x, p){ return (x > p.a && x < p.b) ? 1 / (p.b - p.a) : 0; },
+  cdf: function(x, p){ return x <= p.a ? 0 : (x >= p.b ? 1 : (x - p.a) / (p.b - p.a)); },
+  mean: function(p){ return (p.a + p.b) / 2; },
+  vari: function(p){ return (p.b - p.a) * (p.b - p.a) / 12; },
+  dev: function(p){ return p.a + uni() * (p.b - p.a); },
+  eq: function(){ return "f(x | a, b) = " + fr("1", "b &minus; a") + '<span class="cond">a &lt; x &lt; b</span>'; },
+  eqm: function(){ return fr("a + b", "2"); },
+  eqv: function(){ return fr("1", "12") + "(b &minus; a)<sup>2</sup>"; },
+  remark: "The slide gives the expectation of this family as 1/(a+b). The correct value is (a+b)/2, which is what the panel reports."
+},
+
+expo: {
+  no:6, kind:"continuous", name:"Exponential",
+  params:[{k:"b", sym:E, min:0.2, max:6, step:0.05, v:1.5}],
+  rng: function(p){ return [0, 6.5 * p.b]; },
+  pdf: function(x, p){ return x > 0 ? Math.exp(-x / p.b) / p.b : 0; },
+  cdf: function(x, p){ return x <= 0 ? 0 : 1 - Math.exp(-x / p.b); },
+  mean: function(p){ return p.b; },
+  vari: function(p){ return p.b * p.b; },
+  dev: function(p){ return -p.b * Math.log(1 - uni()); },
+  eq: function(){ return "f(x | " + E + ") = " + fr("1", E) + " e<sup>&minus;x/" + E + "</sup>" + '<span class="cond">x &gt; 0</span>'; },
+  eqm: function(){ return E; },
+  eqv: function(){ return E + "<sup>2</sup>"; },
+  remark: "Waiting time between events of a Poisson process with rate 1/" + E + ". The density is largest at zero for every value of the scale."
+},
+
+gam: {
+  no:7, kind:"continuous", name:"Gamma",
+  params:[
+    {k:"a", sym:ALPHA, min:0.3, max:12, step:0.1, v:2},
+    {k:"b", sym:E, min:0.1, max:4, step:0.05, v:1}
+  ],
+  rng: function(p){
+    var m = p.a * p.b, s = Math.sqrt(p.a) * p.b;
+    return [0, Math.max(m + 5 * s, 3 * p.b)];
+  },
+  pdf: function(x, p){
+    if(x <= 0) return p.a < 1 ? 0 : (p.a === 1 ? 1 / p.b : 0);
+    return Math.exp((p.a - 1) * Math.log(x) - x / p.b - p.a * Math.log(p.b) - lgamma(p.a));
+  },
+  cdf: function(x, p){ return x <= 0 ? 0 : gammp(p.a, x / p.b); },
+  mean: function(p){ return p.a * p.b; },
+  vari: function(p){ return p.a * p.b * p.b; },
+  dev: function(p){ return p.b * gammaDev(p.a); },
+  eq: function(){
+    return "f(x | " + ALPHA + ", " + E + ") = " +
+      fr("1", E + "<sup>" + ALPHA + "</sup> \u0393(" + ALPHA + ")") +
+      " e<sup>&minus;x/" + E + "</sup> x<sup>" + ALPHA + "&minus;1</sup>" +
+      '<span class="cond">x &gt; 0</span>';
+  },
+  eqm: function(){ return ALPHA + E; },
+  eqv: function(){ return ALPHA + E + "<sup>2</sup>"; },
+  remark: "The shape " + ALPHA + " controls the peak and the scale " + E + " controls the spread. Setting " + ALPHA + " to 1 recovers the exponential family."
+},
+
+weib: {
+  no:8, kind:"continuous", name:"Weibull",
+  params:[
+    {k:"b", sym:E, min:0.2, max:6, step:0.05, v:1},
+    {k:"g", sym:GAM, min:0.4, max:6, step:0.05, v:2}
+  ],
+  rng: function(p){ return [0, Math.pow(-p.b * Math.log(0.002), 1 / p.g) * 1.05]; },
+  pdf: function(y, p){
+    if(y <= 0) return 0;
+    return (p.g / p.b) * Math.pow(y, p.g - 1) * Math.exp(-Math.pow(y, p.g) / p.b);
+  },
+  cdf: function(y, p){ return y <= 0 ? 0 : 1 - Math.exp(-Math.pow(y, p.g) / p.b); },
+  mean: function(p){ return Math.pow(p.b, 1 / p.g) * gammaFn(1 + 1 / p.g); },
+  vari: function(p){
+    var g1 = gammaFn(1 + 1 / p.g), g2 = gammaFn(1 + 2 / p.g);
+    return Math.pow(p.b, 2 / p.g) * (g2 - g1 * g1);
+  },
+  dev: function(p){ return Math.pow(-p.b * Math.log(1 - uni()), 1 / p.g); },
+  eq: function(){
+    return "f(y | " + E + ", " + GAM + ") = " + fr(GAM, E) + " y<sup>" + GAM + "&minus;1</sup> e<sup>&minus;y" +
+      "<sup>" + GAM + "</sup>/" + E + "</sup>" + '<span class="cond">y &gt; 0</span>';
+  },
+  eqm: function(){ return E + "<sup>1/" + GAM + "</sup> \u0393(1 + 1/" + GAM + ")"; },
+  eqv: function(){
+    return E + "<sup>2/" + GAM + "</sup> [ \u0393(1 + 2/" + GAM + ") &minus; \u0393(1 + 1/" + GAM + ")<sup>2</sup> ]";
+  },
+  remark: "If X follows the exponential family with scale " + E + ", then Y = X<sup>1/" + GAM + "</sup> follows this one. The slide writes the variance with \u0393(1 + 2/" + GAM + ") in both terms. The second term takes \u0393(1 + 1/" + GAM + ") squared, which is the form used here."
+},
+
+norm: {
+  no:9, kind:"continuous", name:"Normal",
+  params:[
+    {k:"mu", sym:MU, min:-6, max:6, step:0.1, v:0},
+    {k:"sg", sym:SG, min:0.2, max:4, step:0.05, v:1}
+  ],
+  rng: function(p){ return [p.mu - 4.2 * p.sg, p.mu + 4.2 * p.sg]; },
+  pdf: function(x, p){
+    var z = (x - p.mu) / p.sg;
+    return Math.exp(-0.5 * z * z) / (Math.sqrt(2 * Math.PI) * p.sg);
+  },
+  cdf: function(x, p){ return 0.5 * (1 + erf((x - p.mu) / (p.sg * Math.SQRT2))); },
+  mean: function(p){ return p.mu; },
+  vari: function(p){ return p.sg * p.sg; },
+  dev: function(p){ return p.mu + p.sg * gauss(); },
+  eq: function(){
+    return "f(x | " + MU + ", " + SG + ") = " + fr("1", "\u221A(2\u03C0) " + SG) +
+      " e<sup>&minus;(x&minus;" + MU + ")<sup>2</sup>/2" + SG + "<sup>2</sup></sup>";
+  },
+  eqm: function(){ return MU; },
+  eqv: function(){ return SG + "<sup>2</sup>"; },
+  remark: "The standard case is " + MU + " = 0 and " + SG + " = 1. Kurtosis equals 3 for every member of this family, which is the reference point for excess kurtosis."
+},
+
+lap: {
+  no:10, kind:"continuous", name:"Laplace",
+  params:[
+    {k:"mu", sym:MU, min:-6, max:6, step:0.1, v:0},
+    {k:"sg", sym:SG, min:0.2, max:4, step:0.05, v:1}
+  ],
+  rng: function(p){ return [p.mu - 7 * p.sg, p.mu + 7 * p.sg]; },
+  pdf: function(x, p){ return Math.exp(-Math.abs(x - p.mu) / p.sg) / (2 * p.sg); },
+  cdf: function(x, p){
+    return x < p.mu ? 0.5 * Math.exp((x - p.mu) / p.sg) : 1 - 0.5 * Math.exp(-(x - p.mu) / p.sg);
+  },
+  mean: function(p){ return p.mu; },
+  vari: function(p){ return 2 * p.sg * p.sg; },
+  dev: function(p){
+    var u = uni() - 0.5;
+    return p.mu - p.sg * (u < 0 ? -1 : 1) * Math.log(1 - 2 * Math.abs(u));
+  },
+  eq: function(){
+    return "f(x | " + MU + ", " + SG + ") = " + fr("1", "2" + SG) + " e<sup>&minus;|x&minus;" + MU + "|/" + SG + "</sup>";
+  },
+  eqm: function(){ return MU; },
+  eqv: function(){ return "2" + SG + "<sup>2</sup>"; },
+  remark: "Also called the double exponential family. The peak is a corner rather than a smooth maximum, and the tails are heavier than those of the normal family with the same variance."
+}
+
+};
+
+var ORDER_D = ["dunif", "hyper", "binom", "pois"];
+var ORDER_C = ["cunif", "expo", "gam", "weib", "norm", "lap"];
+
+/* ---------- state ---------- */
+
+var cur = "dunif";
+var P = {};
+var GRID = 340;
+var MAXBAR = 140;
+var HBINS = 46;
+
+var tgtY = new Float64Array(Math.max(GRID, MAXBAR));
+var curY = new Float64Array(Math.max(GRID, MAXBAR));
+var vx0 = 0, vx1 = 1, vy1 = 1;
+var tx0 = 0, tx1 = 1, ty1 = 1;
+
+var hist = new Float64Array(Math.max(MAXBAR, HBINS));
+var hLo = 0, hHi = 1, hN = 0, hSum = 0, hSum2 = 0;
+var streaming = false;
+var showMom = true;
+
+var cvM = document.getElementById("main"), cxM = cvM.getContext("2d");
+var cvC = document.getElementById("cdf"), cxC = cvC.getContext("2d");
+var padL = 56, padR = 18, padT = 22, padB = 34;
+var WM = 0, HM = 0, WC = 0, HC = 0, plotW = 0, plotH = 0, cdfH = 0;
+var padTC = 10, padBC = 26;
+
+var el = {
+  chipsD: document.getElementById("chipsD"),
+  chipsC: document.getElementById("chipsC"),
+  params: document.getElementById("params"),
+  fkind: document.getElementById("fkind"),
+  fpdf: document.getElementById("fpdf"),
+  fmean: document.getElementById("fmean"),
+  fvar: document.getElementById("fvar"),
+  nmean: document.getElementById("nmean"),
+  nvar: document.getElementById("nvar"),
+  thMean: document.getElementById("thMean"),
+  thVar: document.getElementById("thVar"),
+  smMean: document.getElementById("smMean"),
+  smVar: document.getElementById("smVar"),
+  smN: document.getElementById("smN"),
+  ncount: document.getElementById("ncount"),
+  remark: document.getElementById("remark"),
+  lgTheory: document.getElementById("lgTheory"),
+  stream: document.getElementById("stream"),
+  showMoments: document.getElementById("showMoments")
+};
+
+var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function F(){ return FAM[cur]; }
+
+/* ---------- setup of a family ---------- */
+
+function buildChips(){
+  function one(key, host){
+    var f = FAM[key];
+    var b = document.createElement("button");
+    b.className = "chip";
+    b.type = "button";
+    b.setAttribute("aria-pressed", key === cur ? "true" : "false");
+    b.dataset.key = key;
+    b.innerHTML = '<span class="num">' + f.no + '</span><span>' + f.name + '</span>';
+    b.addEventListener("click", function(){ selectFamily(key); });
+    host.appendChild(b);
+  }
+  var i;
+  for(i = 0; i < ORDER_D.length; i++) one(ORDER_D[i], el.chipsD);
+  for(i = 0; i < ORDER_C.length; i++) one(ORDER_C[i], el.chipsC);
+}
+
+function markChips(){
+  var all = document.querySelectorAll(".chip");
+  for(var i = 0; i < all.length; i++){
+    all[i].setAttribute("aria-pressed", all[i].dataset.key === cur ? "true" : "false");
+  }
+}
+
+function buildParams(){
+  el.params.innerHTML = "";
+  var ps = F().params;
+  for(var i = 0; i < ps.length; i++){
+    (function(spec){
+      var row = document.createElement("div");
+      row.className = "prow";
+      row.innerHTML =
+        '<div class="phead"><span class="sym">' + spec.sym + '</span><span class="val"></span></div>';
+      var inp = document.createElement("input");
+      inp.type = "range";
+      inp.min = spec.min; inp.max = spec.max; inp.step = spec.step;
+      inp.value = P[spec.k];
+      inp.setAttribute("aria-label", "parameter " + spec.sym);
+      inp.addEventListener("input", function(){
+        P[spec.k] = parseFloat(inp.value);
+        applyFix();
+        clearSamples();
+        refreshParamUI();
+        retarget();
+        updateFormula();
+      });
+      row.appendChild(inp);
+      row.dataset.key = spec.k;
+      el.params.appendChild(row);
+    })(ps[i]);
+  }
+  refreshParamUI();
+}
+
+function applyFix(){
+  var f = F();
+  if(!f.fix) return;
+  var caps = f.fix(P);
+  if(!caps) return;
+  var rows = el.params.querySelectorAll(".prow");
+  for(var i = 0; i < rows.length; i++){
+    var k = rows[i].dataset.key;
+    if(caps[k] && caps[k].max !== undefined){
+      rows[i].querySelector("input").max = caps[k].max;
+    }
+  }
+}
+
+function refreshParamUI(){
+  var rows = el.params.querySelectorAll(".prow");
+  for(var i = 0; i < rows.length; i++){
+    var k = rows[i].dataset.key;
+    var spec = null, ps = F().params;
+    for(var j = 0; j < ps.length; j++) if(ps[j].k === k) spec = ps[j];
+    var v = P[k];
+    rows[i].querySelector("input").value = v;
+    rows[i].querySelector(".val").textContent = spec.step >= 1 ? String(v) : v.toFixed(2);
+  }
+}
+
+function selectFamily(key){
+  cur = key;
+  P = {};
+  var ps = FAM[key].params;
+  for(var i = 0; i < ps.length; i++) P[ps[i].k] = ps[i].v;
+  if(FAM[key].fix) FAM[key].fix(P);
+  markChips();
+  buildParams();
+  clearSamples();
+  el.lgTheory.textContent = FAM[key].kind === "discrete" ? "probability mass" : "probability density";
+  el.fkind.textContent = FAM[key].kind === "discrete" ? "Probability mass function" : "Probability density function";
+  retarget(true);
+  updateFormula();
+}
+
+function updateFormula(){
+  var f = F();
+  el.fpdf.innerHTML = f.eq();
+  el.fmean.innerHTML = f.eqm();
+  el.fvar.innerHTML = f.eqv();
+  var m = f.mean(P), v = f.vari(P);
+  el.nmean.textContent = f2(m);
+  el.nvar.textContent = f2(v);
+  el.thMean.textContent = f2(m);
+  el.thVar.textContent = f2(v);
+  el.remark.innerHTML = f.remark;
+}
+
+/* ---------- targets and animation ---------- */
+
+function retarget(snap){
+  var f = F(), i, x;
+  if(f.kind === "discrete"){
+    var s = f.sup(P);
+    var lo = s[0], hi = Math.min(s[1], s[0] + MAXBAR - 1);
+    tx0 = lo - 0.7; tx1 = hi + 0.7;
+    var top = 0;
+    for(i = 0; i < MAXBAR; i++){
+      var val = (lo + i <= hi) ? f.pmf(lo + i, P) : 0;
+      tgtY[i] = val;
+      if(val > top) top = val;
+    }
+    ty1 = Math.max(top * 1.18, 1e-6);
+    if(hN === 0){ hLo = lo; hHi = hi; }
+  } else {
+    var r = f.rng(P);
+    tx0 = r[0]; tx1 = r[1];
+    var top2 = 0;
+    for(i = 0; i < GRID; i++){
+      x = tx0 + (tx1 - tx0) * i / (GRID - 1);
+      var d = f.pdf(x, P);
+      if(!isFinite(d)) d = 0;
+      tgtY[i] = d;
+      if(d > top2) top2 = d;
+    }
+    /* A density that diverges at the left endpoint would flatten everything
+       else, so the axis is capped and the curve is clipped at the frame. */
+    ty1 = Math.max(Math.min(top2 * 1.18, 10 / (tx1 - tx0)), 1e-6);
+    if(hN === 0){ hLo = tx0; hHi = tx1; }
+  }
+  if(snap){
+    vx0 = tx0; vx1 = tx1; vy1 = ty1;
+    for(i = 0; i < curY.length; i++) curY[i] = tgtY[i];
+  }
+}
+
+function ease(){
+  var k = reduced ? 1 : 0.18;
+  vx0 += (tx0 - vx0) * k;
+  vx1 += (tx1 - vx1) * k;
+  vy1 += (ty1 - vy1) * k;
+  var n = F().kind === "discrete" ? MAXBAR : GRID;
+  for(var i = 0; i < n; i++) curY[i] += (tgtY[i] - curY[i]) * k;
+}
+
+/* ---------- sampling ---------- */
+
+function clearSamples(){
+  hN = 0; hSum = 0; hSum2 = 0;
+  for(var i = 0; i < hist.length; i++) hist[i] = 0;
+  var f = F();
+  if(f.kind === "discrete"){
+    var s = f.sup(P);
+    hLo = s[0]; hHi = Math.min(s[1], s[0] + MAXBAR - 1);
+  } else {
+    var r = f.rng(P);
+    hLo = r[0]; hHi = r[1];
+  }
+  el.ncount.textContent = "0";
+  el.smMean.textContent = "\u2014"; el.smMean.className = "sm off";
+  el.smVar.textContent = "\u2014"; el.smVar.className = "sm off";
+  el.smN.textContent = "0"; el.smN.className = "sm off";
+}
+
+function drawSamples(k){
+  var f = F(), i, v, b;
+  for(i = 0; i < k; i++){
+    v = f.dev(P);
+    hN++; hSum += v; hSum2 += v * v;
+    if(f.kind === "discrete"){
+      b = Math.round(v) - hLo;
+      if(b >= 0 && b < MAXBAR) hist[b]++;
+    } else {
+      b = Math.floor((v - hLo) / (hHi - hLo) * HBINS);
+      if(b >= 0 && b < HBINS) hist[b]++;
+    }
+  }
+  var m = hSum / hN;
+  var vr = hN > 1 ? (hSum2 - hN * m * m) / (hN - 1) : 0;
+  el.ncount.textContent = hN.toLocaleString();
+  el.smN.textContent = hN.toLocaleString();
+  el.smMean.textContent = f2(m);
+  el.smVar.textContent = f2(vr);
+  el.smMean.className = "sm"; el.smVar.className = "sm"; el.smN.className = "sm";
+}
+
+/* ---------- drawing ---------- */
+
+function resize(){
+  var dpr = window.devicePixelRatio || 1, r;
+  r = cvM.getBoundingClientRect();
+  WM = Math.max(320, r.width); HM = Math.max(220, r.height);
+  cvM.width = Math.round(WM * dpr); cvM.height = Math.round(HM * dpr);
+  cxM.setTransform(dpr, 0, 0, dpr, 0, 0);
+  plotW = WM - padL - padR; plotH = HM - padT - padB;
+
+  r = cvC.getBoundingClientRect();
+  WC = Math.max(320, r.width); HC = Math.max(90, r.height);
+  cvC.width = Math.round(WC * dpr); cvC.height = Math.round(HC * dpr);
+  cxC.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cdfH = HC - padTC - padBC;
+}
+
+function xp(x){ return padL + (x - vx0) / (vx1 - vx0) * plotW; }
+function yp(y){
+  var v = padT + plotH - (y / vy1) * plotH;
+  if(v < padT - 40) v = padT - 40;
+  return v;
+}
+
+function niceStep(range, want){
+  var raw = range / want;
+  var p = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10));
+  var n = raw / p;
+  var s = n < 1.5 ? 1 : (n < 3 ? 2 : (n < 7 ? 5 : 10));
+  return s * p;
+}
+
+function axisFrame(cx, top, h){
+  cx.strokeStyle = COL.ink;
+  cx.lineWidth = 1.5;
+  cx.beginPath();
+  cx.moveTo(padL + 0.5, top);
+  cx.lineTo(padL + 0.5, top + h + 0.5);
+  cx.lineTo(padL + plotW, top + h + 0.5);
+  cx.stroke();
+}
+
+function drawMain(){
+  var f = F(), i;
+  cxM.clearRect(0, 0, WM, HM);
+  cxM.fillStyle = COL.grey;
+  cxM.fillRect(0, 0, WM, HM);
+  cxM.font = '600 12px "Bricolage Grotesque", sans-serif';
+
+  /* horizontal grid */
+  var sy = niceStep(vy1, 5);
+  cxM.textAlign = "right"; cxM.textBaseline = "middle";
+  for(var g = 0; g <= vy1 + 1e-12; g += sy){
+    var y = yp(g);
+    cxM.strokeStyle = COL.stone; cxM.lineWidth = 1;
+    cxM.beginPath(); cxM.moveTo(padL, y + 0.5); cxM.lineTo(padL + plotW, y + 0.5); cxM.stroke();
+    cxM.fillStyle = COL.ink2;
+    cxM.fillText(g.toFixed(sy < 0.01 ? 3 : (sy < 0.1 ? 2 : 2)), padL - 9, y);
+  }
+
+  /* vertical ticks */
+  cxM.textAlign = "center"; cxM.textBaseline = "top";
+  var lo, hi, step;
+  if(f.kind === "discrete"){
+    var s = f.sup(P);
+    lo = s[0]; hi = Math.min(s[1], s[0] + MAXBAR - 1);
+    step = Math.ceil((hi - lo + 1) / 14);
+    for(i = lo; i <= hi; i += step){
+      cxM.fillStyle = COL.ink2;
+      cxM.fillText(String(i), xp(i), padT + plotH + 7);
+    }
+  } else {
+    step = niceStep(vx1 - vx0, 8);
+    var t0 = Math.ceil(vx0 / step) * step;
+    for(var t = t0; t <= vx1 + 1e-9; t += step){
+      var x = xp(t);
+      cxM.strokeStyle = COL.stone; cxM.lineWidth = 1;
+      cxM.beginPath(); cxM.moveTo(x + 0.5, padT); cxM.lineTo(x + 0.5, padT + plotH); cxM.stroke();
+      cxM.fillStyle = COL.ink2;
+      cxM.fillText(Math.abs(t) < 1e-9 ? "0" : t.toFixed(step < 1 ? 1 : 0), x, padT + plotH + 7);
+    }
+  }
+
+  cxM.save();
+  cxM.beginPath();
+  cxM.rect(padL, padT - 1, plotW, plotH + 1);
+  cxM.clip();
+
+  /* sample histogram */
+  if(hN > 0){
+    cxM.fillStyle = COL.mute;
+    cxM.globalAlpha = 0.55;
+    if(f.kind === "discrete"){
+      var w0 = (xp(1) - xp(0));
+      for(i = 0; i <= hHi - hLo; i++){
+        if(!hist[i]) continue;
+        var pr = hist[i] / hN;
+        var bx = xp(hLo + i) - w0 * 0.42;
+        cxM.fillRect(bx, yp(pr), w0 * 0.84, padT + plotH - yp(pr));
+      }
+    } else {
+      var bw = (hHi - hLo) / HBINS;
+      for(i = 0; i < HBINS; i++){
+        if(!hist[i]) continue;
+        var dens = hist[i] / (hN * bw);
+        var x0 = xp(hLo + i * bw), x1 = xp(hLo + (i + 1) * bw);
+        cxM.fillRect(x0, yp(dens), Math.max(1, x1 - x0 - 1), padT + plotH - yp(dens));
+      }
+    }
+    cxM.globalAlpha = 1;
+  }
+
+  /* theoretical shape */
+  if(f.kind === "discrete"){
+    var s2 = f.sup(P);
+    var lo2 = s2[0], hi2 = Math.min(s2[1], s2[0] + MAXBAR - 1);
+    var w = (xp(1) - xp(0)) * 0.52;
+    for(i = 0; i <= hi2 - lo2; i++){
+      var v = curY[i];
+      if(v <= 0) continue;
+      var cxp = xp(lo2 + i);
+      cxM.fillStyle = "rgba(215,74,73,0.22)";
+      cxM.fillRect(cxp - w / 2, yp(v), w, padT + plotH - yp(v));
+      cxM.strokeStyle = COL.red; cxM.lineWidth = 2;
+      cxM.strokeRect(cxp - w / 2 + 0.5, yp(v) + 0.5, w - 1, padT + plotH - yp(v));
+    }
+  } else {
+    cxM.beginPath();
+    cxM.moveTo(xp(vx0), padT + plotH);
+    for(i = 0; i < GRID; i++){
+      var xx = vx0 + (vx1 - vx0) * i / (GRID - 1);
+      cxM.lineTo(xp(xx), yp(curY[i]));
+    }
+    cxM.lineTo(xp(vx1), padT + plotH);
+    cxM.closePath();
+    cxM.fillStyle = "rgba(215,74,73,0.22)";
+    cxM.fill();
+    cxM.beginPath();
+    for(i = 0; i < GRID; i++){
+      var x2 = vx0 + (vx1 - vx0) * i / (GRID - 1);
+      if(i === 0) cxM.moveTo(xp(x2), yp(curY[i])); else cxM.lineTo(xp(x2), yp(curY[i]));
+    }
+    cxM.strokeStyle = COL.red; cxM.lineWidth = 2.6; cxM.lineJoin = "round";
+    cxM.stroke();
+  }
+
+  cxM.restore();
+
+  /* mean and one standard deviation */
+  if(showMom){
+    var m = f.mean(P), sd = Math.sqrt(Math.max(0, f.vari(P)));
+    var xm = xp(m);
+    cxM.save();
+    cxM.setLineDash([6, 4]);
+    cxM.strokeStyle = COL.ink; cxM.lineWidth = 2;
+    cxM.beginPath(); cxM.moveTo(xm, padT); cxM.lineTo(xm, padT + plotH); cxM.stroke();
+    cxM.setLineDash([]);
+    var yb = padT + 12;
+    cxM.strokeStyle = COL.ink2; cxM.lineWidth = 1.8;
+    cxM.beginPath();
+    cxM.moveTo(xp(m - sd), yb); cxM.lineTo(xp(m + sd), yb);
+    cxM.moveTo(xp(m - sd), yb - 5); cxM.lineTo(xp(m - sd), yb + 5);
+    cxM.moveTo(xp(m + sd), yb - 5); cxM.lineTo(xp(m + sd), yb + 5);
+    cxM.stroke();
+    cxM.font = '700 12px "Bricolage Grotesque", sans-serif';
+    cxM.fillStyle = COL.ink;
+    cxM.textAlign = "left"; cxM.textBaseline = "bottom";
+    cxM.fillText("mean " + f2(m), xm + 6, padT + plotH - 6);
+    cxM.restore();
+  }
+
+  axisFrame(cxM, padT, plotH);
+
+  cxM.font = '600 12px "Bricolage Grotesque", sans-serif';
+  cxM.fillStyle = COL.ink2;
+  cxM.textAlign = "right"; cxM.textBaseline = "bottom";
+  cxM.fillText(f.kind === "discrete" ? "x" : "x", padL + plotW, padT + plotH + 30);
+  cxM.save();
+  cxM.translate(13, padT + plotH / 2);
+  cxM.rotate(-Math.PI / 2);
+  cxM.textAlign = "center"; cxM.textBaseline = "top";
+  cxM.fillText(f.kind === "discrete" ? "P(X = x)" : "f(x)", 0, 0);
+  cxM.restore();
+}
+
+function drawCdf(){
+  var f = F(), i;
+  cxC.clearRect(0, 0, WC, HC);
+  cxC.fillStyle = COL.blush;
+  cxC.fillRect(0, 0, WC, HC);
+  cxC.font = '600 11px "Bricolage Grotesque", sans-serif';
+
+  function ypc(v){ return padTC + cdfH - v * cdfH; }
+
+  cxC.textAlign = "right"; cxC.textBaseline = "middle";
+  var levels = [0, 0.5, 1];
+  for(i = 0; i < levels.length; i++){
+    var y = ypc(levels[i]);
+    cxC.strokeStyle = COL.stone; cxC.lineWidth = 1;
+    cxC.beginPath(); cxC.moveTo(padL, y + 0.5); cxC.lineTo(padL + plotW, y + 0.5); cxC.stroke();
+    cxC.fillStyle = COL.ink2;
+    cxC.fillText(levels[i].toFixed(1), padL - 9, y);
+  }
+
+  /* empirical curve first, theory over it */
+  if(hN > 0){
+    cxC.strokeStyle = COL.mute; cxC.lineWidth = 2;
+    cxC.beginPath();
+    var acc = 0, started = false;
+    if(f.kind === "discrete"){
+      for(i = 0; i <= hHi - hLo; i++){
+        var xA = xp(hLo + i - 0.5), xB = xp(hLo + i + 0.5);
+        if(!started){ cxC.moveTo(xA, ypc(acc)); started = true; } else cxC.lineTo(xA, ypc(acc));
+        acc += hist[i] / hN;
+        cxC.lineTo(xA, ypc(acc));
+        cxC.lineTo(xB, ypc(acc));
+      }
+    } else {
+      var bw = (hHi - hLo) / HBINS;
+      cxC.moveTo(xp(hLo), ypc(0));
+      for(i = 0; i < HBINS; i++){
+        acc += hist[i] / hN;
+        cxC.lineTo(xp(hLo + (i + 1) * bw), ypc(acc));
+      }
+    }
+    cxC.stroke();
+  }
+
+  cxC.strokeStyle = COL.ink; cxC.lineWidth = 2.2;
+  cxC.beginPath();
+  if(f.kind === "discrete"){
+    var s = f.sup(P), lo = s[0], hi = Math.min(s[1], s[0] + MAXBAR - 1), c = 0;
+    cxC.moveTo(padL, ypc(0));
+    for(i = lo; i <= hi; i++){
+      var xa = xp(i - 0.5);
+      cxC.lineTo(xa, ypc(c));
+      c += f.pmf(i, P);
+      cxC.lineTo(xa, ypc(c));
+    }
+    cxC.lineTo(padL + plotW, ypc(c));
+  } else {
+    for(i = 0; i < GRID; i++){
+      var x = vx0 + (vx1 - vx0) * i / (GRID - 1);
+      var v = f.cdf(x, P);
+      if(i === 0) cxC.moveTo(xp(x), ypc(v)); else cxC.lineTo(xp(x), ypc(v));
+    }
+  }
+  cxC.stroke();
+
+  cxC.strokeStyle = COL.ink; cxC.lineWidth = 1.5;
+  cxC.beginPath();
+  cxC.moveTo(padL + 0.5, padTC);
+  cxC.lineTo(padL + 0.5, padTC + cdfH + 0.5);
+  cxC.lineTo(padL + plotW, padTC + cdfH + 0.5);
+  cxC.stroke();
+
+  cxC.fillStyle = COL.ink2;
+  cxC.textAlign = "left"; cxC.textBaseline = "top";
+  cxC.fillText("cumulative distribution function, theory in dark and samples in grey", padL + 6, padTC + cdfH + 7);
+}
+
+/* ---------- loop ---------- */
+
+var last = 0;
+function frame(ts){
+  var dt = last ? Math.min(80, ts - last) : 16;
+  last = ts;
+  if(streaming) drawSamples(Math.max(1, Math.round(600 * dt / 1000)));
+  retarget(false);
+  ease();
+  drawMain();
+  drawCdf();
+  requestAnimationFrame(frame);
+}
+
+/* ---------- wiring ---------- */
+
+el.stream.addEventListener("click", function(){
+  streaming = !streaming;
+  el.stream.textContent = streaming ? "Pause sampling" : "Stream samples";
+});
+document.getElementById("draw1").addEventListener("click", function(){ drawSamples(1); });
+document.getElementById("draw100").addEventListener("click", function(){ drawSamples(100); });
+document.getElementById("clear").addEventListener("click", function(){
+  streaming = false;
+  el.stream.textContent = "Stream samples";
+  clearSamples();
+});
+el.showMoments.addEventListener("change", function(){ showMom = el.showMoments.checked; });
+
+document.addEventListener("keydown", function(e){
+  if(e.code === "Space" && e.target.tagName !== "INPUT" && e.target.tagName !== "BUTTON"){
+    e.preventDefault();
+    el.stream.click();
+  }
+});
+
+window.addEventListener("resize", resize);
+if(window.ResizeObserver){
+  var ro = new ResizeObserver(resize);
+  ro.observe(cvM); ro.observe(cvC);
+}
+
+buildChips();
+resize();
+selectFamily("dunif");
+requestAnimationFrame(frame);
+
+})();
+</script>
+
+</body>
+</html>
