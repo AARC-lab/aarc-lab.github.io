@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coin toss convergence, the law of large numbers</title>
+
+<!-- Page icon, an inline coin stamped with H. No external file needed. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23d74a49'/%3E%3Ccircle cx='32' cy='32' r='23' fill='none' stroke='%23fcf1ef' stroke-width='3'/%3E%3Cpath d='M24 21v22M40 21v22M24 32h16' stroke='%23fcf1ef' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+
+<!-- Bricolage Grotesque, served from the Google Fonts host. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --red:#d74a49;
+  --ink:#183e4b;
+  --ink2:#1b4552;
+  --mute:#8ba0a4;
+  --grey:#eaeaea;
+  --blush:#fcf1ef;
+  --sand:#e8d8c9;
+  --stone:#ced3d7;
+}
+
+*{box-sizing:border-box}
+
+html,body{height:100%}
+
+body{
+  margin:0;
+  background:var(--blush);
+  color:var(--ink);
+  font-family:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  font-variant-numeric:tabular-nums;
+  font-size:16px;
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+
+.wrap{
+  max-width:1180px;
+  margin:0 auto;
+  padding:28px 22px 0;
+}
+
+/* Masthead */
+header{
+  display:flex;
+  align-items:flex-end;
+  gap:18px;
+  padding-bottom:18px;
+  border-bottom:2px solid var(--ink);
+}
+header .mark{flex:0 0 auto}
+header h1{
+  margin:0;
+  font-size:clamp(24px,3.4vw,40px);
+  font-weight:800;
+  font-stretch:92%;
+  letter-spacing:-.02em;
+  line-height:1.05;
+}
+header p{
+  margin:6px 0 0;
+  max-width:62ch;
+  color:var(--ink2);
+  font-size:15px;
+}
+header .tag{
+  margin-left:auto;
+  align-self:flex-start;
+  background:var(--ink);
+  color:var(--blush);
+  font-size:12px;
+  font-weight:600;
+  padding:5px 10px;
+  border-radius:2px;
+  white-space:nowrap;
+}
+
+/* Board */
+.board{
+  display:grid;
+  grid-template-columns:270px 1fr;
+  gap:22px;
+  margin-top:22px;
+}
+
+.rail{display:flex;flex-direction:column;gap:16px}
+
+/* Coin */
+.coinbox{
+  background:var(--sand);
+  border:1px solid var(--stone);
+  padding:18px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:14px;
+}
+.stage{perspective:700px;width:120px;height:120px}
+.coin{
+  position:relative;
+  width:120px;height:120px;
+  transform-style:preserve-3d;
+  transition:transform .38s cubic-bezier(.3,.8,.35,1);
+}
+.face{
+  position:absolute;inset:0;
+  border-radius:50%;
+  display:grid;place-items:center;
+  font-size:52px;font-weight:800;
+  backface-visibility:hidden;
+  box-shadow:0 4px 0 rgba(24,62,75,.18);
+}
+.face.h{background:var(--red);color:var(--blush);border:5px solid #b93b3a}
+.face.t{background:var(--ink);color:var(--blush);border:5px solid #0f2c36;transform:rotateY(180deg)}
+.callout{font-size:14px;color:var(--ink2);text-align:center;min-height:20px}
+.callout b{color:var(--red)}
+
+/* Readouts */
+.stats{background:var(--grey);border:1px solid var(--stone);padding:16px 18px}
+.big{font-size:46px;font-weight:800;letter-spacing:-.03em;line-height:1}
+.big .lead{color:var(--red)}
+.cap{font-size:13px;color:var(--ink2);margin-top:2px}
+.rows{margin-top:14px;display:grid;gap:7px;font-size:14px}
+.row{display:flex;justify-content:space-between;gap:10px}
+.row span:first-child{color:var(--ink2)}
+.row span:last-child{font-weight:700}
+.row.hi span:last-child{color:var(--red)}
+
+.split{margin-top:14px}
+.bar{height:16px;display:flex;border:1px solid var(--ink);overflow:hidden}
+.bar i{display:block;height:100%;transition:width .25s ease}
+.bar .bh{background:var(--red)}
+.bar .bt{background:var(--ink2)}
+.barkey{display:flex;justify-content:space-between;font-size:12px;color:var(--ink2);margin-top:5px}
+
+/* Chart */
+.chartbox{
+  background:var(--grey);
+  border:1px solid var(--stone);
+  padding:14px 16px 10px;
+  display:flex;flex-direction:column;
+}
+#chart{width:100%;height:460px;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:16px;font-size:13px;color:var(--ink2);padding-top:8px;border-top:1px solid var(--stone);margin-top:8px}
+.legend i{display:inline-block;width:22px;height:0;vertical-align:middle;margin-right:6px}
+.k1{border-top:3px solid var(--red)}
+.k2{border-top:3px solid var(--mute)}
+.k3{border-top:2px dashed var(--ink)}
+.k4{height:10px;background:rgba(139,160,164,.35);border:1px solid var(--stone)}
+.k5{height:10px;background:var(--red);opacity:.75}
+
+/* Controls */
+.controls{
+  grid-column:1 / -1;
+  background:var(--sand);
+  border:1px solid var(--stone);
+  padding:16px 18px;
+}
+.scrub{display:grid;grid-template-columns:auto 1fr auto;align-items:center;column-gap:16px}
+.scrub label{font-size:14px;color:var(--ink2);white-space:nowrap}
+.nval{font-weight:800;font-size:20px;color:var(--ink);min-width:96px;text-align:right}
+.scrub + .scrub{margin-top:6px}
+
+input[type=range]{
+  -webkit-appearance:none;appearance:none;
+  width:100%;height:26px;background:transparent;cursor:pointer;
+}
+input[type=range]::-webkit-slider-runnable-track{height:8px;background:var(--blush);border:1px solid var(--ink)}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:22px;height:22px;margin-top:-8px;border-radius:50%;
+  background:var(--red);border:3px solid var(--blush);
+  box-shadow:0 0 0 1px var(--ink);
+}
+input[type=range]::-moz-range-track{height:8px;background:var(--blush);border:1px solid var(--ink)}
+input[type=range]::-moz-range-thumb{
+  width:20px;height:20px;border-radius:50%;
+  background:var(--red);border:3px solid var(--blush);box-shadow:0 0 0 1px var(--ink);
+}
+input[type=range]#bias::-webkit-slider-thumb{background:var(--ink)}
+input[type=range]#bias::-moz-range-thumb{background:var(--ink)}
+input[type=range]:focus-visible{outline:3px solid var(--ink);outline-offset:4px}
+
+.ticks{
+  grid-column:2;
+  display:flex;justify-content:space-between;
+  font-size:12px;color:var(--ink2);
+  padding:2px 10px 0;
+}
+
+.buttons{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:16px}
+button{
+  font-family:inherit;font-size:14px;font-weight:600;
+  padding:9px 16px;border-radius:2px;cursor:pointer;
+  border:1px solid var(--ink);background:var(--blush);color:var(--ink);
+  transition:background .15s,color .15s;
+}
+button:hover{background:var(--stone)}
+button.primary{background:var(--ink);color:var(--blush)}
+button.primary:hover{background:var(--ink2)}
+button:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+.toggle{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink2)}
+.toggle input{width:17px;height:17px;accent-color:var(--red)}
+.pick{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink2);margin-left:auto}
+select{
+  font-family:inherit;font-size:14px;font-weight:600;
+  padding:8px 10px;border:1px solid var(--ink);border-radius:2px;
+  background:var(--blush);color:var(--ink);cursor:pointer;
+}
+select:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+
+.note{margin:18px 0 0;font-size:14px;color:var(--ink2);max-width:78ch}
+.note b{color:var(--ink)}
+.note + .note{margin-top:10px}
+
+footer{
+  margin-top:30px;
+  border-top:2px solid var(--ink);
+  background:var(--blush);
+}
+footer .inner{
+  max-width:1180px;margin:0 auto;padding:16px 22px 26px;
+  display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  font-size:14px;color:var(--ink2);
+}
+footer b{color:var(--ink);font-weight:700}
+
+@media (max-width:880px){
+  .board{grid-template-columns:1fr}
+  header{flex-wrap:wrap}
+  header .tag{margin-left:0}
+  #chart{height:380px}
+  .stage,.coin{width:96px;height:96px}
+  .face{font-size:42px}
+  .pick{margin-left:0}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .coin{transition:none}
+  .bar i{transition:none}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <svg class="mark" width="52" height="52" viewBox="0 0 64 64" aria-hidden="true">
+      <circle cx="32" cy="32" r="30" fill="#d74a49"/>
+      <circle cx="32" cy="32" r="23" fill="none" stroke="#fcf1ef" stroke-width="3"/>
+      <path d="M24 21v22M40 21v22M24 32h16" stroke="#fcf1ef" stroke-width="5" stroke-linecap="round"/>
+    </svg>
+    <div>
+      <h1>A coin, tossed n times</h1>
+      <p>Drag the slider to increase the number of tosses. The fraction of heads approaches the true probability, which is one half for a fair coin. The envelope around it narrows in proportion to one over the square root of n.</p>
+    </div>
+    <div class="tag">Law of large numbers</div>
+  </header>
+
+  <div class="board">
+
+    <div class="rail">
+      <div class="coinbox">
+        <div class="stage">
+          <div class="coin" id="coin">
+            <div class="face h">H</div>
+            <div class="face t">T</div>
+          </div>
+        </div>
+        <div class="callout" id="callout">Toss number <b id="tossno">1</b></div>
+      </div>
+
+      <div class="stats">
+        <div class="big"><span class="lead" id="p">0.0000</span></div>
+        <div class="cap">fraction of heads after <b id="ncap">1</b> tosses</div>
+
+        <div class="rows">
+          <div class="row"><span>heads</span><span id="heads">0</span></div>
+          <div class="row"><span>tails</span><span id="tails">1</span></div>
+          <div class="row"><span>distance from target</span><span id="dev">0.5000</span></div>
+          <div class="row"><span>heads minus tails</span><span id="gap">-1</span></div>
+          <div class="row hi"><span id="epslabel">runs within 0.02</span><span id="within">0 of 400</span></div>
+        </div>
+
+        <div class="split">
+          <div class="bar"><i class="bh" id="bh" style="width:0%"></i><i class="bt" id="bt" style="width:100%"></i></div>
+          <div class="barkey"><span>heads</span><span>tails</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chartbox">
+      <canvas id="chart"></canvas>
+      <div class="legend">
+        <span><i class="k1"></i>this run</span>
+        <span><i class="k2"></i>five parallel runs</span>
+        <span><i class="k3"></i>true probability</span>
+        <span><i class="k4" style="width:22px"></i>two standard errors</span>
+        <span><i class="k5" style="width:22px"></i>ensemble of 400 runs at this n</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="scrub">
+        <label for="slider">number of tosses</label>
+        <input id="slider" type="range" min="0" max="1000" value="0" step="1"
+               aria-label="Number of tosses, logarithmic scale">
+        <div class="nval" id="nval">1</div>
+        <div class="ticks"><span>1</span><span>10</span><span>100</span><span>1,000</span><span>10,000</span><span>100,000</span></div>
+      </div>
+
+      <div class="scrub">
+        <label for="bias">probability of heads</label>
+        <input id="bias" type="range" min="5" max="95" value="50" step="1"
+               aria-label="True probability of heads">
+        <div class="nval" id="biasval">0.50</div>
+      </div>
+
+      <div class="buttons">
+        <button class="primary" id="play">Toss continuously</button>
+        <button id="step">Toss once</button>
+        <button id="reset">Back to one toss</button>
+        <button id="reseed">New sequence</button>
+        <label class="toggle"><input type="checkbox" id="zoom"> magnify near the target</label>
+        <span class="pick">
+          <label for="eps">tolerance</label>
+          <select id="eps">
+            <option value="0.10">0.10</option>
+            <option value="0.05">0.05</option>
+            <option value="0.02" selected>0.02</option>
+            <option value="0.01">0.01</option>
+          </select>
+        </span>
+      </div>
+    </div>
+
+  </div>
+
+  <p class="note">The fraction of heads approaches the target as n increases. Over the same range, the difference between the head count and the tail count usually grows in absolute value.</p>
+
+  <p class="note">The strip at the right of the chart is a histogram of 400 independent runs at the current n, with the normal curve predicted by theory drawn over it. Bars inside the tolerance band are red, and the rail reports how many runs they hold. That count divided by 400 estimates the probability in the weak law, which approaches one as n increases.</p>
+
+</div>
+
+<footer>
+  <div class="inner">
+    <span><b>CPE 486/586: Machine Learning for Engineering Applications</b></span>
+    <span>University of Alabama in Huntsville</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+"use strict";
+
+var MAXN = 100000;
+var LOGN = Math.log(MAXN);
+var GHOSTS = 5;
+var ENS = 400;
+
+var COL = {
+  red:"#d74a49", ink:"#183e4b", ink2:"#1b4552",
+  mute:"#8ba0a4", grey:"#eaeaea", blush:"#fcf1ef",
+  sand:"#e8d8c9", stone:"#ced3d7"
+};
+
+var cv = document.getElementById("chart");
+var ctx = cv.getContext("2d");
+
+var padL = 58, padR = 16, padT = 18, padB = 40, stripW = 120, stripGap = 14;
+var W = 0, H = 0, plotW = 0, plotH = 0;
+
+var main = null;      // current run, cumulative heads plus the face of each toss
+var ghosts = [];      // five independent runs drawn faintly
+var samples = [];     // toss indices sampled for drawing, roughly one per pixel
+var marks = [];       // checkpoint counts used by the ensemble
+var ens = null;       // cumulative heads for every ensemble run at every checkpoint
+var seedBase = 1;
+
+var pTrue = 0.5;
+var eps = 0.02;
+var nCur = 1;
+var playing = false;
+var playT = 0;
+var lastTs = 0;
+var lastFlipTs = 0;
+var lastShown = 0;
+var spin = 0;
+var within = 0;
+
+var yLo = 0, yHi = 1, yLoT = 0, yHiT = 1;
+
+var el = {
+  coin: document.getElementById("coin"),
+  tossno: document.getElementById("tossno"),
+  p: document.getElementById("p"),
+  ncap: document.getElementById("ncap"),
+  heads: document.getElementById("heads"),
+  tails: document.getElementById("tails"),
+  dev: document.getElementById("dev"),
+  gap: document.getElementById("gap"),
+  within: document.getElementById("within"),
+  epslabel: document.getElementById("epslabel"),
+  bh: document.getElementById("bh"),
+  bt: document.getElementById("bt"),
+  slider: document.getElementById("slider"),
+  nval: document.getElementById("nval"),
+  bias: document.getElementById("bias"),
+  biasval: document.getElementById("biasval"),
+  play: document.getElementById("play"),
+  step: document.getElementById("step"),
+  reset: document.getElementById("reset"),
+  reseed: document.getElementById("reseed"),
+  zoom: document.getElementById("zoom"),
+  eps: document.getElementById("eps")
+};
+
+var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* Small deterministic generator, so a scrub back and forth replays the same run. */
+function mulberry32(a){
+  return function(){
+    a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function gauss(rng){
+  var u = 1 - rng(), v = rng();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+function erf(x){
+  var s = x < 0 ? -1 : 1;
+  x = Math.abs(x);
+  var t = 1 / (1 + 0.3275911 * x);
+  var y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+  return s * y;
+}
+function Phi(z){ return 0.5 * (1 + erf(z / Math.SQRT2)); }
+
+function makeRun(seed, keepFaces){
+  var rng = mulberry32(seed);
+  var c = new Int32Array(MAXN + 1);
+  var faces = keepFaces ? new Uint8Array(MAXN + 1) : null;
+  var h = 0, i, f;
+  for(i = 1; i <= MAXN; i++){
+    f = rng() < pTrue ? 1 : 0;
+    h += f;
+    c[i] = h;
+    if(faces) faces[i] = f;
+  }
+  return {c:c, faces:faces};
+}
+
+/* Checkpoints let the ensemble advance in blocks. Each block is a binomial draw,
+   exact for short blocks and normal for long ones. */
+function buildMarks(){
+  marks = [];
+  var n;
+  for(n = 1; n <= 30; n++) marks.push(n);
+  var v = 30;
+  while(v < MAXN){
+    var next = Math.max(v + 1, Math.round(v * 1.05));
+    if(next > MAXN) next = MAXN;
+    marks.push(next);
+    v = next;
+  }
+}
+
+function binom(d, p, rng){
+  if(d <= 0) return 0;
+  var mean = d * p;
+  var tail = Math.min(mean, d - mean);
+  if(d <= 100 || tail < 12){
+    var s = 0;
+    for(var i = 0; i < d; i++) if(rng() < p) s++;
+    return s;
+  }
+  var x = Math.round(mean + Math.sqrt(d * p * (1 - p)) * gauss(rng));
+  if(x < 0) x = 0;
+  if(x > d) x = d;
+  return x;
+}
+
+function buildEnsemble(seed){
+  var K = marks.length;
+  ens = new Int32Array(ENS * K);
+  var rng = mulberry32(seed);
+  for(var r = 0; r < ENS; r++){
+    var h = 0, prev = 0;
+    for(var k = 0; k < K; k++){
+      h += binom(marks[k] - prev, pTrue, rng);
+      prev = marks[k];
+      ens[r * K + k] = h;
+    }
+  }
+}
+
+function rebuild(){
+  main = makeRun(seedBase, true);
+  ghosts = [];
+  for(var k = 1; k <= GHOSTS; k++) ghosts.push(makeRun((seedBase + k * 7919) >>> 0, false).c);
+  buildEnsemble((seedBase + 104729) >>> 0);
+}
+
+function markIndex(n){
+  var lo = 0, hi = marks.length - 1;
+  while(lo < hi){
+    var mid = (lo + hi) >> 1;
+    if(marks[mid] < n) lo = mid + 1; else hi = mid;
+  }
+  if(lo > 0 && Math.abs(marks[lo - 1] - n) < Math.abs(marks[lo] - n)) lo -= 1;
+  return lo;
+}
+
+/* Axis maps. The horizontal axis is logarithmic, so the early scatter and the
+   late flatness both fit on one screen. */
+function xOf(n){ return padL + (Math.log(n) / LOGN) * plotW; }
+function yOf(p){
+  var y = padT + (1 - (p - yLo) / (yHi - yLo)) * plotH;
+  if(y < padT) y = padT;
+  if(y > padT + plotH) y = padT + plotH;
+  return y;
+}
+function nOfSlider(v){ return Math.max(1, Math.round(Math.exp((v / 1000) * LOGN))); }
+function sliderOfN(n){ return Math.round(1000 * Math.log(n) / LOGN); }
+
+function buildSamples(){
+  samples = [];
+  var n;
+  for(n = 1; n <= 200 && n <= MAXN; n++) samples.push(n);
+  n = 201;
+  while(n <= MAXN){
+    samples.push(n);
+    var px = xOf(n) + 0.8;
+    var next = Math.ceil(Math.exp(((px - padL) / plotW) * LOGN));
+    if(next <= n) next = n + 1;
+    n = next;
+  }
+  if(samples[samples.length - 1] !== MAXN) samples.push(MAXN);
+}
+
+function resize(){
+  var rect = cv.getBoundingClientRect();
+  var dpr = window.devicePixelRatio || 1;
+  W = Math.max(320, rect.width);
+  H = Math.max(240, rect.height);
+  cv.width = Math.round(W * dpr);
+  cv.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  stripW = W < 620 ? 76 : 120;
+  plotW = W - padL - padR - stripW - stripGap;
+  plotH = H - padT - padB;
+  buildSamples();
+}
+
+function drawGrid(){
+  ctx.save();
+  ctx.font = '600 12px "Bricolage Grotesque", sans-serif';
+  ctx.fillStyle = COL.ink2;
+
+  var range = yHi - yLo;
+  var stepY = range > 0.4 ? 0.25 : (range > 0.15 ? 0.05 : 0.02);
+  var start = Math.ceil(yLo / stepY - 1e-9) * stepY;
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  for(var v = start; v <= yHi + 1e-9; v += stepY){
+    var y = yOf(v);
+    ctx.strokeStyle = COL.stone;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padL, y + 0.5);
+    ctx.lineTo(padL + plotW, y + 0.5);
+    ctx.stroke();
+    ctx.fillStyle = COL.ink2;
+    ctx.fillText(v.toFixed(2), padL - 10, y);
+  }
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  var decades = [1, 10, 100, 1000, 10000, 100000];
+  for(var i = 0; i < decades.length; i++){
+    var x = xOf(decades[i]);
+    ctx.strokeStyle = COL.stone;
+    ctx.beginPath();
+    ctx.moveTo(x + 0.5, padT);
+    ctx.lineTo(x + 0.5, padT + plotH);
+    ctx.stroke();
+    ctx.fillStyle = COL.ink2;
+    ctx.fillText(decades[i].toLocaleString(), x, padT + plotH + 8);
+  }
+
+  ctx.strokeStyle = COL.ink;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(padL + 0.5, padT);
+  ctx.lineTo(padL + 0.5, padT + plotH + 0.5);
+  ctx.lineTo(padL + plotW, padT + plotH + 0.5);
+  ctx.stroke();
+
+  ctx.fillStyle = COL.ink2;
+  ctx.textAlign = "right";
+  ctx.textBaseline = "bottom";
+  ctx.fillText("number of tosses, log scale", padL + plotW, padT + plotH + 34);
+  ctx.save();
+  ctx.translate(14, padT + plotH / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillText("fraction of heads", 0, 0);
+  ctx.restore();
+
+  ctx.restore();
+}
+
+function drawBand(){
+  ctx.save();
+  ctx.beginPath();
+  var px, n, s;
+  var sd = Math.sqrt(pTrue * (1 - pTrue));
+  for(px = 0; px <= plotW; px++){
+    n = Math.exp((px / plotW) * LOGN);
+    s = 2 * sd / Math.sqrt(n);
+    ctx.lineTo(padL + px, yOf(Math.min(1, pTrue + s)));
+  }
+  for(px = plotW; px >= 0; px--){
+    n = Math.exp((px / plotW) * LOGN);
+    s = 2 * sd / Math.sqrt(n);
+    ctx.lineTo(padL + px, yOf(Math.max(0, pTrue - s)));
+  }
+  ctx.closePath();
+  ctx.fillStyle = "rgba(139,160,164,0.30)";
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawTargetLine(){
+  ctx.save();
+  ctx.setLineDash([7, 5]);
+  ctx.strokeStyle = COL.ink;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(padL, yOf(pTrue));
+  ctx.lineTo(padL + plotW + stripGap + stripW, yOf(pTrue));
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawRun(c, nMax, color, width, alpha){
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  var started = false, i, n;
+  for(i = 0; i < samples.length; i++){
+    n = samples[i];
+    if(n > nMax) break;
+    var x = xOf(n), y = yOf(c[n] / n);
+    if(started) ctx.lineTo(x, y); else { ctx.moveTo(x, y); started = true; }
+  }
+  var xe = xOf(nMax), ye = yOf(c[nMax] / nMax);
+  if(started) ctx.lineTo(xe, ye); else ctx.moveTo(xe, ye);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* Marginal histogram of the ensemble, pinned to the right edge and sharing the
+   vertical scale of the main chart. */
+function drawStrip(){
+  var x0 = padL + plotW + stripGap;
+  var x1 = x0 + stripW;
+  var K = marks.length;
+  var k = markIndex(nCur);
+  var nk = marks[k];
+
+  ctx.save();
+  ctx.fillStyle = COL.blush;
+  ctx.fillRect(x0, padT, stripW, plotH);
+  ctx.strokeStyle = COL.stone;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x0 + 0.5, padT + 0.5, stripW - 1, plotH - 1);
+
+  var BINS = 64;
+  var counts = new Int32Array(BINS);
+  var lo = yLo, hi = yHi, wBin = (hi - lo) / BINS;
+  var r, b, ph;
+  within = 0;
+  for(r = 0; r < ENS; r++){
+    ph = ens[r * K + k] / nk;
+    if(Math.abs(ph - pTrue) <= eps) within++;
+    b = Math.floor((ph - lo) / wBin);
+    if(b < 0) b = 0;
+    if(b >= BINS) b = BINS - 1;
+    counts[b]++;
+  }
+
+  var top = 1;
+  for(b = 0; b < BINS; b++) if(counts[b] > top) top = counts[b];
+  var scale = (stripW - 12) / top;
+  var hBin = plotH / BINS;
+
+  for(b = 0; b < BINS; b++){
+    if(!counts[b]) continue;
+    var center = lo + (b + 0.5) * wBin;
+    var inside = Math.abs(center - pTrue) <= eps;
+    ctx.fillStyle = inside ? COL.red : COL.mute;
+    ctx.globalAlpha = inside ? 0.75 : 0.55;
+    ctx.fillRect(x0 + 1, padT + plotH - (b + 1) * hBin, counts[b] * scale, hBin - 0.6);
+  }
+  ctx.globalAlpha = 1;
+
+  var sd = Math.sqrt(pTrue * (1 - pTrue) / nk);
+  ctx.strokeStyle = COL.ink;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  for(b = 0; b < BINS; b++){
+    var a = lo + b * wBin, c2 = lo + (b + 1) * wBin;
+    var expect = ENS * (Phi((c2 - pTrue) / sd) - Phi((a - pTrue) / sd));
+    var y = padT + plotH - (b + 0.5) * hBin;
+    var x = x0 + 1 + expect * scale;
+    if(x > x1 - 2) x = x1 - 2;
+    if(b === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  ctx.setLineDash([3, 3]);
+  ctx.strokeStyle = COL.red;
+  ctx.lineWidth = 1;
+  var yUp = yOf(pTrue + eps), yDn = yOf(pTrue - eps);
+  ctx.beginPath();
+  ctx.moveTo(x0, yUp + 0.5); ctx.lineTo(x1, yUp + 0.5);
+  ctx.moveTo(x0, yDn + 0.5); ctx.lineTo(x1, yDn + 0.5);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.font = '600 11px "Bricolage Grotesque", sans-serif';
+  ctx.fillStyle = COL.ink2;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillText("400 runs", x0 + stripW / 2, padT + plotH + 8);
+  ctx.restore();
+}
+
+function drawHead(ts){
+  var p = main.c[nCur] / nCur;
+  var x = xOf(nCur), y = yOf(p);
+  var pulse = reduced ? 0 : (Math.sin(ts / 380) * 0.5 + 0.5);
+
+  ctx.save();
+  ctx.strokeStyle = COL.red;
+  ctx.globalAlpha = 0.30 - 0.22 * pulse;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(x, y, 8 + 12 * pulse, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.save();
+  ctx.strokeStyle = COL.stone;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 4]);
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x, padT + plotH);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.save();
+  ctx.fillStyle = COL.red;
+  ctx.strokeStyle = COL.blush;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(x, y, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  var label = p.toFixed(4);
+  ctx.save();
+  ctx.font = '700 13px "Bricolage Grotesque", sans-serif';
+  var w = ctx.measureText(label).width + 14;
+  var bx = x + 12, by = y - 26;
+  if(bx + w > padL + plotW) bx = x - 12 - w;
+  if(by < padT) by = y + 12;
+  ctx.fillStyle = COL.ink;
+  ctx.fillRect(bx, by, w, 21);
+  ctx.fillStyle = COL.blush;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, bx + w / 2, by + 11);
+  ctx.restore();
+}
+
+function draw(ts){
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = COL.grey;
+  ctx.fillRect(0, 0, W, H);
+  drawBand();
+  drawGrid();
+  drawStrip();
+  drawTargetLine();
+  for(var g = 0; g < ghosts.length; g++) drawRun(ghosts[g], nCur, COL.mute, 1.2, 0.55);
+  drawRun(main.c, nCur, COL.red, 2.4, 1);
+  drawHead(ts);
+}
+
+/* Coin face. Landing angle is chosen so the visible side matches the toss. */
+function showFace(f){
+  var target = f ? 0 : 180;
+  var cur = ((spin % 360) + 360) % 360;
+  var delta = (reduced ? 0 : 720) + (((target - cur) % 360) + 360) % 360;
+  spin += delta;
+  el.coin.style.transform = "rotateY(" + spin + "deg)";
+}
+
+function updateReadouts(){
+  var h = main.c[nCur];
+  var t = nCur - h;
+  var p = h / nCur;
+  el.p.textContent = p.toFixed(4);
+  el.ncap.textContent = nCur.toLocaleString();
+  el.heads.textContent = h.toLocaleString();
+  el.tails.textContent = t.toLocaleString();
+  el.dev.textContent = Math.abs(p - pTrue).toFixed(4);
+  el.gap.textContent = (h - t > 0 ? "+" : "") + (h - t).toLocaleString();
+  el.bh.style.width = (p * 100).toFixed(2) + "%";
+  el.bt.style.width = ((1 - p) * 100).toFixed(2) + "%";
+  el.nval.textContent = nCur.toLocaleString();
+  el.tossno.textContent = nCur.toLocaleString();
+  el.within.textContent = within + " of " + ENS;
+}
+
+function maybeFlip(ts){
+  if(nCur === lastShown) return;
+  if(ts - lastFlipTs < 140) return;
+  lastShown = nCur;
+  lastFlipTs = ts;
+  showFace(main.faces[nCur]);
+}
+
+function setN(n, fromSlider){
+  nCur = Math.min(MAXN, Math.max(1, n));
+  playT = Math.log(nCur) / LOGN;
+  if(!fromSlider) el.slider.value = sliderOfN(nCur);
+  updateReadouts();
+}
+
+function stopPlay(){
+  playing = false;
+  el.play.textContent = "Toss continuously";
+}
+
+function frame(ts){
+  var dt = lastTs ? Math.min(60, ts - lastTs) : 16;
+  lastTs = ts;
+
+  if(playing){
+    playT += dt / 17000;
+    if(playT >= 1){ playT = 1; stopPlay(); }
+    var n = Math.max(1, Math.round(Math.exp(playT * LOGN)));
+    if(n !== nCur){
+      nCur = n;
+      el.slider.value = sliderOfN(nCur);
+    }
+  }
+
+  yLo += (yLoT - yLo) * 0.14;
+  yHi += (yHiT - yHi) * 0.14;
+
+  maybeFlip(ts);
+  draw(ts);
+  updateReadouts();
+  requestAnimationFrame(frame);
+}
+
+/* Wiring */
+el.slider.addEventListener("input", function(){
+  stopPlay();
+  setN(nOfSlider(parseInt(el.slider.value, 10)), true);
+});
+
+var biasTimer = 0;
+el.bias.addEventListener("input", function(){
+  pTrue = parseInt(el.bias.value, 10) / 100;
+  el.biasval.textContent = pTrue.toFixed(2);
+  if(el.zoom.checked){
+    yLoT = Math.max(0, pTrue - 0.10);
+    yHiT = Math.min(1, pTrue + 0.10);
+  }
+  /* The band and the target line follow at once. Regenerating the runs costs
+     tens of milliseconds, so it waits for a pause in the drag. */
+  if(biasTimer) clearTimeout(biasTimer);
+  biasTimer = setTimeout(function(){
+    biasTimer = 0;
+    rebuild();
+    lastShown = 0;
+    updateReadouts();
+  }, 110);
+});
+
+el.eps.addEventListener("change", function(){
+  eps = parseFloat(el.eps.value);
+  el.epslabel.textContent = "runs within " + eps.toFixed(2);
+});
+
+el.play.addEventListener("click", function(){
+  if(playing){ stopPlay(); return; }
+  if(nCur >= MAXN) setN(1, false);
+  playing = true;
+  el.play.textContent = "Pause";
+});
+
+el.step.addEventListener("click", function(){
+  stopPlay();
+  setN(nCur + 1, false);
+  lastShown = nCur - 1;
+});
+
+el.reset.addEventListener("click", function(){
+  stopPlay();
+  setN(1, false);
+  lastShown = 0;
+});
+
+el.reseed.addEventListener("click", function(){
+  seedBase = (Math.random() * 4294967295) >>> 0;
+  rebuild();
+  setN(1, false);
+  lastShown = 0;
+  playing = true;
+  el.play.textContent = "Pause";
+});
+
+el.zoom.addEventListener("change", function(){
+  if(el.zoom.checked){
+    yLoT = Math.max(0, pTrue - 0.10);
+    yHiT = Math.min(1, pTrue + 0.10);
+  } else {
+    yLoT = 0; yHiT = 1;
+  }
+});
+
+document.addEventListener("keydown", function(e){
+  if(e.code === "Space" && e.target.tagName !== "INPUT" && e.target.tagName !== "BUTTON" && e.target.tagName !== "SELECT"){
+    e.preventDefault();
+    el.play.click();
+  }
+});
+
+window.addEventListener("resize", resize);
+if(window.ResizeObserver) new ResizeObserver(resize).observe(cv);
+
+seedBase = (Math.random() * 4294967295) >>> 0;
+buildMarks();
+rebuild();
+resize();
+setN(1, false);
+showFace(main.faces[1]);
+lastShown = 1;
+requestAnimationFrame(frame);
+
+})();
+</script>
+
+</body>
+</html>
