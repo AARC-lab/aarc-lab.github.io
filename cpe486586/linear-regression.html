@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simple linear regression and the Working-Hotelling-Scheff&eacute; band</title>
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23183e4b'/%3E%3Cpath d='M6 40Q32 30 58 12L58 28Q32 46 6 58Z' fill='%23d74a49' opacity='.55'/%3E%3Cpath d='M6 49L58 20' stroke='%23fcf1ef' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='15' cy='39' r='4' fill='%23e8d8c9'/%3E%3Ccircle cx='27' cy='43' r='4' fill='%23e8d8c9'/%3E%3Ccircle cx='40' cy='26' r='4' fill='%23e8d8c9'/%3E%3Ccircle cx='51' cy='30' r='4' fill='%23e8d8c9'/%3E%3C/svg%3E">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --red:#d74a49;
+  --ink:#183e4b;
+  --ink2:#1b4552;
+  --mute:#8ba0a4;
+  --grey:#eaeaea;
+  --blush:#fcf1ef;
+  --sand:#e8d8c9;
+  --stone:#ced3d7;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--blush);color:var(--ink);
+  font-family:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  font-variant-numeric:tabular-nums;font-size:16px;line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1260px;margin:0 auto;padding:26px 22px 0}
+
+header{display:flex;align-items:flex-end;gap:18px;padding-bottom:16px;border-bottom:2px solid var(--ink)}
+header h1{margin:0;font-size:clamp(23px,3.1vw,37px);font-weight:800;font-stretch:92%;letter-spacing:-.02em;line-height:1.05}
+header p{margin:6px 0 0;max-width:66ch;color:var(--ink2);font-size:15px}
+header .tag{
+  margin-left:auto;align-self:flex-start;background:var(--ink);color:var(--blush);
+  font-size:12px;font-weight:600;padding:5px 10px;border-radius:2px;white-space:nowrap;
+}
+
+.board{display:grid;grid-template-columns:1fr 316px;gap:20px;margin-top:20px;align-items:stretch}
+
+.plotbox{
+  position:relative;background:var(--grey);border:1px solid var(--stone);
+  padding:12px 14px 10px;display:flex;flex-direction:column;min-height:540px;
+}
+.canvaswrap{position:relative;flex:1;min-height:420px}
+#plot{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair;touch-action:none}
+#plot.grab{cursor:grab}
+#plot.grabbing{cursor:grabbing}
+.hint{
+  position:absolute;left:62px;bottom:54px;pointer-events:none;max-width:60%;
+  font-size:12.5px;color:var(--ink2);background:rgba(234,234,234,.92);padding:4px 9px;border-radius:2px;
+  transition:opacity .4s;
+}
+.hint.gone{opacity:0}
+.legend{
+  display:flex;flex-wrap:wrap;gap:8px 16px;font-size:13px;color:var(--ink2);
+  padding-top:8px;border-top:1px solid var(--stone);margin-top:8px;
+}
+.legend i{display:inline-block;vertical-align:-1px;margin-right:6px}
+.lg-fit{width:22px;height:0;border-top:3px solid var(--red);vertical-align:middle !important}
+.lg-whs{width:20px;height:11px;background:rgba(215,74,73,.2);border:1px solid rgba(215,74,73,.7)}
+.lg-pt{width:20px;height:11px;background:rgba(24,62,75,.1);border:1px dashed var(--ink2)}
+.lg-true{width:22px;height:0;border-top:2px dashed var(--ink);vertical-align:middle !important}
+.lg-syn{width:11px;height:11px;border-radius:50%;background:var(--ink2);border:1.5px solid var(--blush)}
+.lg-usr{width:11px;height:11px;border-radius:50%;background:var(--blush);border:2.5px solid var(--red)}
+
+.rail{display:flex;flex-direction:column;gap:14px}
+.panel{background:var(--grey);border:1px solid var(--stone);padding:14px 16px}
+.panel.sand{background:var(--sand)}
+.panel h2{margin:0 0 10px;font-size:13px;font-weight:700;color:var(--ink2)}
+
+.eqn{font-size:24px;font-weight:800;letter-spacing:-.01em;line-height:1.2;margin-bottom:12px}
+.eqn .v{color:var(--red)}
+table.est{width:100%;border-collapse:collapse;font-size:14px}
+table.est th{font-size:11.5px;font-weight:700;color:var(--ink2);text-align:right;padding:0 0 5px;border-bottom:1px solid var(--stone)}
+table.est th:first-child{text-align:left}
+table.est td{padding:5px 0;text-align:right;font-weight:700}
+table.est td:first-child{text-align:left;font-weight:600;color:var(--ink2)}
+table.est td.hi{color:var(--red)}
+table.est td.lo{color:var(--mute);font-weight:600}
+.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:12px;padding-top:10px;border-top:1px solid var(--stone);align-items:end}
+.facts div{font-size:12px;color:var(--ink2)}
+.facts b{display:block;font-size:17px;color:var(--ink);font-weight:800}
+
+.ctl{margin-bottom:12px}
+.ctl .row{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}
+.ctl .row span{color:var(--ink2)}
+.ctl .row b{font-weight:800;color:var(--red);font-size:17px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:24px;background:transparent;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:6px;background:var(--blush);border:1px solid var(--ink)}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;width:18px;height:18px;margin-top:-7px;border-radius:50%;
+  background:var(--red);border:3px solid var(--blush);box-shadow:0 0 0 1px var(--ink);
+}
+input[type=range]::-moz-range-track{height:6px;background:var(--blush);border:1px solid var(--ink)}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--red);border:3px solid var(--blush);box-shadow:0 0 0 1px var(--ink)}
+input[type=range]:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+
+.seg{display:flex;border:1px solid var(--ink);border-radius:2px;overflow:hidden;margin-top:4px}
+.seg button{
+  flex:1;border:0;border-radius:0;background:var(--blush);color:var(--ink);
+  font-family:inherit;font-size:14px;font-weight:600;padding:7px 4px;cursor:pointer;
+}
+.seg button + button{border-left:1px solid var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--blush)}
+.seg button:focus-visible{outline:3px solid var(--red);outline-offset:-3px}
+.seglabel{font-size:14px;color:var(--ink2)}
+
+.toggles{display:flex;flex-direction:column;gap:5px;margin:12px 0}
+.toggle{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink2);cursor:pointer}
+.toggle input{width:16px;height:16px;accent-color:var(--red);margin:0}
+
+.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button.act{
+  font-family:inherit;font-size:14px;font-weight:600;padding:8px 8px;border-radius:2px;cursor:pointer;
+  border:1px solid var(--ink);background:var(--blush);color:var(--ink);
+}
+button.act:hover{background:var(--stone)}
+button.act.primary{background:var(--ink);color:var(--blush)}
+button.act.primary:hover{background:var(--ink2)}
+button.act.wide{grid-column:1 / -1}
+button.act:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+button.act:disabled{opacity:.5;cursor:default}
+
+.lower{display:grid;grid-template-columns:1fr 1fr 316px;gap:20px;margin-top:20px;align-items:stretch}
+
+.fm{font-size:15.5px;line-height:2.15;overflow-x:auto}
+.fm > div{white-space:nowrap}
+.fm > div.lab{white-space:normal}
+.fm .lab{font-size:12.5px;color:var(--ink2);line-height:1.3;margin-top:4px}
+.frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;margin:0 3px;line-height:1.15}
+.frac .num{border-bottom:1.5px solid var(--ink);padding:0 4px}
+.frac .den{padding:0 4px}
+.sqrt{display:inline-flex;align-items:center}
+.sqrt .rad{border-top:1.5px solid var(--ink);padding:0 3px;display:inline-flex;align-items:center}
+sup,sub{font-size:.68em}
+.refs{font-size:12px;color:var(--ink2);margin-top:10px;padding-top:8px;border-top:1px solid var(--stone);line-height:1.5}
+
+.small{font-size:13px;color:var(--ink2);margin:0 0 10px}
+.cov{margin:14px 0 6px;display:grid;gap:12px}
+.covrow{display:grid;grid-template-columns:118px 1fr 56px;align-items:center;gap:10px;font-size:13.5px}
+.covrow span{color:var(--ink2)}
+.covrow b{text-align:right;font-weight:800;font-size:16px}
+.cbar{position:relative;height:16px;background:var(--blush);border:1px solid var(--ink)}
+.cbar i{position:absolute;left:0;top:0;bottom:0;width:0;transition:width .12s linear}
+.cbar i.w{background:var(--red)}
+.cbar i.t{background:var(--ink2)}
+.cbar em{position:absolute;top:-5px;bottom:-5px;width:2px;background:var(--ink)}
+.cscale{display:grid;grid-template-columns:118px 1fr 56px;gap:10px;font-size:11.5px;color:var(--ink2)}
+.cscale div{display:flex;justify-content:space-between}
+.simnote{font-size:13px;color:var(--ink2);margin-top:10px;min-height:56px}
+.simnote b{color:var(--ink)}
+
+.kv{display:grid;grid-template-columns:1fr auto;gap:6px 10px;font-size:14px}
+.kv span:nth-child(odd){color:var(--ink2)}
+.kv span:nth-child(even){font-weight:800;text-align:right}
+.verdict{margin-top:10px;padding-top:9px;border-top:1px solid var(--stone);font-size:14px;font-weight:600;min-height:40px}
+.verdict.bad{color:var(--red)}
+
+.note{margin:18px 0 0;font-size:14.5px;color:var(--ink2);max-width:86ch}
+.note + .note{margin-top:10px}
+.note b{color:var(--ink)}
+
+footer{margin-top:28px;border-top:2px solid var(--ink)}
+footer .inner{
+  max-width:1260px;margin:0 auto;padding:15px 22px 26px;
+  display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:14px;color:var(--ink2);
+}
+footer b{color:var(--ink);font-weight:700}
+
+@media (max-width:1100px){
+  .lower{grid-template-columns:1fr 1fr}
+  .lower .bandnums{grid-column:1 / -1}
+}
+@media (max-width:900px){
+  .board{grid-template-columns:1fr}
+  .plotbox{min-height:0}
+  .canvaswrap{min-height:0;height:400px;flex:none}
+  .lower{grid-template-columns:1fr}
+  header{flex-wrap:wrap}
+  header .tag{margin-left:0}
+  .hint{left:58px;bottom:50px}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <svg width="52" height="52" viewBox="0 0 64 64" aria-hidden="true">
+      <rect width="64" height="64" rx="12" fill="#183e4b"/>
+      <path d="M6 40Q32 30 58 12L58 28Q32 46 6 58Z" fill="#d74a49" opacity=".55"/>
+      <path d="M6 49L58 20" stroke="#fcf1ef" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="15" cy="39" r="4" fill="#e8d8c9"/><circle cx="27" cy="43" r="4" fill="#e8d8c9"/>
+      <circle cx="40" cy="26" r="4" fill="#e8d8c9"/><circle cx="51" cy="30" r="4" fill="#e8d8c9"/>
+    </svg>
+    <div>
+      <h1>Simple linear regression with a Working&#8209;Hotelling&#8209;Scheff&eacute; band</h1>
+      <p>The data come from the model y = 1.5 + 0.7x + &epsilon; with Gaussian noise. The least squares line and its simultaneous confidence band are recomputed when the data change. Click the plot to add a point.</p>
+    </div>
+    <div class="tag">Regression</div>
+  </header>
+
+  <div class="board">
+
+    <div class="plotbox">
+      <div class="canvaswrap">
+        <canvas id="plot" aria-label="Scatter plot with fitted line and confidence band. Click to add a point."></canvas>
+        <div class="hint" id="hint">Click to add a point. Drag a point to move it. Double click a point to remove it.</div>
+      </div>
+      <div class="legend">
+        <span><i class="lg-fit"></i>least squares line</span>
+        <span><i class="lg-whs"></i>WHS band</span>
+        <span id="lgPt" hidden><i class="lg-pt"></i>pointwise t band</span>
+        <span id="lgTrue"><i class="lg-true"></i>true line</span>
+        <span><i class="lg-syn"></i>generated point</span>
+        <span><i class="lg-usr"></i>added point</span>
+      </div>
+    </div>
+
+    <div class="rail">
+
+      <div class="panel">
+        <h2>Fitted line</h2>
+        <div class="eqn" id="eqn">&ycirc; = <span class="v">0.000</span> + <span class="v">0.000</span>x</div>
+        <table class="est">
+          <thead><tr><th>parameter</th><th>estimate</th><th>std. error</th><th>true</th></tr></thead>
+          <tbody>
+            <tr><td>intercept &beta;<sub>0</sub></td><td class="hi" id="b0">0</td><td id="se0">0</td><td class="lo">1.500</td></tr>
+            <tr><td>slope &beta;<sub>1</sub></td><td class="hi" id="b1">0</td><td id="se1">0</td><td class="lo">0.700</td></tr>
+          </tbody>
+        </table>
+        <div class="facts">
+          <div>points n<span id="nAdd"></span><b id="nn">0</b></div>
+          <div>residual s<b id="ss">0</b></div>
+          <div>R<sup>2</sup><b id="r2">0</b></div>
+        </div>
+      </div>
+
+      <div class="panel sand">
+        <h2>Data and band</h2>
+        <div class="ctl">
+          <div class="row"><span>noise &sigma;</span><b id="sigVal">1.00</b></div>
+          <input id="sig" type="range" min="0.1" max="2" step="0.05" value="1" aria-label="Noise standard deviation">
+        </div>
+        <div class="ctl">
+          <div class="row"><span>generated points</span><b id="n0Val">15</b></div>
+          <input id="n0" type="range" min="3" max="60" step="1" value="15" aria-label="Number of generated points">
+        </div>
+        <div class="ctl">
+          <span class="seglabel">confidence level 1 &minus; &alpha;</span>
+          <div class="seg" role="group" aria-label="Confidence level">
+            <button type="button" data-a="0.10" aria-pressed="false">90%</button>
+            <button type="button" data-a="0.05" aria-pressed="true">95%</button>
+            <button type="button" data-a="0.01" aria-pressed="false">99%</button>
+          </div>
+        </div>
+        <div class="toggles">
+          <label class="toggle"><input type="checkbox" id="tTrue" checked> show the true line</label>
+          <label class="toggle"><input type="checkbox" id="tPt"> show the pointwise t band</label>
+          <label class="toggle"><input type="checkbox" id="tRes"> show residuals</label>
+        </div>
+        <div class="buttons">
+          <button class="act primary" id="resample" type="button">New sample</button>
+          <button class="act" id="restart" type="button">Start over</button>
+          <button class="act wide" id="clearMine" type="button">Clear my points</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="lower">
+
+    <div class="panel">
+      <h2>Formulas</h2>
+      <div class="fm" id="fm"></div>
+      <div class="refs">Working, H. and Hotelling, H. (1929). Applications of the theory of error to the interpretation of trends. Journal of the American Statistical Association 24, 73-85.<br>Scheff&eacute;, H. (1959). The Analysis of Variance. Wiley, New York.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Coverage over repeated samples</h2>
+      <p class="small">Draws 1000 new data sets from the true model with the current noise, point count and level. Clicked points take no part.</p>
+      <button class="act primary" id="sim" type="button" style="width:100%">Draw 1000 samples</button>
+      <div class="cov">
+        <div class="covrow"><span>WHS band</span><div class="cbar"><i class="w" id="barW"></i><em id="nomW"></em></div><b id="pW">&ndash;</b></div>
+        <div class="covrow"><span>pointwise t band</span><div class="cbar"><i class="t" id="barT"></i><em id="nomT"></em></div><b id="pT">&ndash;</b></div>
+      </div>
+      <div class="cscale"><span></span><div><span>50%</span><span>75%</span><span>100%</span></div><span></span></div>
+      <div class="simnote" id="simNote">The bars give the share of samples in which the band held the true line along its full length on [0, 10]. The black mark is the nominal level.</div>
+    </div>
+
+    <div class="panel bandnums">
+      <h2>Band at the current data</h2>
+      <div class="kv">
+        <span>WHS multiplier W</span><span id="kW">&ndash;</span>
+        <span>t quantile</span><span id="kT">&ndash;</span>
+        <span>W divided by t</span><span id="kR">&ndash;</span>
+        <span>half-width at x&#772;</span><span id="kH0">&ndash;</span>
+        <span>half-width at x = 10</span><span id="kH1">&ndash;</span>
+      </div>
+      <div class="verdict" id="verdict"></div>
+    </div>
+
+  </div>
+
+  <p class="note">The band is a simultaneous confidence band for the mean response &beta;<sub>0</sub> + &beta;<sub>1</sub>x. With probability 1 &minus; &alpha;, the true line lies inside it along its full length. The band is narrowest at x&#772; and widens with distance from x&#772;, because an error in the slope estimate moves the line further from the truth there.</p>
+  <p class="note">The band concerns the line, so many individual points fall outside it. A prediction band for new observations would be wider. The pointwise t band is valid for one x at a time. Along the line as a whole its coverage falls below the nominal level, which the coverage panel measures.</p>
+
+</div>
+
+<footer>
+  <div class="inner">
+    <span><b>CPE 486/586: Machine Learning for Engineering Applications</b></span>
+    <span>University of Alabama in Huntsville</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+"use strict";
+
+var COL = {
+  red:"#d74a49", ink:"#183e4b", ink2:"#1b4552", mute:"#8ba0a4",
+  grey:"#eaeaea", blush:"#fcf1ef", sand:"#e8d8c9", stone:"#ced3d7"
+};
+
+var B0 = 1.5, B1 = 0.7;
+var XMIN = 0, XMAX = 10, YMIN = -5, YMAX = 15;
+var MAXN0 = 60;
+var DEFAULT_SEED = 486586;
+
+/* ---------- numerical routines ---------- */
+
+function lgamma(z){
+  var g = [676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059,
+           12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+  if(z < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * z)) - lgamma(1 - z);
+  z -= 1;
+  var x = 0.99999999999980993;
+  for(var i = 0; i < 8; i++) x += g[i] / (z + i + 1);
+  var t = z + 7.5;
+  return 0.5 * Math.log(2 * Math.PI) + (z + 0.5) * Math.log(t) - t + Math.log(x);
+}
+
+/* Continued fraction for the incomplete beta function, after Press et al. (1992). */
+function betacf(a, b, x){
+  var qab = a + b, qap = a + 1, qam = a - 1, c = 1, d = 1 - qab * x / qap, m, m2, aa, del, h;
+  if(Math.abs(d) < 1e-300) d = 1e-300;
+  d = 1 / d; h = d;
+  for(m = 1; m <= 300; m++){
+    m2 = 2 * m;
+    aa = m * (b - m) * x / ((qam + m2) * (a + m2));
+    d = 1 + aa * d; if(Math.abs(d) < 1e-300) d = 1e-300;
+    c = 1 + aa / c; if(Math.abs(c) < 1e-300) c = 1e-300;
+    d = 1 / d; h *= d * c;
+    aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2));
+    d = 1 + aa * d; if(Math.abs(d) < 1e-300) d = 1e-300;
+    c = 1 + aa / c; if(Math.abs(c) < 1e-300) c = 1e-300;
+    d = 1 / d; del = d * c; h *= del;
+    if(Math.abs(del - 1) < 1e-14) break;
+  }
+  return h;
+}
+function betai(a, b, x){
+  if(x <= 0) return 0;
+  if(x >= 1) return 1;
+  var bt = Math.exp(lgamma(a + b) - lgamma(a) - lgamma(b) + a * Math.log(x) + b * Math.log(1 - x));
+  return x < (a + 1) / (a + b + 2) ? bt * betacf(a, b, x) / a : 1 - bt * betacf(b, a, 1 - x) / b;
+}
+function tcdf(t, v){
+  var p = 0.5 * betai(v / 2, 0.5, v / (v + t * t));
+  return t >= 0 ? 1 - p : p;
+}
+function tQuantile(p, v){
+  var lo = 0, hi = 1e4;
+  for(var i = 0; i < 120; i++){
+    var mid = 0.5 * (lo + hi);
+    if(tcdf(mid, v) < p) lo = mid; else hi = mid;
+  }
+  return 0.5 * (lo + hi);
+}
+/* With two numerator degrees of freedom the F distribution function is
+   1 - (1 + 2f/v)^(-v/2), so its quantile has a closed form. */
+function fQuantile2(alpha, v){ return (v / 2) * (Math.pow(alpha, -2 / v) - 1); }
+
+var qCache = {};
+function quantiles(v, alpha){
+  var key = v + ":" + alpha;
+  if(!qCache[key]) qCache[key] = {W:Math.sqrt(2 * fQuantile2(alpha, v)), T:tQuantile(1 - alpha / 2, v)};
+  return qCache[key];
+}
+
+function mulberry32(a){
+  return function(){
+    a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function gauss(r){
+  var u = 1 - r(), v = r();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+/* ---------- state ---------- */
+
+var seed = DEFAULT_SEED;
+var baseX = [], baseZ = [];
+var sigma = 1.0, n0 = 15, alpha = 0.05;
+var showTrue = true, showPt = false, showRes = false;
+var pts = [], fading = [], ripples = [];
+var nextId = 1;
+var fit = null;
+var hover = null, drag = null;
+
+var GB = 181;
+var gx = new Float64Array(GB);
+for(var gi = 0; gi < GB; gi++) gx[gi] = XMIN + (XMAX - XMIN) * gi / (GB - 1);
+function arr(){ return new Float64Array(GB); }
+var tgt = {line:arr(), wu:arr(), wl:arr(), tu:arr(), tl:arr()};
+var cur = {line:arr(), wu:arr(), wl:arr(), tu:arr(), tl:arr()};
+var aLine = 0, aLineT = 0, aBand = 0, aBandT = 0, aPt = 0;
+var cx0 = 0, cxT = 0;
+var firstFit = true;
+
+var sim = null, simLines = [];
+
+var el = {};
+["plot","nAdd","eqn","b0","b1","se0","se1","nn","ss","r2","sig","sigVal","n0","n0Val","tTrue","tPt","tRes",
+ "resample","clearMine","restart","fm","sim","barW","barT","nomW","nomT","pW","pT","simNote",
+ "kW","kT","kR","kH0","kH1","verdict","lgPt","lgTrue"].forEach(function(id){ el[id] = document.getElementById(id); });
+var segBtns = document.querySelectorAll(".seg button");
+
+var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------- data ---------- */
+
+function genBase(){
+  var r = mulberry32(seed);
+  baseX = []; baseZ = [];
+  for(var i = 0; i < MAXN0; i++){
+    baseX.push(0.5 + 9 * r());
+    baseZ.push(gauss(r));
+  }
+}
+
+function fadeOut(p, now){ fading.push({x:p.dx, y:p.dy, user:p.user, t0:now}); }
+
+/* Rebuild the generated points from the stored draws. A point with the same
+   index keeps its object, so it moves to its new place rather than reappearing. */
+function rebuildGenerated(clearUser){
+  var now = performance.now(), old = {}, keep = [], i;
+  for(i = 0; i < pts.length; i++){
+    var p = pts[i];
+    if(p.user){
+      if(clearUser) fadeOut(p, now); else keep.push(p);
+    } else old[p.idx] = p;
+  }
+  var list = [];
+  for(i = 0; i < n0; i++){
+    var x = baseX[i], y = B0 + B1 * x + sigma * baseZ[i];
+    if(old[i]){
+      old[i].x = x; old[i].y = y;
+      list.push(old[i]);
+      delete old[i];
+    } else {
+      list.push({id:nextId++, idx:i, user:false, x:x, y:y, dx:x, dy:y, born:now + (reduced ? 0 : 22 * i)});
+    }
+  }
+  for(var k in old) fadeOut(old[k], now);
+  pts = list.concat(keep);
+  refit();
+}
+
+function addPoint(x, y){
+  var p = {id:nextId++, idx:-1, user:true, x:x, y:y, dx:x, dy:y, born:performance.now()};
+  pts.push(p);
+  refit();
+  return p;
+}
+function removePoint(p){
+  var i = pts.indexOf(p);
+  if(i < 0) return;
+  fadeOut(p, performance.now());
+  pts.splice(i, 1);
+  if(hover === p) hover = null;
+  refit();
+}
+
+/* ---------- least squares and the bands ---------- */
+
+function computeFit(list, a){
+  var n = list.length, i;
+  if(n < 2) return {ok:false, n:n, why:"Add at least two points to fit a line."};
+  var sx = 0, sy = 0;
+  for(i = 0; i < n; i++){ sx += list[i].x; sy += list[i].y; }
+  var xb = sx / n, yb = sy / n, sxx = 0, sxy = 0, syy = 0;
+  for(i = 0; i < n; i++){
+    var dx = list[i].x - xb, dy = list[i].y - yb;
+    sxx += dx * dx; sxy += dx * dy; syy += dy * dy;
+  }
+  if(sxx < 1e-10) return {ok:false, n:n, why:"The points share one x value, so the slope is undefined."};
+  var b1 = sxy / sxx, b0 = yb - b1 * xb;
+  var f = {ok:true, n:n, xb:xb, yb:yb, sxx:sxx, b0:b0, b1:b1, band:false};
+  if(n < 3){ f.why = "Two points give an exact fit with no residual degrees of freedom, so no band."; return f; }
+  var sse = 0;
+  for(i = 0; i < n; i++){ var e = list[i].y - b0 - b1 * list[i].x; sse += e * e; }
+  var v = n - 2, s = Math.sqrt(sse / v), q = quantiles(v, a);
+  f.band = true; f.s = s; f.v = v; f.W = q.W; f.T = q.T;
+  f.r2 = syy > 0 ? 1 - sse / syy : 1;
+  f.se1 = s / Math.sqrt(sxx);
+  f.se0 = s * Math.sqrt(1 / n + xb * xb / sxx);
+  return f;
+}
+function hwUnit(f, x){ return f.s * Math.sqrt(1 / f.n + (x - f.xb) * (x - f.xb) / f.sxx); }
+
+function refit(){
+  fit = computeFit(pts, alpha);
+  var i;
+  if(fit.ok){
+    for(i = 0; i < GB; i++){
+      var y = fit.b0 + fit.b1 * gx[i];
+      tgt.line[i] = y;
+      if(fit.band){
+        var u = hwUnit(fit, gx[i]);
+        tgt.wu[i] = y + fit.W * u; tgt.wl[i] = y - fit.W * u;
+        tgt.tu[i] = y + fit.T * u; tgt.tl[i] = y - fit.T * u;
+      } else {
+        tgt.wu[i] = tgt.wl[i] = tgt.tu[i] = tgt.tl[i] = y;
+      }
+    }
+    cxT = fit.xb;
+    aLineT = 1;
+    aBandT = fit.band ? 1 : 0;
+    if(firstFit){
+      for(var k in tgt) for(i = 0; i < GB; i++) cur[k][i] = tgt[k][i];
+      cx0 = cxT;
+      firstFit = false;
+    }
+  } else {
+    aLineT = 0; aBandT = 0;
+  }
+  updateReadouts();
+}
+
+/* ---------- readouts ---------- */
+
+function f3(v){ return (v < 0 ? "\u2212" : "") + Math.abs(v).toFixed(3); }
+
+function updateReadouts(){
+  var f = fit, nUser = 0;
+  for(var i = 0; i < pts.length; i++) if(pts[i].user) nUser++;
+  el.nn.textContent = pts.length;
+  el.nAdd.textContent = nUser ? ", " + nUser + " added" : "";
+  if(!f.ok){
+    el.eqn.innerHTML = '<span style="font-size:15px;font-weight:600;color:#1b4552">' + f.why + '</span>';
+    el.b0.textContent = el.b1.textContent = el.se0.textContent = el.se1.textContent = "\u2013";
+    el.ss.textContent = el.r2.textContent = "\u2013";
+  } else {
+    var sgn = f.b1 < 0 ? " \u2212 " : " + ";
+    el.eqn.innerHTML = '&ycirc; = <span class="v">' + f3(f.b0) + '</span>' + sgn + '<span class="v">' + Math.abs(f.b1).toFixed(3) + '</span>x';
+    el.b0.textContent = f3(f.b0);
+    el.b1.textContent = f3(f.b1);
+    el.se0.textContent = f.band ? f.se0.toFixed(3) : "\u2013";
+    el.se1.textContent = f.band ? f.se1.toFixed(3) : "\u2013";
+    el.ss.textContent = f.band ? f.s.toFixed(3) : "\u2013";
+    el.r2.textContent = f.band ? f.r2.toFixed(3) : "\u2013";
+  }
+
+  if(f.ok && f.band){
+    el.kW.textContent = f.W.toFixed(3);
+    el.kT.textContent = f.T.toFixed(3);
+    el.kR.textContent = (f.W / f.T).toFixed(3);
+    el.kH0.textContent = (f.W * f.s / Math.sqrt(f.n)).toFixed(3);
+    el.kH1.textContent = (f.W * hwUnit(f, 10)).toFixed(3);
+    var miss = null;
+    for(var g = 0; g < GB; g++){
+      var d = Math.abs(f.b0 + f.b1 * gx[g] - (B0 + B1 * gx[g]));
+      if(d > f.W * hwUnit(f, gx[g])){ miss = gx[g]; break; }
+    }
+    if(miss === null){
+      el.verdict.textContent = "The true line lies inside the WHS band on [0, 10].";
+      el.verdict.className = "verdict";
+    } else {
+      el.verdict.textContent = "The true line leaves the WHS band near x = " + miss.toFixed(1) + ".";
+      el.verdict.className = "verdict bad";
+    }
+  } else {
+    el.kW.textContent = el.kT.textContent = el.kR.textContent = el.kH0.textContent = el.kH1.textContent = "\u2013";
+    el.verdict.textContent = f.ok ? f.why : "A band needs at least three points.";
+    el.verdict.className = "verdict";
+  }
+  writeFormulas();
+}
+
+function writeFormulas(){
+  var v = fit && fit.band ? fit.v : "n \u2212 2";
+  var lvl = (100 * (1 - alpha)).toFixed(0);
+  var h = '';
+  h += '<div>&beta;&#770;<sub>1</sub> = <span class="frac"><span class="num">S<sub>xy</sub></span><span class="den">S<sub>xx</sub></span></span>, &nbsp; &beta;&#770;<sub>0</sub> = y&#772; &minus; &beta;&#770;<sub>1</sub>x&#772;, &nbsp; s<sup>2</sup> = <span class="frac"><span class="num">SSE</span><span class="den">n &minus; 2</span></span></div>';
+  h += '<div>&ycirc;(x) &plusmn; W s <span class="sqrt">&radic;<span class="rad"><span class="frac"><span class="num">1</span><span class="den">n</span></span> + <span class="frac"><span class="num">(x &minus; x&#772;)<sup>2</sup></span><span class="den">S<sub>xx</sub></span></span></span></span></div>';
+  h += '<div>W<sup>2</sup> = 2F(1 &minus; &alpha;; 2, n &minus; 2)</div>';
+  h += '<div>F(1 &minus; &alpha;; 2, &nu;) = <span class="frac"><span class="num">&nu;</span><span class="den">2</span></span>(&alpha;<sup>&minus;2/&nu;</sup> &minus; 1)</div>';
+  h += '<div class="lab">The pointwise band replaces W with t(1 &minus; &alpha;/2; n &minus; 2). At the current data, &nu; = ' + v + ' and the level is ' + lvl + '%.</div>';
+  el.fm.innerHTML = h;
+}
+
+/* ---------- canvas ---------- */
+
+var cv = el.plot, cx = cv.getContext("2d");
+var W = 0, H = 0, padL = 50, padR = 18, padT = 16, padB = 42, pw = 0, ph = 0;
+
+function resize(){
+  var r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  W = Math.max(300, r.width); H = Math.max(260, r.height);
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  pw = W - padL - padR; ph = H - padT - padB;
+}
+function X(x){ return padL + (x - XMIN) / (XMAX - XMIN) * pw; }
+function Y(y){ return padT + (YMAX - y) / (YMAX - YMIN) * ph; }
+function invX(px){ return XMIN + (px - padL) / pw * (XMAX - XMIN); }
+function invY(py){ return YMAX - (py - padT) / ph * (YMAX - YMIN); }
+
+function easeBack(t){
+  if(t <= 0) return 0;
+  if(t >= 1) return 1;
+  var c1 = 1.9, c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+}
+
+function bandPath(up, lo){
+  cx.beginPath();
+  for(var i = 0; i < GB; i++){ if(i === 0) cx.moveTo(X(gx[i]), Y(up[i])); else cx.lineTo(X(gx[i]), Y(up[i])); }
+  for(i = GB - 1; i >= 0; i--) cx.lineTo(X(gx[i]), Y(lo[i]));
+  cx.closePath();
+}
+function strokeCurve(a){
+  cx.beginPath();
+  for(var i = 0; i < GB; i++){ if(i === 0) cx.moveTo(X(gx[i]), Y(a[i])); else cx.lineTo(X(gx[i]), Y(a[i])); }
+  cx.stroke();
+}
+
+function draw(now){
+  cx.clearRect(0, 0, W, H);
+  cx.fillStyle = COL.blush;
+  cx.fillRect(padL, padT, pw, ph);
+  cx.font = '600 12px "Bricolage Grotesque", sans-serif';
+
+  var i, v;
+  cx.lineWidth = 1;
+  cx.textAlign = "right"; cx.textBaseline = "middle";
+  for(v = YMIN; v <= YMAX; v += 2){
+    cx.strokeStyle = COL.stone;
+    cx.beginPath(); cx.moveTo(padL, Y(v) + 0.5); cx.lineTo(padL + pw, Y(v) + 0.5); cx.stroke();
+    cx.fillStyle = COL.ink2; cx.fillText(v < 0 ? "\u2212" + Math.abs(v) : String(v), padL - 8, Y(v));
+  }
+  cx.textAlign = "center"; cx.textBaseline = "top";
+  for(v = XMIN; v <= XMAX; v += 1){
+    cx.strokeStyle = COL.stone;
+    cx.beginPath(); cx.moveTo(X(v) + 0.5, padT); cx.lineTo(X(v) + 0.5, padT + ph); cx.stroke();
+    cx.fillStyle = COL.ink2; cx.fillText(String(v), X(v), padT + ph + 7);
+  }
+
+  cx.save();
+  cx.beginPath(); cx.rect(padL, padT, pw, ph); cx.clip();
+
+  /* faint fitted lines from the coverage simulation */
+  for(i = 0; i < simLines.length; i++){
+    var sl = simLines[i], age = now - sl.t;
+    var a = 0.22 * Math.max(0, 1 - age / 1600);
+    if(a <= 0) continue;
+    cx.globalAlpha = a;
+    cx.strokeStyle = sl.ok ? COL.ink2 : COL.red;
+    cx.lineWidth = 1;
+    cx.beginPath(); cx.moveTo(X(XMIN), Y(sl.b0 + sl.b1 * XMIN)); cx.lineTo(X(XMAX), Y(sl.b0 + sl.b1 * XMAX)); cx.stroke();
+  }
+  cx.globalAlpha = 1;
+
+  if(aPt > 0.01 && aBand > 0.01){
+    cx.globalAlpha = aPt * aBand;
+    bandPath(cur.tu, cur.tl);
+    cx.fillStyle = "rgba(24,62,75,0.10)"; cx.fill();
+    cx.setLineDash([5, 4]); cx.strokeStyle = COL.ink2; cx.lineWidth = 1.2;
+    strokeCurve(cur.tu); strokeCurve(cur.tl);
+    cx.setLineDash([]);
+    cx.globalAlpha = 1;
+  }
+
+  if(aBand > 0.01){
+    cx.globalAlpha = aBand;
+    bandPath(cur.wu, cur.wl);
+    cx.fillStyle = "rgba(215,74,73,0.17)"; cx.fill();
+    cx.strokeStyle = "rgba(215,74,73,0.75)"; cx.lineWidth = 1.4;
+    strokeCurve(cur.wu); strokeCurve(cur.wl);
+    cx.globalAlpha = 1;
+  }
+
+  if(showTrue){
+    cx.setLineDash([8, 5]); cx.strokeStyle = COL.ink; cx.lineWidth = 1.8;
+    cx.beginPath(); cx.moveTo(X(XMIN), Y(B0 + B1 * XMIN)); cx.lineTo(X(XMAX), Y(B0 + B1 * XMAX)); cx.stroke();
+    cx.setLineDash([]);
+  }
+
+  if(aLine > 0.01){
+    cx.globalAlpha = aLine;
+    if(showRes && fit.ok){
+      cx.strokeStyle = COL.mute; cx.lineWidth = 1.4;
+      cx.beginPath();
+      for(i = 0; i < pts.length; i++){
+        var p = pts[i], yh = fit.b0 + fit.b1 * p.dx;
+        cx.moveTo(X(p.dx), Y(p.dy)); cx.lineTo(X(p.dx), Y(yh));
+      }
+      cx.stroke();
+    }
+    cx.strokeStyle = COL.red; cx.lineWidth = 2.8; cx.lineCap = "round";
+    strokeCurve(cur.line);
+    cx.lineCap = "butt";
+
+    /* centre of the data, where the band is narrowest */
+    var xm = cx0, ym = cur.line[Math.round((xm - XMIN) / (XMAX - XMIN) * (GB - 1))];
+    cx.setLineDash([2, 4]); cx.strokeStyle = COL.ink2; cx.lineWidth = 1;
+    cx.beginPath(); cx.moveTo(X(xm), Y(ym)); cx.lineTo(X(xm), padT + ph); cx.stroke();
+    cx.setLineDash([]);
+    cx.fillStyle = COL.ink;
+    cx.beginPath();
+    cx.moveTo(X(xm), Y(ym) - 7); cx.lineTo(X(xm) + 7, Y(ym)); cx.lineTo(X(xm), Y(ym) + 7); cx.lineTo(X(xm) - 7, Y(ym));
+    cx.closePath(); cx.fill();
+    cx.globalAlpha = 1;
+  }
+
+  /* points leaving the plot */
+  for(i = fading.length - 1; i >= 0; i--){
+    var fp = fading[i], ft = (now - fp.t0) / 320;
+    if(ft >= 1){ fading.splice(i, 1); continue; }
+    var fr = 5.5 * (1 - ft);
+    cx.globalAlpha = 1 - ft;
+    drawDot(X(fp.x), Y(fp.y), fr, fp.user, false);
+  }
+  cx.globalAlpha = 1;
+
+  for(i = 0; i < pts.length; i++){
+    var q = pts[i], sc = easeBack((now - q.born) / 380);
+    if(sc <= 0) continue;
+    drawDot(X(q.dx), Y(q.dy), 5.5 * sc, q.user, q === hover || q === drag);
+  }
+
+  for(i = ripples.length - 1; i >= 0; i--){
+    var rp = ripples[i], rt = (now - rp.t0) / 600;
+    if(rt >= 1){ ripples.splice(i, 1); continue; }
+    cx.strokeStyle = COL.red; cx.globalAlpha = 1 - rt; cx.lineWidth = 2;
+    cx.beginPath(); cx.arc(X(rp.x), Y(rp.y), 6 + 22 * rt, 0, Math.PI * 2); cx.stroke();
+  }
+  cx.globalAlpha = 1;
+  cx.restore();
+
+  cx.strokeStyle = COL.ink; cx.lineWidth = 1.5;
+  cx.beginPath(); cx.moveTo(padL + 0.5, padT); cx.lineTo(padL + 0.5, padT + ph + 0.5); cx.lineTo(padL + pw, padT + ph + 0.5); cx.stroke();
+
+  cx.fillStyle = COL.ink2; cx.font = '600 12px "Bricolage Grotesque", sans-serif';
+  cx.textAlign = "right"; cx.textBaseline = "top";
+  cx.fillText("x", padL + pw, padT + ph + 24);
+  if(aLine > 0.01){
+    cx.textAlign = "center";
+    cx.fillText("x\u0304", X(cx0), padT + ph + 24);
+  }
+  cx.save();
+  cx.translate(14, padT + ph / 2); cx.rotate(-Math.PI / 2);
+  cx.textAlign = "center"; cx.textBaseline = "top";
+  cx.fillText("y", 0, 0);
+  cx.restore();
+
+  if(hover && !drag) tooltip(hover);
+}
+
+function drawDot(px, py, r, user, hi){
+  if(r <= 0.2) return;
+  if(hi){
+    cx.fillStyle = "rgba(215,74,73,0.18)";
+    cx.beginPath(); cx.arc(px, py, r + 6, 0, Math.PI * 2); cx.fill();
+  }
+  cx.beginPath(); cx.arc(px, py, r, 0, Math.PI * 2);
+  if(user){
+    cx.fillStyle = COL.blush; cx.fill();
+    cx.strokeStyle = COL.red; cx.lineWidth = 2.6; cx.stroke();
+  } else {
+    cx.fillStyle = COL.ink2; cx.fill();
+    cx.strokeStyle = COL.blush; cx.lineWidth = 1.5; cx.stroke();
+  }
+}
+
+function tooltip(p){
+  var lines = ["x = " + f3(p.x) + ", y = " + f3(p.y)];
+  if(fit.ok){
+    lines.push("residual " + f3(p.y - fit.b0 - fit.b1 * p.x));
+    lines.push("leverage " + (1 / fit.n + (p.x - fit.xb) * (p.x - fit.xb) / fit.sxx).toFixed(3));
+  }
+  cx.font = '600 12.5px "Bricolage Grotesque", sans-serif';
+  var w = 0;
+  for(var i = 0; i < lines.length; i++) w = Math.max(w, cx.measureText(lines[i]).width);
+  w += 18;
+  var h = 10 + 18 * lines.length;
+  var bx = X(p.dx) + 14, by = Y(p.dy) - h - 8;
+  if(bx + w > padL + pw) bx = X(p.dx) - 14 - w;
+  if(by < padT) by = Y(p.dy) + 12;
+  cx.fillStyle = COL.ink; cx.fillRect(bx, by, w, h);
+  cx.fillStyle = COL.blush; cx.textAlign = "left"; cx.textBaseline = "top";
+  for(i = 0; i < lines.length; i++) cx.fillText(lines[i], bx + 9, by + 7 + 18 * i);
+}
+
+/* ---------- pointer handling ---------- */
+
+function mouse(e){
+  var r = cv.getBoundingClientRect();
+  return {px:e.clientX - r.left, py:e.clientY - r.top};
+}
+function inPlot(m){ return m.px >= padL && m.px <= padL + pw && m.py >= padT && m.py <= padT + ph; }
+function hitTest(m){
+  var best = null, bd = 11 * 11;
+  for(var i = 0; i < pts.length; i++){
+    var dx = X(pts[i].dx) - m.px, dy = Y(pts[i].dy) - m.py, d = dx * dx + dy * dy;
+    if(d < bd){ bd = d; best = pts[i]; }
+  }
+  return best;
+}
+function clampX(x){ return Math.max(XMIN, Math.min(XMAX, x)); }
+function clampY(y){ return Math.max(YMIN, Math.min(YMAX, y)); }
+
+cv.addEventListener("pointerdown", function(e){
+  if(e.button !== 0) return;
+  var m = mouse(e);
+  if(!inPlot(m)) return;
+  document.getElementById("hint").className = "hint gone";
+  var hit = hitTest(m);
+  if(hit){
+    drag = hit;
+  } else {
+    var x = clampX(invX(m.px)), y = clampY(invY(m.py));
+    drag = addPoint(x, y);
+    ripples.push({x:x, y:y, t0:performance.now()});
+  }
+  cv.setPointerCapture(e.pointerId);
+  cv.className = "grabbing";
+});
+cv.addEventListener("pointermove", function(e){
+  var m = mouse(e);
+  if(drag){
+    drag.x = drag.dx = clampX(invX(m.px));
+    drag.y = drag.dy = clampY(invY(m.py));
+    refit();
+    return;
+  }
+  hover = inPlot(m) ? hitTest(m) : null;
+  cv.className = hover ? "grab" : "";
+});
+function endDrag(){ drag = null; cv.className = hover ? "grab" : ""; }
+cv.addEventListener("pointerup", endDrag);
+cv.addEventListener("pointercancel", endDrag);
+cv.addEventListener("pointerleave", function(){ if(!drag) hover = null; });
+cv.addEventListener("dblclick", function(e){
+  var hit = hitTest(mouse(e));
+  if(hit) removePoint(hit);
+});
+cv.addEventListener("contextmenu", function(e){
+  var hit = hitTest(mouse(e));
+  if(hit){ e.preventDefault(); removePoint(hit); }
+});
+
+/* ---------- coverage simulation ---------- */
+
+function startSim(){
+  if(n0 < 3) return;
+  var q = quantiles(n0 - 2, alpha);
+  sim = {N:1000, done:0, cw:0, ct:0, rng:mulberry32((Math.random() * 4294967295) >>> 0),
+         n:n0, sigma:sigma, alpha:alpha, W:q.W, T:q.T};
+  el.sim.disabled = true;
+  el.sim.textContent = "Drawing samples";
+  var nom = ((1 - alpha - 0.5) / 0.5 * 100).toFixed(2) + "%";
+  el.nomW.style.left = nom; el.nomT.style.left = nom;
+}
+
+function simBatch(k, now){
+  var s = sim, n = s.n, xs = new Float64Array(n), ys = new Float64Array(n);
+  for(var b = 0; b < k && s.done < s.N; b++){
+    var sx = 0, sy = 0, i;
+    for(i = 0; i < n; i++){
+      xs[i] = 0.5 + 9 * s.rng();
+      ys[i] = B0 + B1 * xs[i] + s.sigma * gauss(s.rng);
+      sx += xs[i]; sy += ys[i];
+    }
+    var xb = sx / n, yb = sy / n, sxx = 0, sxy = 0;
+    for(i = 0; i < n; i++){ sxx += (xs[i] - xb) * (xs[i] - xb); sxy += (xs[i] - xb) * (ys[i] - yb); }
+    var b1 = sxy / sxx, b0 = yb - b1 * xb, sse = 0;
+    for(i = 0; i < n; i++){ var e = ys[i] - b0 - b1 * xs[i]; sse += e * e; }
+    var sd = Math.sqrt(sse / (n - 2)), okW = true, okT = true;
+    for(var g = 0; g <= 100; g++){
+      var x = XMIN + (XMAX - XMIN) * g / 100;
+      var d = Math.abs(b0 + b1 * x - B0 - B1 * x), u = sd * Math.sqrt(1 / n + (x - xb) * (x - xb) / sxx);
+      if(d > s.W * u) okW = false;
+      if(d > s.T * u){ okT = false; if(!okW) break; }
+    }
+    s.done++;
+    if(okW) s.cw++;
+    if(okT) s.ct++;
+    if(s.done % 3 === 0){
+      simLines.push({b0:b0, b1:b1, ok:okW, t:now});
+      if(simLines.length > 140) simLines.shift();
+    }
+  }
+  var pw_ = s.cw / s.done, pt_ = s.ct / s.done;
+  el.barW.style.width = Math.max(0, (pw_ - 0.5) / 0.5 * 100).toFixed(2) + "%";
+  el.barT.style.width = Math.max(0, (pt_ - 0.5) / 0.5 * 100).toFixed(2) + "%";
+  el.pW.textContent = (100 * pw_).toFixed(1) + "%";
+  el.pT.textContent = (100 * pt_).toFixed(1) + "%";
+  if(s.done >= s.N){
+    el.simNote.innerHTML = "With n = " + s.n + ", &sigma; = " + s.sigma.toFixed(2) + " and a nominal level of " +
+      (100 * (1 - s.alpha)).toFixed(0) + "%, the WHS band held the true line in <b>" + s.cw +
+      "</b> of 1000 samples. The pointwise band held it in <b>" + s.ct + "</b>. At 1000 samples the Monte Carlo standard error of each share is near " +
+      (100 * Math.sqrt((1 - s.alpha) * s.alpha / 1000)).toFixed(1) + " percentage points.";
+    el.sim.disabled = false;
+    el.sim.textContent = "Draw 1000 samples";
+    sim = null;
+  }
+}
+
+/* ---------- animation loop ---------- */
+
+var last = 0;
+function frame(now){
+  var dt = last ? Math.min(60, now - last) : 16;
+  last = now;
+  var k = reduced ? 1 : (drag ? 0.55 : 0.16);
+  for(var key in cur){
+    var c = cur[key], t = tgt[key];
+    for(var i = 0; i < GB; i++) c[i] += (t[i] - c[i]) * k;
+  }
+  cx0 += (cxT - cx0) * k;
+  aLine += (aLineT - aLine) * 0.15;
+  aBand += (aBandT - aBand) * 0.15;
+  aPt += ((showPt ? 1 : 0) - aPt) * 0.15;
+  for(i = 0; i < pts.length; i++){
+    var p = pts[i];
+    if(p !== drag){
+      p.dx += (p.x - p.dx) * (reduced ? 1 : 0.14);
+      p.dy += (p.y - p.dy) * (reduced ? 1 : 0.14);
+    }
+  }
+  if(sim) simBatch(Math.max(1, Math.round(dt * 0.42)), now);
+  draw(now);
+  requestAnimationFrame(frame);
+}
+
+/* ---------- controls ---------- */
+
+el.sig.addEventListener("input", function(){
+  sigma = parseFloat(el.sig.value);
+  el.sigVal.textContent = sigma.toFixed(2);
+  rebuildGenerated(true);
+});
+el.n0.addEventListener("input", function(){
+  n0 = parseInt(el.n0.value, 10);
+  el.n0Val.textContent = n0;
+  rebuildGenerated(true);
+});
+for(var s = 0; s < segBtns.length; s++){
+  segBtns[s].addEventListener("click", function(){
+    alpha = parseFloat(this.dataset.a);
+    for(var j = 0; j < segBtns.length; j++) segBtns[j].setAttribute("aria-pressed", segBtns[j] === this ? "true" : "false");
+    refit();
+  });
+}
+el.tTrue.addEventListener("change", function(){ showTrue = el.tTrue.checked; el.lgTrue.hidden = !showTrue; });
+el.tPt.addEventListener("change", function(){ showPt = el.tPt.checked; el.lgPt.hidden = !showPt; });
+el.tRes.addEventListener("change", function(){ showRes = el.tRes.checked; });
+
+el.resample.addEventListener("click", function(){
+  seed = (Math.random() * 4294967295) >>> 0;
+  genBase();
+  rebuildGenerated(true);
+});
+el.clearMine.addEventListener("click", function(){
+  var now = performance.now();
+  pts = pts.filter(function(p){ if(p.user){ fadeOut(p, now); return false; } return true; });
+  hover = null;
+  refit();
+});
+el.restart.addEventListener("click", function(){
+  seed = DEFAULT_SEED;
+  sigma = 1; n0 = 15; alpha = 0.05;
+  el.sig.value = 1; el.sigVal.textContent = "1.00";
+  el.n0.value = 15; el.n0Val.textContent = "15";
+  for(var j = 0; j < segBtns.length; j++) segBtns[j].setAttribute("aria-pressed", segBtns[j].dataset.a === "0.05" ? "true" : "false");
+  showTrue = true; showPt = false; showRes = false;
+  el.tTrue.checked = true; el.tPt.checked = false; el.tRes.checked = false;
+  el.lgTrue.hidden = false; el.lgPt.hidden = true;
+  var now = performance.now();
+  for(var i = 0; i < pts.length; i++) fadeOut(pts[i], now);
+  pts = [];
+  hover = null; drag = null;
+  genBase();
+  rebuildGenerated(true);
+  el.barW.style.width = "0"; el.barT.style.width = "0";
+  el.pW.textContent = el.pT.textContent = "\u2013";
+  el.simNote.textContent = "The bars give the share of samples in which the band held the true line along its full length on [0, 10]. The black mark is the nominal level.";
+  simLines = [];
+});
+el.sim.addEventListener("click", startSim);
+
+window.addEventListener("resize", resize);
+if(window.ResizeObserver) new ResizeObserver(resize).observe(cv);
+
+var nomInit = ((0.95 - 0.5) / 0.5 * 100).toFixed(2) + "%";
+el.nomW.style.left = nomInit; el.nomT.style.left = nomInit;
+
+resize();
+genBase();
+rebuildGenerated(true);
+requestAnimationFrame(frame);
+
+})();
+</script>
+
+</body>
+</html>
