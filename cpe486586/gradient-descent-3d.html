@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gradient descent and the learning rate</title>
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23183e4b'/%3E%3Cpath d='M8 18C18 58 46 58 56 18' fill='none' stroke='%23fcf1ef' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M17 30Q32 8 44 34' fill='none' stroke='%23ced3d7' stroke-width='3' stroke-dasharray='4 4'/%3E%3Ccircle cx='46' cy='36' r='7' fill='%23d74a49'/%3E%3C/svg%3E">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --red:#d74a49;
+  --ink:#183e4b;
+  --ink2:#1b4552;
+  --mute:#8ba0a4;
+  --grey:#eaeaea;
+  --blush:#fcf1ef;
+  --sand:#e8d8c9;
+  --stone:#ced3d7;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--blush);color:var(--ink);
+  font-family:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  font-variant-numeric:tabular-nums;font-size:16px;line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1260px;margin:0 auto;padding:26px 22px 0}
+
+header{display:flex;align-items:flex-end;gap:18px;padding-bottom:16px;border-bottom:2px solid var(--ink)}
+header h1{margin:0;font-size:clamp(23px,3.2vw,38px);font-weight:800;font-stretch:92%;letter-spacing:-.02em;line-height:1.05}
+header p{margin:6px 0 0;max-width:66ch;color:var(--ink2);font-size:15px}
+header .tag{
+  margin-left:auto;align-self:flex-start;background:var(--ink);color:var(--blush);
+  font-size:12px;font-weight:600;padding:5px 10px;border-radius:2px;white-space:nowrap;
+}
+
+.board{display:grid;grid-template-columns:1fr 316px;gap:20px;margin-top:20px;align-items:stretch}
+
+/* 3D stage */
+.stage{
+  position:relative;min-height:460px;
+  border:1px solid var(--stone);
+  background:linear-gradient(180deg,var(--blush) 0%,var(--grey) 62%,var(--sand) 100%);
+  overflow:hidden;touch-action:none;cursor:grab;
+}
+.stage.dragging{cursor:grabbing}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block}
+.hud{
+  position:absolute;left:14px;top:12px;pointer-events:none;
+  font-size:14px;color:var(--ink2);line-height:1.35;
+}
+.hud b{font-size:22px;font-weight:800;color:var(--ink);letter-spacing:-.01em}
+.hint{
+  position:absolute;left:14px;bottom:10px;pointer-events:none;
+  font-size:12.5px;color:var(--ink2);background:rgba(252,241,239,.8);padding:3px 8px;border-radius:2px;
+}
+.nogl{position:absolute;inset:0;display:none;place-items:center;padding:30px;text-align:center;color:var(--ink2);font-size:15px}
+
+/* Rail */
+.rail{display:flex;flex-direction:column;gap:14px}
+.panel{background:var(--grey);border:1px solid var(--stone);padding:14px 16px}
+.panel.sand{background:var(--sand)}
+.panel h2{margin:0 0 10px;font-size:13px;font-weight:700;color:var(--ink2)}
+
+.seg{display:flex;border:1px solid var(--ink);border-radius:2px;overflow:hidden}
+.seg button{
+  flex:1;border:0;border-radius:0;background:var(--blush);color:var(--ink);
+  font-family:inherit;font-size:13.5px;font-weight:600;padding:8px 4px;cursor:pointer;white-space:nowrap;
+}
+.seg button + button{border-left:1px solid var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--blush)}
+.seg button:focus-visible{outline:3px solid var(--red);outline-offset:-3px}
+.formula{margin-top:9px;font-size:15px}
+
+.lrhead{display:flex;justify-content:space-between;align-items:baseline}
+.lrhead span{font-size:14px;color:var(--ink2)}
+.lrhead b{font-size:28px;font-weight:800;color:var(--red);letter-spacing:-.02em}
+
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:26px;background:transparent;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:10px;border:1px solid var(--ink);background:var(--track,var(--blush))}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;width:22px;height:22px;margin-top:-7px;border-radius:50%;
+  background:var(--red);border:3px solid var(--blush);box-shadow:0 0 0 1px var(--ink);
+}
+input[type=range]::-moz-range-track{height:10px;border:1px solid var(--ink);background:var(--track,var(--blush))}
+input[type=range]::-moz-range-thumb{
+  width:18px;height:18px;border-radius:50%;background:var(--red);
+  border:3px solid var(--blush);box-shadow:0 0 0 1px var(--ink);
+}
+input[type=range].plain{--track:var(--blush)}
+input[type=range].plain::-webkit-slider-runnable-track{height:6px}
+input[type=range].plain::-webkit-slider-thumb{width:18px;height:18px;margin-top:-7px;background:var(--ink)}
+input[type=range].plain::-moz-range-track{height:6px}
+input[type=range].plain::-moz-range-thumb{background:var(--ink)}
+input[type=range]:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+
+.scale{position:relative;height:16px;font-size:11.5px;color:var(--ink2);margin:0 11px}
+.scale span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.zones{font-size:12.5px;color:var(--ink2);margin-top:6px;line-height:1.5}
+.zones i{display:inline-block;width:11px;height:11px;border:1px solid var(--ink);vertical-align:-1px;margin-right:5px}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{
+  font-family:inherit;font-size:13px;font-weight:600;padding:5px 9px;border-radius:2px;cursor:pointer;
+  border:1px solid var(--ink);background:var(--blush);color:var(--ink);
+}
+.chip:hover{background:var(--stone)}
+.chip:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+
+.buttons{display:flex;gap:8px;margin-top:12px}
+button.act{
+  flex:1;font-family:inherit;font-size:14px;font-weight:600;padding:9px 10px;border-radius:2px;cursor:pointer;
+  border:1px solid var(--ink);background:var(--blush);color:var(--ink);
+}
+button.act:hover{background:var(--stone)}
+button.act.primary{background:var(--ink);color:var(--blush)}
+button.act.primary:hover{background:var(--ink2)}
+button.act:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+.speed{margin-top:12px}
+.speed .row{display:flex;justify-content:space-between;font-size:13px;color:var(--ink2)}
+.speed b{color:var(--ink)}
+
+.read{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:14px}
+.read span:nth-child(odd){color:var(--ink2)}
+.read span:nth-child(even){text-align:right;font-weight:700}
+.status{margin-top:10px;padding-top:9px;border-top:1px solid var(--stone);font-size:14px;font-weight:600;min-height:42px}
+.status.bad{color:var(--red)}
+.status.good{color:var(--ink)}
+.status.idle{color:var(--ink2)}
+
+.theory{font-size:14px;line-height:1.55}
+.theory .eqline{display:flex;justify-content:space-between;gap:10px}
+.theory .eqline b{font-weight:800;white-space:nowrap}
+.theory .eqline b.warn{color:var(--red)}
+.theory .verdict{margin-top:8px;color:var(--ink2);font-size:13.5px}
+
+/* Lower row */
+.lower{display:grid;grid-template-columns:1fr 316px;gap:20px;margin-top:20px;align-items:stretch}
+.charts2{display:grid;grid-template-columns:1.45fr 1fr;gap:20px}
+.lower .panel{padding:12px 14px 10px}
+#loss,#map{width:100%;height:270px;display:block}
+#map{cursor:crosshair}
+.cap{font-size:12.5px;color:var(--ink2);margin-top:6px}
+
+.note{margin:18px 0 0;font-size:14.5px;color:var(--ink2);max-width:84ch}
+.note + .note{margin-top:10px}
+.note b{color:var(--ink)}
+
+footer{margin-top:28px;border-top:2px solid var(--ink)}
+footer .inner{
+  max-width:1260px;margin:0 auto;padding:15px 22px 26px;
+  display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:14px;color:var(--ink2);
+}
+footer b{color:var(--ink);font-weight:700}
+
+@media (max-width:980px){
+  .board{grid-template-columns:1fr}
+  .stage{min-height:0;height:420px}
+  .lower{grid-template-columns:1fr}
+  .charts2{grid-template-columns:1fr}
+  header{flex-wrap:wrap}
+  header .tag{margin-left:0}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <svg width="52" height="52" viewBox="0 0 64 64" aria-hidden="true">
+      <rect width="64" height="64" rx="12" fill="#183e4b"/>
+      <path d="M8 18C18 58 46 58 56 18" fill="none" stroke="#fcf1ef" stroke-width="5" stroke-linecap="round"/>
+      <path d="M17 30Q32 8 44 34" fill="none" stroke="#ced3d7" stroke-width="3" stroke-dasharray="4 4"/>
+      <circle cx="46" cy="36" r="7" fill="#d74a49"/>
+    </svg>
+    <div>
+      <h1>Gradient descent and the learning rate</h1>
+      <p>Each hop of the ball is one update, &theta; &larr; &theta; &minus; &eta;&nabla;f(&theta;). A small &eta; takes many short steps toward the minimum. A large &eta; steps past the valley floor, and beyond a threshold the iterates move away from the minimum.</p>
+    </div>
+    <div class="tag">Optimization</div>
+  </header>
+
+  <div class="board">
+
+    <div class="stage" id="stage">
+      <canvas id="gl" aria-label="Three dimensional loss surface with the gradient descent iterate"></canvas>
+      <div class="hud"><b id="hudEta">&eta; = 0.100</b><br><span id="hudStep">step 0</span></div>
+      <div class="hint">Drag to rotate. Scroll to zoom. Click the surface to move the start point.</div>
+      <div class="nogl" id="nogl">The 3D view needs the three.js library from cdnjs.cloudflare.com. Check the network connection and reload the page. The loss plot and the contour map below still work.</div>
+    </div>
+
+    <div class="rail">
+
+      <div class="panel">
+        <h2>Loss surface</h2>
+        <div class="seg" role="group" aria-label="Loss surface">
+          <button type="button" id="sBowl" aria-pressed="true">Elongated bowl</button>
+          <button type="button" id="sBasins" aria-pressed="false">Two basins</button>
+        </div>
+        <div class="formula" id="formula"></div>
+      </div>
+
+      <div class="panel sand">
+        <div class="lrhead"><span>learning rate &eta;</span><b id="etaVal">0.100</b></div>
+        <input id="eta" type="range" min="0" max="1000" step="1" aria-label="Learning rate, logarithmic scale">
+        <div class="scale" id="scale"></div>
+        <div class="zones" id="zones"></div>
+        <div class="chips" id="chips"></div>
+
+        <div class="buttons">
+          <button class="act primary" id="run" type="button">Run</button>
+          <button class="act" id="step" type="button">Step</button>
+          <button class="act" id="reset" type="button">Reset</button>
+        </div>
+
+        <div class="speed">
+          <div class="row"><span>steps per second</span><b id="spsVal">8</b></div>
+          <input id="sps" class="plain" type="range" min="1" max="60" step="1" value="8" aria-label="Steps per second">
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Current iterate</h2>
+        <div class="read">
+          <span>step</span><span id="rK">0</span>
+          <span>&theta;</span><span id="rTheta">(0, 0)</span>
+          <span>f(&theta;) &minus; f*</span><span id="rLoss">0</span>
+          <span>&Vert;&nabla;f(&theta;)&Vert;</span><span id="rGrad">0</span>
+          <span>step length</span><span id="rLen">0</span>
+        </div>
+        <div class="status idle" id="status">Ready. Press Run or Step.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="lower">
+    <div class="charts2">
+      <div class="panel">
+        <h2>f(&theta;) &minus; f* against step, log scale</h2>
+        <canvas id="loss" aria-label="Loss against iteration"></canvas>
+        <div class="cap">The current run is red. Earlier runs from the same start with other learning rates stay in grey.</div>
+      </div>
+      <div class="panel">
+        <h2>Contour map from above</h2>
+        <canvas id="map" aria-label="Contour map, click to move the start point"></canvas>
+        <div class="cap">Click the map to move the start point.</div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Why it behaves this way</h2>
+      <div class="theory" id="theory"></div>
+    </div>
+  </div>
+
+  <p class="note" id="note1"></p>
+  <p class="note" id="note2"></p>
+
+</div>
+
+<footer>
+  <div class="inner">
+    <span><b>CPE 486/586: Machine Learning for Engineering Applications</b></span>
+    <span>University of Alabama in Huntsville</span>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+"use strict";
+
+var COL = {
+  red:"#d74a49", ink:"#183e4b", ink2:"#1b4552", mute:"#8ba0a4",
+  grey:"#eaeaea", blush:"#fcf1ef", sand:"#e8d8c9", stone:"#ced3d7"
+};
+
+/* ---------- loss surfaces ---------- */
+
+function newton(x){
+  for(var i = 0; i < 80; i++) x -= (4 * x * x * x - 4 * x + 0.3) / (12 * x * x - 4);
+  return x;
+}
+
+var SURF = {
+  bowl: {
+    key:"bowl", half:3,
+    f: function(x, y){ return 0.5 * x * x + 2 * y * y; },
+    g: function(x, y){ return [x, 4 * y]; },
+    start:[-2.6, 1.7],
+    presets:[0.01, 0.1, 0.4, 0.52],
+    formula:"f(&theta;) = &frac12;&theta;<sub>1</sub><sup>2</sup> + 2&theta;<sub>2</sub><sup>2</sup>"
+  },
+  basins: {
+    key:"basins", half:2,
+    f: function(x, y){ var a = x * x - 1; return a * a + 0.3 * x + 0.8 * y * y; },
+    g: function(x, y){ return [4 * x * (x * x - 1) + 0.3, 1.6 * y]; },
+    start:[1.75, 1.3],
+    presets:[0.02, 0.1, 0.15, 0.24],
+    formula:"f(&theta;) = (&theta;<sub>1</sub><sup>2</sup> &minus; 1)<sup>2</sup> + 0.3&theta;<sub>1</sub> + 0.8&theta;<sub>2</sub><sup>2</sup>"
+  }
+};
+
+(function prepare(){
+  SURF.bowl.mins = [{x:0, y:0, global:true}];
+  var xl = newton(-1), xr = newton(1);
+  SURF.basins.mins = [{x:xl, y:0, global:true}, {x:xr, y:0, global:false}];
+  SURF.basins.ridge = newton(0);
+  SURF.basins.lamG = 12 * xl * xl - 4;
+  SURF.basins.lamL = 12 * xr * xr - 4;
+  ["bowl", "basins"].forEach(function(k){
+    var s = SURF[k], lo = Infinity, hi = -Infinity, n = 160, i, j;
+    for(i = 0; i < s.mins.length; i++) lo = Math.min(lo, s.f(s.mins[i].x, s.mins[i].y));
+    for(j = 0; j <= n; j++) for(i = 0; i <= n; i++){
+      var v = s.f(-s.half + 2 * s.half * i / n, -s.half + 2 * s.half * j / n);
+      if(v > hi) hi = v;
+    }
+    s.fstar = lo;
+    s.fmax = hi;
+  });
+})();
+
+var S = SURF.bowl;
+var WORLD = 3;
+var HGT = 2.6;
+var ETA_MIN = 0.002, ETA_MAX = 0.6;
+var MAXIT = 4000;
+var GTOL = 1e-3;
+
+function sc(){ return WORLD / S.half; }
+function rel(f){ return (f - S.fstar) / (S.fmax - S.fstar); }
+function hW(x, y){
+  var h = rel(S.f(x, y)) * HGT;
+  if(!isFinite(h) || h > HGT * 1.6) h = HGT * 1.6;
+  return h;
+}
+function normalAt(x, y){
+  var h = rel(S.f(x, y)) * HGT;
+  if(!isFinite(h) || h > HGT * 1.6) return [0, 0, 1];
+  var G = S.g(x, y), k = HGT / (S.fmax - S.fstar) / sc();
+  var nx = -k * G[0], ny = -k * G[1], L = Math.sqrt(nx * nx + ny * ny + 1);
+  return [nx / L, ny / L, 1 / L];
+}
+function etaOf(v){ return Math.exp(Math.log(ETA_MIN) + v / 1000 * (Math.log(ETA_MAX) - Math.log(ETA_MIN))); }
+function vOf(e){ return 1000 * (Math.log(e) - Math.log(ETA_MIN)) / (Math.log(ETA_MAX) - Math.log(ETA_MIN)); }
+
+var RAMP = [
+  [0.00, [0x1b, 0x45, 0x52]],
+  [0.30, [0x8b, 0xa0, 0xa4]],
+  [0.62, [0xce, 0xd3, 0xd7]],
+  [1.00, [0xe8, 0xd8, 0xc9]]
+];
+function ramp(t){
+  if(t < 0) t = 0;
+  if(t > 1) t = 1;
+  for(var i = 1; i < RAMP.length; i++){
+    if(t <= RAMP[i][0]){
+      var a = RAMP[i - 1], b = RAMP[i], u = (t - a[0]) / (b[0] - a[0]);
+      return [a[1][0] + (b[1][0] - a[1][0]) * u, a[1][1] + (b[1][1] - a[1][1]) * u, a[1][2] + (b[1][2] - a[1][2]) * u];
+    }
+  }
+  return RAMP[RAMP.length - 1][1];
+}
+
+/* Marching squares on the parameter grid. Returns segments in parameter
+   coordinates, each tagged with the level it belongs to. */
+var EDGE_TABLE = {1:[[3,0]], 2:[[0,1]], 3:[[3,1]], 4:[[1,2]], 5:[[0,3],[1,2]], 6:[[0,2]], 7:[[3,2]],
+                  8:[[2,3]], 9:[[0,2]], 10:[[0,1],[2,3]], 11:[[1,2]], 12:[[1,3]], 13:[[0,1]], 14:[[0,3]]};
+function contours(N, K){
+  var h = S.half, d = 2 * h / N, vals = new Float64Array((N + 1) * (N + 1)), i, j, k;
+  for(j = 0; j <= N; j++) for(i = 0; i <= N; i++) vals[j * (N + 1) + i] = S.f(-h + i * d, -h + j * d);
+  var out = [];
+  for(k = 1; k < K; k++){
+    var L = S.fstar + (S.fmax - S.fstar) * (k / K) * (k / K);
+    for(j = 0; j < N; j++) for(i = 0; i < N; i++){
+      var v0 = vals[j * (N + 1) + i], v1 = vals[j * (N + 1) + i + 1];
+      var v2 = vals[(j + 1) * (N + 1) + i + 1], v3 = vals[(j + 1) * (N + 1) + i];
+      var idx = (v0 > L ? 1 : 0) | (v1 > L ? 2 : 0) | (v2 > L ? 4 : 0) | (v3 > L ? 8 : 0);
+      if(idx === 0 || idx === 15) continue;
+      var x0 = -h + i * d, y0 = -h + j * d;
+      var P = [
+        [x0 + (L - v0) / (v1 - v0) * d, y0],
+        [x0 + d, y0 + (L - v1) / (v2 - v1) * d],
+        [x0 + (L - v3) / (v2 - v3) * d, y0 + d],
+        [x0, y0 + (L - v0) / (v3 - v0) * d]
+      ];
+      var pairs = EDGE_TABLE[idx];
+      for(var p = 0; p < pairs.length; p++){
+        var a = P[pairs[p][0]], b = P[pairs[p][1]];
+        out.push([a[0], a[1], b[0], b[1], L]);
+      }
+    }
+  }
+  return out;
+}
+
+/* ---------- run state ---------- */
+
+var eta = 0.1, runEta = 0.1;
+var start = S.start.slice();
+var pts = [], losses = [];
+var ghosts = [];
+var running = false, resumeAfterDrag = false;
+var hop = null, lastStepAt = 0, sps = 8;
+var status = "ready", statusMsg = "", statusKind = "idle";
+var ballP = [0, 0], ballZ = 0, ballAlpha = 1;
+var segs = [];
+
+function lossAt(p){ return S.f(p[0], p[1]) - S.fstar; }
+function gradNorm(p){ var G = S.g(p[0], p[1]); return Math.sqrt(G[0] * G[0] + G[1] * G[1]); }
+
+/* ---------- 3D scene ---------- */
+
+var has3D = !!window.THREE;
+var stage = document.getElementById("stage");
+var renderer, scene, camera, surfMat, surfMesh = null, contour3 = null, markers = null;
+var ball, shadow, trail, trailPos, trailCount = 0, TRAIL_CAP = 140000;
+var dots, dotPos, dotCount = 0, startRing, labels = [];
+var raycaster, orbit = {th:-2.45, ph:0.6, r:11.4, tth:-2.45, tph:0.6, tr:11.4};
+var prevBallWorld = null;
+
+function ringOn(x, y, inner, outer, color, lift){
+  var g = new THREE.RingGeometry(inner, outer, 44);
+  var m = new THREE.MeshBasicMaterial({color:color, side:THREE.DoubleSide, transparent:true, opacity:0.95, depthWrite:false});
+  var mesh = new THREE.Mesh(g, m);
+  var n = normalAt(x, y), s = sc();
+  mesh.position.set(x * s + n[0] * lift, y * s + n[1] * lift, hW(x, y) + n[2] * lift);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(n[0], n[1], n[2]));
+  return mesh;
+}
+
+function textSprite(txt){
+  var c = document.createElement("canvas");
+  c.width = 128; c.height = 64;
+  var x = c.getContext("2d");
+  x.font = '700 40px "Bricolage Grotesque", sans-serif';
+  x.fillStyle = COL.ink2;
+  x.textAlign = "center"; x.textBaseline = "middle";
+  x.fillText(txt, 64, 34);
+  var t = new THREE.CanvasTexture(c);
+  var sp = new THREE.Sprite(new THREE.SpriteMaterial({map:t, depthTest:false, transparent:true}));
+  sp.scale.set(0.8, 0.4, 1);
+  return sp;
+}
+
+function init3D(){
+  var cv = document.getElementById("gl");
+  renderer = new THREE.WebGLRenderer({canvas:cv, antialias:true, alpha:true});
+  renderer.setClearColor(0x000000, 0);
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(36, 1, 0.1, 200);
+  camera.up.set(0, 0, 1);
+
+  scene.add(new THREE.HemisphereLight(0xfcf1ef, 0x8ba0a4, 0.85));
+  var sun = new THREE.DirectionalLight(0xfcf1ef, 0.7);
+  sun.position.set(-4, -6, 9);
+  scene.add(sun);
+
+  surfMat = new THREE.MeshStandardMaterial({
+    vertexColors:true, roughness:0.9, metalness:0, side:THREE.DoubleSide,
+    polygonOffset:true, polygonOffsetFactor:1, polygonOffsetUnits:1
+  });
+
+  var frameGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-WORLD, -WORLD, -0.02), new THREE.Vector3(WORLD, -WORLD, -0.02),
+    new THREE.Vector3(WORLD, WORLD, -0.02), new THREE.Vector3(-WORLD, WORLD, -0.02)
+  ]);
+  scene.add(new THREE.LineLoop(frameGeo, new THREE.LineBasicMaterial({color:0x8ba0a4})));
+
+  /* Ball with painted bands, so its rotation is visible as it moves. */
+  var bc = document.createElement("canvas");
+  bc.width = 256; bc.height = 128;
+  var bx = bc.getContext("2d");
+  bx.fillStyle = COL.red; bx.fillRect(0, 0, 256, 128);
+  bx.fillStyle = COL.blush;
+  bx.fillRect(0, 58, 256, 12);
+  bx.fillRect(58, 0, 12, 128);
+  bx.fillRect(186, 0, 12, 128);
+  var btex = new THREE.CanvasTexture(bc);
+  ball = new THREE.Mesh(new THREE.SphereGeometry(0.15, 36, 24),
+    new THREE.MeshStandardMaterial({map:btex, roughness:0.45, metalness:0.05, transparent:true}));
+  scene.add(ball);
+
+  shadow = new THREE.Mesh(new THREE.CircleGeometry(0.16, 32),
+    new THREE.MeshBasicMaterial({color:0x183e4b, transparent:true, opacity:0.3, depthWrite:false}));
+  scene.add(shadow);
+
+  trailPos = new Float32Array(TRAIL_CAP * 3);
+  var tg = new THREE.BufferGeometry();
+  tg.setAttribute("position", new THREE.BufferAttribute(trailPos, 3));
+  tg.setDrawRange(0, 0);
+  trail = new THREE.Line(tg, new THREE.LineBasicMaterial({color:0xd74a49}));
+  trail.frustumCulled = false;
+  scene.add(trail);
+
+  dotPos = new Float32Array((MAXIT + 2) * 3);
+  var dg = new THREE.BufferGeometry();
+  dg.setAttribute("position", new THREE.BufferAttribute(dotPos, 3));
+  dg.setDrawRange(0, 0);
+  dots = new THREE.Points(dg, new THREE.PointsMaterial({color:0x183e4b, size:0.075, sizeAttenuation:true}));
+  dots.frustumCulled = false;
+  scene.add(dots);
+
+  raycaster = new THREE.Raycaster();
+
+  function addLabels(){
+    labels.forEach(function(l){ scene.remove(l); });
+    labels = [];
+    var a = textSprite("\u03B8\u2081"), b = textSprite("\u03B8\u2082");
+    a.position.set(WORLD + 0.45, -WORLD, 0);
+    b.position.set(-WORLD, WORLD + 0.45, 0);
+    scene.add(a); scene.add(b);
+    labels.push(a, b);
+  }
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(addLabels); else addLabels();
+
+  bindOrbit();
+}
+
+function buildSurface3D(){
+  if(!has3D) return;
+  if(surfMesh){ scene.remove(surfMesh); surfMesh.geometry.dispose(); }
+  if(contour3){ scene.remove(contour3); contour3.geometry.dispose(); }
+  if(markers){ scene.remove(markers); }
+
+  var N = 150, s = sc(), i;
+  var geo = new THREE.PlaneGeometry(2 * WORLD, 2 * WORLD, N, N);
+  var pos = geo.attributes.position, cols = new Float32Array(pos.count * 3);
+  for(i = 0; i < pos.count; i++){
+    var x = pos.getX(i) / s, y = pos.getY(i) / s, f = S.f(x, y), r = rel(f);
+    pos.setZ(i, r * HGT);
+    var c = ramp(Math.sqrt(Math.max(0, r)));
+    cols[3 * i] = c[0] / 255; cols[3 * i + 1] = c[1] / 255; cols[3 * i + 2] = c[2] / 255;
+  }
+  geo.setAttribute("color", new THREE.BufferAttribute(cols, 3));
+  geo.computeVertexNormals();
+  surfMesh = new THREE.Mesh(geo, surfMat);
+  scene.add(surfMesh);
+
+  var cp = new Float32Array(segs.length * 6);
+  for(i = 0; i < segs.length; i++){
+    var z = rel(segs[i][4]) * HGT + 0.012;
+    cp[6 * i] = segs[i][0] * s; cp[6 * i + 1] = segs[i][1] * s; cp[6 * i + 2] = z;
+    cp[6 * i + 3] = segs[i][2] * s; cp[6 * i + 4] = segs[i][3] * s; cp[6 * i + 5] = z;
+  }
+  var cg = new THREE.BufferGeometry();
+  cg.setAttribute("position", new THREE.BufferAttribute(cp, 3));
+  contour3 = new THREE.LineSegments(cg, new THREE.LineBasicMaterial({color:0x1b4552, transparent:true, opacity:0.32}));
+  scene.add(contour3);
+
+  markers = new THREE.Group();
+  for(i = 0; i < S.mins.length; i++){
+    var m = S.mins[i];
+    markers.add(ringOn(m.x, m.y, 0.08, 0.14, m.global ? 0x183e4b : 0x8ba0a4, 0.015));
+  }
+  scene.add(markers);
+}
+
+function placeStartRing(){
+  if(!has3D) return;
+  if(startRing){ scene.remove(startRing); startRing.geometry.dispose(); }
+  startRing = ringOn(start[0], start[1], 0.17, 0.23, 0xd74a49, 0.02);
+  scene.add(startRing);
+}
+
+function setBall(x, y, z, nrm){
+  ballP[0] = x; ballP[1] = y; ballZ = z;
+  if(!has3D) return;
+  var s = sc(), r = 0.15;
+  var wx = x * s + nrm[0] * r, wy = y * s + nrm[1] * r, wz = z + nrm[2] * r;
+  if(prevBallWorld){
+    var dx = wx - prevBallWorld[0], dy = wy - prevBallWorld[1];
+    var d = Math.sqrt(dx * dx + dy * dy);
+    if(d > 1e-6){
+      var axis = new THREE.Vector3(-dy / d, dx / d, 0);
+      ball.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(axis, d / r));
+    }
+  }
+  prevBallWorld = [wx, wy, wz];
+  ball.position.set(wx, wy, wz);
+  ball.material.opacity = ballAlpha;
+  ball.visible = ballAlpha > 0.02;
+
+  var inside = Math.abs(x) <= S.half && Math.abs(y) <= S.half;
+  shadow.visible = inside && ballAlpha > 0.02;
+  if(inside){
+    var n = normalAt(x, y), hs = hW(x, y), above = Math.max(0, z - hs);
+    shadow.position.set(x * s + n[0] * 0.01, y * s + n[1] * 0.01, hs + n[2] * 0.01);
+    shadow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(n[0], n[1], n[2]));
+    var k = 1 + above * 0.9;
+    shadow.scale.set(k, k, 1);
+    shadow.material.opacity = 0.32 / (1 + above * 2.2) * ballAlpha;
+  }
+}
+
+function pushTrail(x, y, z){
+  if(!has3D || trailCount >= TRAIL_CAP) return;
+  var s = sc();
+  trailPos[3 * trailCount] = x * s;
+  trailPos[3 * trailCount + 1] = y * s;
+  trailPos[3 * trailCount + 2] = z + 0.025;
+  trailCount++;
+  trail.geometry.setDrawRange(0, trailCount);
+  trail.geometry.attributes.position.needsUpdate = true;
+}
+function pushDot(x, y){
+  if(!has3D || dotCount >= MAXIT + 2) return;
+  var s = sc(), n = normalAt(x, y);
+  dotPos[3 * dotCount] = x * s + n[0] * 0.03;
+  dotPos[3 * dotCount + 1] = y * s + n[1] * 0.03;
+  dotPos[3 * dotCount + 2] = hW(x, y) + n[2] * 0.03;
+  dotCount++;
+  dots.geometry.setDrawRange(0, dotCount);
+  dots.geometry.attributes.position.needsUpdate = true;
+}
+
+/* Custom orbit, so no second library is needed. */
+function bindOrbit(){
+  var down = null;
+  stage.addEventListener("pointerdown", function(e){
+    down = {x:e.clientX, y:e.clientY, lx:e.clientX, ly:e.clientY, moved:0};
+    stage.setPointerCapture(e.pointerId);
+    stage.classList.add("dragging");
+  });
+  stage.addEventListener("pointermove", function(e){
+    if(!down) return;
+    var dx = e.clientX - down.lx, dy = e.clientY - down.ly;
+    down.lx = e.clientX; down.ly = e.clientY;
+    down.moved += Math.abs(dx) + Math.abs(dy);
+    orbit.tth -= dx * 0.008;
+    orbit.tph = Math.max(0.1, Math.min(1.45, orbit.tph + dy * 0.006));
+  });
+  stage.addEventListener("pointerup", function(e){
+    stage.classList.remove("dragging");
+    if(down && down.moved < 5) pickSurface(e);
+    down = null;
+  });
+  stage.addEventListener("pointercancel", function(){ down = null; stage.classList.remove("dragging"); });
+  stage.addEventListener("wheel", function(e){
+    e.preventDefault();
+    orbit.tr = Math.max(5, Math.min(20, orbit.tr * (1 + e.deltaY * 0.001)));
+  }, {passive:false});
+}
+
+function pickSurface(e){
+  if(!surfMesh) return;
+  var r = stage.getBoundingClientRect();
+  var v = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  raycaster.setFromCamera(v, camera);
+  var hit = raycaster.intersectObject(surfMesh);
+  if(!hit.length) return;
+  var s = sc();
+  setStart(hit[0].point.x / s, hit[0].point.y / s);
+}
+
+function updateCamera(){
+  var k = 0.14;
+  orbit.th += (orbit.tth - orbit.th) * k;
+  orbit.ph += (orbit.tph - orbit.ph) * k;
+  orbit.r += (orbit.tr - orbit.r) * k;
+  /* Pull the camera back on narrow stages so the corners stay in view. */
+  var fit = Math.max(1, 1.3 / Math.max(0.3, camera.aspect));
+  var rr = orbit.r * fit, tz = HGT * 0.34, cp = Math.cos(orbit.ph);
+  camera.position.set(rr * cp * Math.cos(orbit.th), rr * cp * Math.sin(orbit.th), tz + rr * Math.sin(orbit.ph));
+  camera.lookAt(0, 0, tz);
+}
+
+function resize3D(){
+  if(!has3D) return;
+  var r = stage.getBoundingClientRect();
+  renderer.setSize(Math.max(200, r.width), Math.max(200, r.height), false);
+  camera.aspect = r.width / Math.max(1, r.height);
+  camera.updateProjectionMatrix();
+}
+
+/* ---------- run control ---------- */
+
+function resetRun(archive){
+  if(archive && losses.length >= 3){
+    ghosts.push({eta:runEta, losses:losses.slice()});
+    if(ghosts.length > 4) ghosts.shift();
+  }
+  pts = [start.slice()];
+  losses = [lossAt(start)];
+  runEta = eta;
+  hop = null;
+  status = "ready";
+  setStatus("Ready. Press Run or Step.", "idle");
+  trailCount = 0; dotCount = 0;
+  if(has3D){ trail.geometry.setDrawRange(0, 0); dots.geometry.setDrawRange(0, 0); }
+  ballAlpha = 1;
+  prevBallWorld = null;
+  pushTrail(start[0], start[1], hW(start[0], start[1]));
+  pushDot(start[0], start[1]);
+  setBall(start[0], start[1], hW(start[0], start[1]), normalAt(start[0], start[1]));
+  updateReadouts();
+}
+
+function setStart(x, y){
+  var lim = S.half * 0.97;
+  start = [Math.max(-lim, Math.min(lim, x)), Math.max(-lim, Math.min(lim, y))];
+  ghosts = [];
+  placeStartRing();
+  var was = running;
+  running = false;
+  resetRun(false);
+  if(was) startRunning();
+}
+
+function isTerminal(){ return status === "converged" || status === "diverged" || status === "capped"; }
+
+function startRunning(){
+  if(isTerminal()) resetRun(false);
+  running = true;
+  status = "running";
+  lastStepAt = 0;
+  setStatus("Running.", "idle");
+  el.run.textContent = "Pause";
+}
+function stopRunning(){
+  running = false;
+  el.run.textContent = "Run";
+  if(status === "running"){ status = "paused"; setStatus("Paused.", "idle"); }
+}
+
+function hopDuration(){ return Math.min(650, 0.8 * 1000 / sps); }
+
+function beginHop(now){
+  var p = pts[pts.length - 1];
+  var G = S.g(p[0], p[1]);
+  var q = [p[0] - runEta * G[0], p[1] - runEta * G[1]];
+  var bound = S.half * 1.35;
+  var out = !isFinite(q[0]) || !isFinite(q[1]) || Math.abs(q[0]) > bound || Math.abs(q[1]) > bound;
+  var qd = q.slice();
+  if(out){
+    /* Show the departing hop only as far as a square slightly outside the plot. */
+    var dx = q[0] - p[0], dy = q[1] - p[1], lim = S.half * 1.55, t = 1;
+    if(Math.abs(dx) > 1e-12) t = Math.min(t, (lim * Math.sign(dx) - p[0]) / dx);
+    if(Math.abs(dy) > 1e-12) t = Math.min(t, (lim * Math.sign(dy) - p[1]) / dy);
+    if(!isFinite(t) || t < 0) t = 1;
+    qd = [p[0] + dx * t, p[1] + dy * t];
+  }
+  var zp = hW(p[0], p[1]), zq = hW(qd[0], qd[1]);
+  var s = sc(), dist = Math.hypot((qd[0] - p[0]) * s, (qd[1] - p[1]) * s);
+  var lift = 0.16 * dist;
+  for(var i = 1; i < 20; i++){
+    var t2 = i / 20, xs = p[0] + (qd[0] - p[0]) * t2, ys = p[1] + (qd[1] - p[1]) * t2;
+    var chord = zp + (zq - zp) * t2, need = (hW(xs, ys) + 0.2 - chord) / (4 * t2 * (1 - t2));
+    if(need > lift) lift = need;
+  }
+  hop = {p:p, q:q, qd:qd, zp:zp, zq:zq, lift:lift, out:out, t0:now, dur:hopDuration(), dist:dist};
+}
+
+function arcAt(h, e){
+  return [h.p[0] + (h.qd[0] - h.p[0]) * e, h.p[1] + (h.qd[1] - h.p[1]) * e,
+          h.zp + (h.zq - h.zp) * e + h.lift * 4 * e * (1 - e)];
+}
+
+function advanceHop(now){
+  var t = Math.min(1, (now - hop.t0) / hop.dur);
+  var e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  var a = arcAt(hop, e);
+  var n0 = normalAt(hop.p[0], hop.p[1]), n1 = hop.out ? [0, 0, 1] : normalAt(hop.qd[0], hop.qd[1]);
+  var nx = n0[0] + (n1[0] - n0[0]) * e, ny = n0[1] + (n1[1] - n0[1]) * e, nz = n0[2] + (n1[2] - n0[2]) * e;
+  var L = Math.sqrt(nx * nx + ny * ny + nz * nz);
+  if(hop.out) ballAlpha = 1 - e;
+  setBall(a[0], a[1], a[2], [nx / L, ny / L, nz / L]);
+  if(t >= 1) finishHop();
+}
+
+function finishHop(){
+  var h = hop;
+  hop = null;
+  var k = pts.length;
+  if(h.out){
+    running = false;
+    el.run.textContent = "Run";
+    status = "diverged";
+    ballAlpha = 0;
+    setBall(h.qd[0], h.qd[1], h.zq, [0, 0, 1]);
+    setStatus("Diverged at step " + k + ". The update left the plotted region, because the step overshoots by more than it corrects.", "bad");
+    updateReadouts(h.q);
+    return;
+  }
+  var nSeg = Math.max(1, Math.min(30, Math.ceil(h.dist * 10)));
+  for(var i = 1; i <= nSeg; i++){
+    var a = arcAt(h, i / nSeg);
+    pushTrail(a[0], a[1], a[2]);
+  }
+  pts.push(h.q);
+  losses.push(lossAt(h.q));
+  pushDot(h.q[0], h.q[1]);
+
+  var gn = gradNorm(h.q);
+  if(gn < GTOL){
+    running = false;
+    el.run.textContent = "Run";
+    status = "converged";
+    var msg = "Converged at step " + k + ". The gradient norm fell below 0.001.";
+    if(S.key === "basins"){
+      msg = (h.q[0] < S.ridge ? "Reached the global minimum at step " : "Stopped in the local minimum at step ") + k +
+            (h.q[0] < S.ridge ? "." : ". The loss there is 0.60 above the global minimum.");
+    }
+    setStatus(msg, h.q[0] < (S.ridge || Infinity) ? "good" : "bad");
+  } else if(k >= MAXIT){
+    running = false;
+    el.run.textContent = "Run";
+    status = "capped";
+    setStatus("Stopped after " + MAXIT + " steps without reaching the tolerance.", "bad");
+  }
+  updateReadouts();
+}
+
+/* ---------- readouts and text ---------- */
+
+var el = {
+  eta: document.getElementById("eta"),
+  etaVal: document.getElementById("etaVal"),
+  hudEta: document.getElementById("hudEta"),
+  hudStep: document.getElementById("hudStep"),
+  scale: document.getElementById("scale"),
+  zones: document.getElementById("zones"),
+  chips: document.getElementById("chips"),
+  run: document.getElementById("run"),
+  step: document.getElementById("step"),
+  reset: document.getElementById("reset"),
+  sps: document.getElementById("sps"),
+  spsVal: document.getElementById("spsVal"),
+  rK: document.getElementById("rK"),
+  rTheta: document.getElementById("rTheta"),
+  rLoss: document.getElementById("rLoss"),
+  rGrad: document.getElementById("rGrad"),
+  rLen: document.getElementById("rLen"),
+  status: document.getElementById("status"),
+  theory: document.getElementById("theory"),
+  formula: document.getElementById("formula"),
+  sBowl: document.getElementById("sBowl"),
+  sBasins: document.getElementById("sBasins"),
+  note1: document.getElementById("note1"),
+  note2: document.getElementById("note2")
+};
+
+function fmt(v){
+  if(!isFinite(v)) return "\u221E";
+  var a = Math.abs(v);
+  if(a === 0) return "0";
+  if(a >= 1e4 || a < 1e-3){
+    var parts = v.toExponential(2).split("e");
+    return parts[0] + "\u00D7" + supPow(parseInt(parts[1], 10));
+  }
+  if(a >= 100) return v.toFixed(1);
+  return v.toFixed(4);
+}
+
+function setStatus(msg, kind){
+  statusMsg = msg; statusKind = kind;
+  el.status.textContent = msg;
+  el.status.className = "status " + kind;
+}
+
+function updateReadouts(override){
+  var p = override || pts[pts.length - 1];
+  var k = override ? pts.length : pts.length - 1;
+  var G = S.g(p[0], p[1]);
+  var gn = Math.sqrt(G[0] * G[0] + G[1] * G[1]);
+  el.rK.textContent = k;
+  el.rTheta.textContent = "(" + fmt(p[0]) + ", " + fmt(p[1]) + ")";
+  el.rLoss.textContent = fmt(S.f(p[0], p[1]) - S.fstar);
+  el.rGrad.textContent = fmt(gn);
+  el.rLen.textContent = fmt(runEta * gn);
+  el.hudStep.textContent = "step " + k;
+}
+
+function setEtaDisplay(){
+  el.etaVal.textContent = eta.toFixed(3);
+  el.hudEta.textContent = "\u03B7 = " + eta.toFixed(3);
+  el.eta.value = Math.round(vOf(eta));
+  updateTheory();
+}
+
+function updateTheory(){
+  var h;
+  if(S.key === "bowl"){
+    var r1 = 1 - eta, r2 = 1 - 4 * eta, rho = Math.max(Math.abs(r1), Math.abs(r2));
+    var n = rho < 1 ? Math.ceil(Math.log(1000) / -Math.log(rho)) : null;
+    var verdict;
+    if(r2 >= 0) verdict = "Both factors are positive, so each coordinate shrinks without changing sign. The ball approaches the valley floor from one side.";
+    else if(Math.abs(r2) < 1) verdict = "The factor on \u03B8\u2082 is negative, so \u03B8\u2082 changes sign at every step. The ball crosses the valley floor each time and still gets closer.";
+    else verdict = "The factor on \u03B8\u2082 exceeds one in magnitude, so \u03B8\u2082 grows at every step and the run diverges.";
+    h = '<div class="eqline"><span>&theta;<sub>1</sub> factor, 1 &minus; &eta;</span><b>' + r1.toFixed(3) + '</b></div>' +
+        '<div class="eqline"><span>&theta;<sub>2</sub> factor, 1 &minus; 4&eta;</span><b class="' + (Math.abs(r2) >= 1 ? "warn" : "") + '">' + r2.toFixed(3) + '</b></div>' +
+        '<div class="eqline"><span>steps for 1000&times; reduction</span><b class="' + (n ? "" : "warn") + '">' + (n ? "about " + n : "none") + '</b></div>' +
+        '<div class="verdict">' + verdict + '</div>';
+  } else {
+    var tg = 2 / S.lamG, tl = 2 / S.lamL;
+    var sg = eta < tg, sl = eta < tl;
+    h = '<div class="eqline"><span>curvature, global minimum</span><b>' + S.lamG.toFixed(2) + '</b></div>' +
+        '<div class="eqline"><span>&eta; limit, global minimum</span><b class="' + (sg ? "" : "warn") + '">' + tg.toFixed(3) + '</b></div>' +
+        '<div class="eqline"><span>curvature, local minimum</span><b>' + S.lamL.toFixed(2) + '</b></div>' +
+        '<div class="eqline"><span>&eta; limit, local minimum</span><b class="' + (sl ? "" : "warn") + '">' + tl.toFixed(3) + '</b></div>' +
+        '<div class="verdict">At &eta; = ' + eta.toFixed(3) + ', the global minimum is ' + (sg ? "stable" : "unstable") +
+        ' and the local minimum is ' + (sl ? "stable" : "unstable") + '. Which one the run reaches depends on where the first large steps land relative to the ridge at &theta;<sub>1</sub> = ' + S.ridge.toFixed(3) + '.</div>';
+  }
+  el.theory.innerHTML = h;
+}
+
+function buildScale(){
+  var ticks = [0.002, 0.01, 0.1, 0.6];
+  var html = "";
+  ticks.forEach(function(t){
+    html += '<span style="left:' + (vOf(t) / 10).toFixed(2) + '%">' + t + '</span>';
+  });
+  el.scale.innerHTML = html;
+
+  var a, b, track, legend;
+  if(S.key === "bowl"){
+    a = vOf(0.25) / 10; b = vOf(0.5) / 10;
+    legend = '<i style="background:#ced3d7"></i>no overshoot, &eta; &lt; 0.25<br>' +
+             '<i style="background:#e8d8c9"></i>overshoots and converges, 0.25 to 0.5<br>' +
+             '<i style="background:#d74a49"></i>diverges, &eta; &gt; 0.5';
+  } else {
+    a = vOf(2 / S.lamG) / 10; b = vOf(2 / S.lamL) / 10;
+    legend = '<i style="background:#ced3d7"></i>both minima stable, &eta; &lt; ' + (2 / S.lamG).toFixed(3) + '<br>' +
+             '<i style="background:#e8d8c9"></i>only the local minimum stable<br>' +
+             '<i style="background:#d74a49"></i>neither minimum stable, &eta; &gt; ' + (2 / S.lamL).toFixed(3);
+  }
+  track = "linear-gradient(90deg,#ced3d7 0%,#ced3d7 " + a.toFixed(2) + "%,#e8d8c9 " + a.toFixed(2) + "%,#e8d8c9 " +
+          b.toFixed(2) + "%,#d74a49 " + b.toFixed(2) + "%,#d74a49 100%)";
+  el.eta.style.setProperty("--track", track);
+  el.zones.innerHTML = legend;
+
+  el.chips.innerHTML = "";
+  S.presets.forEach(function(v){
+    var c = document.createElement("button");
+    c.type = "button";
+    c.className = "chip";
+    c.textContent = "\u03B7 = " + v;
+    c.addEventListener("click", function(){
+      eta = v;
+      setEtaDisplay();
+      resetRun(true);
+      startRunning();
+    });
+    el.chips.appendChild(c);
+  });
+}
+
+function writeNotes(){
+  if(S.key === "bowl"){
+    el.note1.innerHTML = "The bowl has curvature 1 along &theta;<sub>1</sub> and 4 along &theta;<sub>2</sub>. The update multiplies &theta;<sub>1</sub> by 1 &minus; &eta; and &theta;<sub>2</sub> by 1 &minus; 4&eta;. Convergence requires both factors to lie between &minus;1 and 1, so &eta; must stay below 2 divided by the largest curvature, which is 0.5.";
+    el.note2.innerHTML = "Overshooting is not the same as failing. The best fixed rate for this bowl is <b>&eta; = 0.4</b>, where &theta;<sub>2</sub> crosses the valley at every step and the error still falls by a factor of 0.6 per step. At &eta; = 0.01 the ball never overshoots and needs close to 800 steps.";
+  } else {
+    el.note1.innerHTML = "This surface has a local minimum near &theta;<sub>1</sub> = " + S.mins[1].x.toFixed(2) + " and a lower minimum near &theta;<sub>1</sub> = " + S.mins[0].x.toFixed(2) + ", with a ridge between them. From the default start, rates up to about 0.11 stop in the local minimum. Rates from about 0.12 to 0.2 move the first iterate past the ridge, and the run ends at the global minimum.";
+    el.note2.innerHTML = "The step length depends on the start point, so the same &eta; can give a different outcome from another start. Near &eta; = 0.25 some starts neither converge nor leave the plot. The iterate then alternates between two points, which the loss curve shows as a flat band.";
+  }
+  el.formula.innerHTML = S.formula;
+}
+
+function selectSurface(key){
+  S = SURF[key];
+  el.sBowl.setAttribute("aria-pressed", key === "bowl" ? "true" : "false");
+  el.sBasins.setAttribute("aria-pressed", key === "basins" ? "true" : "false");
+  start = S.start.slice();
+  ghosts = [];
+  segs = contours(110, 16);
+  buildSurface3D();
+  placeStartRing();
+  mapCache = null;
+  buildScale();
+  writeNotes();
+  running = false;
+  el.run.textContent = "Run";
+  resetRun(false);
+  setEtaDisplay();
+}
+
+/* ---------- 2D panels ---------- */
+
+var cvL = document.getElementById("loss"), cxL = cvL.getContext("2d");
+var cvP = document.getElementById("map"), cxP = cvP.getContext("2d");
+var WL = 0, HL = 0, WP = 0, HP = 0, dpr = 1;
+var mapCache = null, mapGeom = null;
+
+function resize2D(){
+  dpr = window.devicePixelRatio || 1;
+  var r = cvL.getBoundingClientRect();
+  WL = Math.max(260, r.width); HL = Math.max(180, r.height);
+  cvL.width = Math.round(WL * dpr); cvL.height = Math.round(HL * dpr);
+  cxL.setTransform(dpr, 0, 0, dpr, 0, 0);
+  r = cvP.getBoundingClientRect();
+  WP = Math.max(200, r.width); HP = Math.max(180, r.height);
+  cvP.width = Math.round(WP * dpr); cvP.height = Math.round(HP * dpr);
+  cxP.setTransform(dpr, 0, 0, dpr, 0, 0);
+  mapCache = null;
+}
+
+function niceStep(range, want){
+  var raw = range / want, p = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10)), n = raw / p;
+  return (n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10) * p;
+}
+function supPow(e){
+  var map = {"-":"\u207B", "0":"\u2070", "1":"\u00B9", "2":"\u00B2", "3":"\u00B3", "4":"\u2074",
+             "5":"\u2075", "6":"\u2076", "7":"\u2077", "8":"\u2078", "9":"\u2079"};
+  return "10" + String(e).split("").map(function(c){ return map[c]; }).join("");
+}
+
+function drawLoss(){
+  var c = cxL, L = 52, R = 70, T = 10, B = 30, pw = WL - L - R, ph = HL - T - B, i, g;
+  c.clearRect(0, 0, WL, HL);
+  c.fillStyle = COL.grey; c.fillRect(0, 0, WL, HL);
+  c.font = '600 11.5px "Bricolage Grotesque", sans-serif';
+
+  var n = losses.length;
+  var xMax = Math.max(60, Math.ceil((n - 1) * 1.15));
+  var top = 10;
+  for(i = 0; i < n; i++) if(losses[i] > top) top = losses[i];
+  for(g = 0; g < ghosts.length; g++){
+    var gl = ghosts[g].losses;
+    for(i = 0; i < gl.length && i <= xMax; i++) if(gl[i] > top) top = gl[i];
+  }
+  var yHi = Math.min(4, Math.ceil(Math.log(top) / Math.LN10)), yLo = -8;
+  function X(k){ return L + k / xMax * pw; }
+  function Y(v){
+    var lv = Math.log(Math.max(v, 1e-12)) / Math.LN10;
+    lv = Math.max(yLo, Math.min(yHi, lv));
+    return T + (yHi - lv) / (yHi - yLo) * ph;
+  }
+
+  c.textAlign = "right"; c.textBaseline = "middle";
+  for(var e = yLo; e <= yHi; e += 2){
+    var y = Y(Math.pow(10, e));
+    c.strokeStyle = COL.stone; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(L, y + 0.5); c.lineTo(L + pw, y + 0.5); c.stroke();
+    c.fillStyle = COL.ink2; c.fillText(supPow(e), L - 8, y);
+  }
+  var st = niceStep(xMax, 6);
+  c.textAlign = "center"; c.textBaseline = "top";
+  for(var t = 0; t <= xMax; t += st){
+    var x = X(t);
+    c.strokeStyle = COL.stone;
+    c.beginPath(); c.moveTo(x + 0.5, T); c.lineTo(x + 0.5, T + ph); c.stroke();
+    c.fillStyle = COL.ink2; c.fillText(String(t), x, T + ph + 6);
+  }
+
+  c.save();
+  c.beginPath(); c.rect(L, T - 2, pw + 1, ph + 4); c.clip();
+  for(g = 0; g < ghosts.length; g++){
+    var gs = ghosts[g].losses;
+    c.strokeStyle = COL.mute; c.lineWidth = 1.6; c.globalAlpha = 0.85;
+    c.beginPath();
+    for(i = 0; i < gs.length && i <= xMax; i++){
+      if(i === 0) c.moveTo(X(i), Y(gs[i])); else c.lineTo(X(i), Y(gs[i]));
+    }
+    c.stroke();
+  }
+  c.globalAlpha = 1;
+  c.strokeStyle = COL.red; c.lineWidth = 2.4; c.lineJoin = "round";
+  c.beginPath();
+  for(i = 0; i < n; i++){
+    if(i === 0) c.moveTo(X(i), Y(losses[i])); else c.lineTo(X(i), Y(losses[i]));
+  }
+  c.stroke();
+  if(n){
+    c.fillStyle = COL.red;
+    c.beginPath(); c.arc(X(n - 1), Y(losses[n - 1]), 4, 0, Math.PI * 2); c.fill();
+  }
+  c.restore();
+
+  c.font = '600 11px "Bricolage Grotesque", sans-serif';
+  c.textAlign = "left"; c.textBaseline = "middle";
+  for(g = 0; g < ghosts.length; g++){
+    var gg = ghosts[g].losses, last = Math.min(gg.length - 1, xMax);
+    c.fillStyle = COL.ink2;
+    c.fillText("\u03B7 " + ghosts[g].eta.toFixed(3), Math.min(X(last) + 6, L + pw + 6), Y(gg[last]));
+  }
+  if(n){
+    c.fillStyle = COL.red;
+    c.fillText("\u03B7 " + runEta.toFixed(3), Math.min(X(n - 1) + 8, L + pw + 6), Math.max(T + 8, Y(losses[n - 1]) - 12));
+  }
+
+  c.strokeStyle = COL.ink; c.lineWidth = 1.5;
+  c.beginPath(); c.moveTo(L + 0.5, T); c.lineTo(L + 0.5, T + ph + 0.5); c.lineTo(L + pw, T + ph + 0.5); c.stroke();
+  c.fillStyle = COL.ink2; c.font = '600 11.5px "Bricolage Grotesque", sans-serif';
+  c.textAlign = "right"; c.textBaseline = "top";
+  c.fillText("step k", L + pw, T + ph + 18);
+}
+
+function mapBox(){
+  var L = 36, R = 12, T = 8, B = 28;
+  var side = Math.min(WP - L - R, HP - T - B);
+  var ox = L + Math.max(0, (WP - L - R - side) / 2);
+  return {x:ox, y:T, s:side};
+}
+function mX(x, b){ return b.x + (x + S.half) / (2 * S.half) * b.s; }
+function mY(y, b){ return b.y + (S.half - y) / (2 * S.half) * b.s; }
+
+function buildMapCache(b){
+  var n = Math.max(2, Math.round(b.s * dpr));
+  var oc = document.createElement("canvas");
+  oc.width = n; oc.height = n;
+  var ox = oc.getContext("2d"), img = ox.createImageData(n, n), d = img.data;
+  for(var j = 0; j < n; j++){
+    var y = S.half - (j + 0.5) / n * 2 * S.half;
+    for(var i = 0; i < n; i++){
+      var x = -S.half + (i + 0.5) / n * 2 * S.half;
+      var c = ramp(Math.sqrt(Math.max(0, rel(S.f(x, y)))));
+      var o = 4 * (j * n + i);
+      d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
+    }
+  }
+  ox.putImageData(img, 0, 0);
+  mapCache = oc;
+  mapGeom = b;
+}
+
+function drawMap(){
+  var c = cxP, b = mapBox(), i;
+  if(!mapCache || !mapGeom || mapGeom.s !== b.s) buildMapCache(b);
+  c.clearRect(0, 0, WP, HP);
+  c.fillStyle = COL.grey; c.fillRect(0, 0, WP, HP);
+  c.drawImage(mapCache, b.x, b.y, b.s, b.s);
+
+  c.strokeStyle = "rgba(24,62,75,0.35)"; c.lineWidth = 1;
+  c.beginPath();
+  for(i = 0; i < segs.length; i++){
+    c.moveTo(mX(segs[i][0], b), mY(segs[i][1], b));
+    c.lineTo(mX(segs[i][2], b), mY(segs[i][3], b));
+  }
+  c.stroke();
+
+  c.save();
+  c.beginPath(); c.rect(b.x, b.y, b.s, b.s); c.clip();
+  c.strokeStyle = COL.red; c.lineWidth = 2; c.lineJoin = "round";
+  c.beginPath();
+  for(i = 0; i < pts.length; i++){
+    if(i === 0) c.moveTo(mX(pts[i][0], b), mY(pts[i][1], b)); else c.lineTo(mX(pts[i][0], b), mY(pts[i][1], b));
+  }
+  if(hop) c.lineTo(mX(ballP[0], b), mY(ballP[1], b));
+  c.stroke();
+  if(pts.length < 500){
+    c.fillStyle = COL.ink;
+    for(i = 1; i < pts.length; i++){
+      c.beginPath(); c.arc(mX(pts[i][0], b), mY(pts[i][1], b), 2.2, 0, Math.PI * 2); c.fill();
+    }
+  }
+  for(i = 0; i < S.mins.length; i++){
+    var mx = mX(S.mins[i].x, b), my = mY(S.mins[i].y, b);
+    c.strokeStyle = S.mins[i].global ? COL.blush : COL.stone; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(mx - 5, my - 5); c.lineTo(mx + 5, my + 5); c.moveTo(mx + 5, my - 5); c.lineTo(mx - 5, my + 5); c.stroke();
+  }
+  c.strokeStyle = COL.red; c.lineWidth = 2.5;
+  c.beginPath(); c.arc(mX(start[0], b), mY(start[1], b), 7, 0, Math.PI * 2); c.stroke();
+  if(ballAlpha > 0.05){
+    c.globalAlpha = ballAlpha;
+    c.fillStyle = COL.red; c.strokeStyle = COL.blush; c.lineWidth = 2;
+    c.beginPath(); c.arc(mX(ballP[0], b), mY(ballP[1], b), 5.5, 0, Math.PI * 2); c.fill(); c.stroke();
+    c.globalAlpha = 1;
+  }
+  c.restore();
+
+  c.strokeStyle = COL.ink; c.lineWidth = 1.5;
+  c.strokeRect(b.x + 0.5, b.y + 0.5, b.s - 1, b.s - 1);
+  c.fillStyle = COL.ink2; c.font = '600 11px "Bricolage Grotesque", sans-serif';
+  c.textAlign = "center"; c.textBaseline = "top";
+  [-S.half, 0, S.half].forEach(function(v){ c.fillText(String(v), mX(v, b), b.y + b.s + 5); });
+  c.fillText("\u03B8\u2081", mX(S.half / 2, b), b.y + b.s + 5);
+  c.textAlign = "right"; c.textBaseline = "middle";
+  [-S.half, 0, S.half].forEach(function(v){ c.fillText(String(v), b.x - 6, mY(v, b)); });
+  c.fillText("\u03B8\u2082", b.x - 6, mY(S.half / 2, b));
+}
+
+cvP.addEventListener("click", function(e){
+  var r = cvP.getBoundingClientRect(), b = mapBox();
+  var px = e.clientX - r.left, py = e.clientY - r.top;
+  if(px < b.x || px > b.x + b.s || py < b.y || py > b.y + b.s) return;
+  var x = -S.half + (px - b.x) / b.s * 2 * S.half;
+  var y = S.half - (py - b.y) / b.s * 2 * S.half;
+  setStart(x, y);
+});
+
+/* ---------- loop ---------- */
+
+function tick(now){
+  if(running && !hop && now - lastStepAt >= 1000 / sps){
+    lastStepAt = now;
+    beginHop(now);
+  }
+  if(hop) advanceHop(now);
+  if(has3D){
+    updateCamera();
+    renderer.render(scene, camera);
+  }
+  drawLoss();
+  drawMap();
+  requestAnimationFrame(tick);
+}
+
+/* ---------- wiring ---------- */
+
+el.eta.addEventListener("input", function(){
+  if(running){ resumeAfterDrag = true; stopRunning(); }
+  eta = etaOf(parseFloat(el.eta.value));
+  setEtaDisplay();
+});
+el.eta.addEventListener("change", function(){
+  resetRun(true);
+  if(resumeAfterDrag){ resumeAfterDrag = false; startRunning(); }
+});
+el.run.addEventListener("click", function(){ if(running) stopRunning(); else startRunning(); });
+el.step.addEventListener("click", function(){
+  if(isTerminal() || hop) return;
+  stopRunning();
+  beginHop(performance.now());
+});
+el.reset.addEventListener("click", function(){
+  stopRunning();
+  resetRun(false);
+});
+el.sps.addEventListener("input", function(){
+  sps = parseInt(el.sps.value, 10);
+  el.spsVal.textContent = sps;
+});
+el.sBowl.addEventListener("click", function(){ if(S.key !== "bowl") selectSurface("bowl"); });
+el.sBasins.addEventListener("click", function(){ if(S.key !== "basins") selectSurface("basins"); });
+
+document.addEventListener("keydown", function(e){
+  var tag = e.target.tagName;
+  if(e.code === "Space" && tag !== "INPUT" && tag !== "BUTTON"){
+    e.preventDefault();
+    el.run.click();
+  }
+});
+
+function onResize(){ resize3D(); resize2D(); }
+window.addEventListener("resize", onResize);
+if(window.ResizeObserver){
+  var ro = new ResizeObserver(onResize);
+  ro.observe(stage); ro.observe(cvL); ro.observe(cvP);
+}
+
+if(has3D){
+  try { init3D(); }
+  catch(err){ has3D = false; }
+}
+if(!has3D){
+  document.getElementById("nogl").style.display = "grid";
+  document.getElementById("gl").style.display = "none";
+}
+
+onResize();
+selectSurface("bowl");
+requestAnimationFrame(tick);
+
+})();
+</script>
+
+</body>
+</html>
