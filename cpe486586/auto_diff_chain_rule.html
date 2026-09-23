@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>Automatic Differentiation and Chain Rule | CPE 486/586</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23fcf1ef'/%3E%3Cpath d='M20 46 L20 30 M20 46 L44 30 M44 46 L44 30 M44 46 L20 30 M20 30 L32 16 M44 30 L32 16' stroke='%23183e4b' stroke-width='3' fill='none'/%3E%3Ccircle cx='32' cy='14' r='6' fill='%23d74a49'/%3E%3Ccircle cx='20' cy='30' r='5' fill='%231b4552'/%3E%3Ccircle cx='44' cy='30' r='5' fill='%231b4552'/%3E%3Ccircle cx='20' cy='48' r='5' fill='%23e8d8c9' stroke='%23183e4b' stroke-width='2'/%3E%3Ccircle cx='44' cy='48' r='5' fill='%23e8d8c9' stroke='%23183e4b' stroke-width='2'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,200..800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --red: #d74a49;
+  --ink: #183e4b;
+  --ink-2: #1b4552;
+  --muted: #8ba0a4;
+  --grey: #eaeaea;
+  --blush: #fcf1ef;
+  --sand: #e8d8c9;
+  --mist: #ced3d7;
+  --font: "Bricolage Grotesque", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+*, *::before, *::after { box-sizing: inherit; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+body {
+  margin: 0;
+  background: var(--blush);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 17px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1240px; margin: 0 auto; padding: 28px 28px 0; }
+
+header.top {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 24px;
+  align-items: end;
+  padding-bottom: 20px;
+  border-bottom: 2px solid var(--ink);
+}
+h1 {
+  margin: 0;
+  font-size: clamp(2.2rem, 5vw, 3.9rem);
+  line-height: 0.95;
+  font-weight: 800;
+  font-variation-settings: "wdth" 75, "opsz" 96;
+  letter-spacing: -0.01em;
+}
+.eq {
+  margin: 10px 0 0;
+  font-size: 1.15rem;
+  color: var(--ink-2);
+}
+.eq i { font-style: italic; }
+
+.inputs { display: flex; gap: 22px; }
+.inputs label {
+  display: grid;
+  gap: 2px;
+  font-size: 0.85rem;
+  color: var(--ink-2);
+}
+.inputs .row { display: flex; align-items: center; gap: 10px; }
+.inputs output {
+  font-weight: 700;
+  font-size: 1.1rem;
+  min-width: 2.6em;
+  color: var(--ink);
+}
+input[type=range] { accent-color: var(--red); width: 130px; }
+
+main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 36px;
+  padding: 26px 0 28px;
+}
+
+.stage {
+  position: relative;
+  background-color: var(--blush);
+  background-image: radial-gradient(var(--sand) 1.2px, transparent 1.2px);
+  background-size: 22px 22px;
+  border: 1px solid var(--sand);
+  border-radius: 6px;
+}
+.stage svg { display: block; width: 100%; height: auto; }
+.legend {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 0 18px 14px;
+  font-size: 0.85rem;
+  color: var(--ink-2);
+}
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.sw { width: 22px; height: 12px; border-radius: 3px; border: 1.5px solid; display: inline-block; }
+.sw.f { background: var(--grey); border-color: var(--mist); }
+.sw.a { background: var(--blush); border-color: var(--red); }
+.sw.p { background: var(--blush); border-color: var(--red); border-style: dashed; }
+
+.panel { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.phase {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ink-2);
+  font-size: 0.95rem;
+}
+.phase b { font-weight: 700; }
+.phase.rev b { color: var(--red); }
+h2 {
+  margin: -6px 0 0;
+  font-size: 2rem;
+  line-height: 1.05;
+  font-weight: 750;
+  font-variation-settings: "wdth" 85, "opsz" 48;
+}
+.narr { margin: 0; max-width: 62ch; min-height: 11em; }
+.narr code, .rule code { font-family: var(--mono); font-size: 0.88em; background: var(--grey); padding: 1px 5px; border-radius: 4px; }
+.rule {
+  padding: 10px 14px;
+  border-left: 4px solid var(--ink);
+  background: var(--grey);
+  font-size: 0.95rem;
+  color: var(--ink-2);
+}
+.phase.rev ~ .rule, .rule.rev { border-left-color: var(--red); }
+.caption {
+  padding: 12px 18px;
+  min-height: 3.2em;
+  border-bottom: 1px solid var(--sand);
+  background: var(--blush);
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 1rem;
+  border-radius: 6px 6px 0 0;
+}
+.caption.rev { color: var(--red); }
+.narr p { margin: 0 0 0.6em; }
+.math { font-style: italic; white-space: nowrap; }
+.ov { text-decoration: overline; text-decoration-thickness: 1.5px; }
+.warn {
+  display: none;
+  padding: 10px 14px;
+  border-left: 4px solid var(--red);
+  background: var(--grey);
+  color: var(--ink);
+}
+.warn.on { display: block; }
+
+table.ledger { width: 100%; border-collapse: collapse; font-size: 0.98rem; }
+.ledger th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--ink-2);
+  border-bottom: 2px solid var(--ink);
+  padding: 6px 8px;
+}
+.ledger td { padding: 6px 8px; border-bottom: 1px solid var(--mist); }
+.ledger td.num { font-variant-numeric: tabular-nums; }
+.ledger td.adj { color: var(--red); font-weight: 600; }
+.ledger tr.cur td { background: var(--sand); }
+.ledger .def { color: var(--ink-2); }
+.ledger .empty { color: var(--mist); }
+
+pre.code {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--grey);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  line-height: 1.55;
+  overflow-x: auto;
+  color: var(--ink);
+}
+pre.code .c { color: var(--muted); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+button {
+  font: inherit;
+  font-size: 0.98rem;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 6px;
+  border: 1.5px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+button:hover:not(:disabled) { background: var(--sand); }
+button.primary { background: var(--ink); color: var(--blush); }
+button.primary:hover:not(:disabled) { background: var(--ink-2); }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
+
+.dots { display: flex; gap: 6px; flex-wrap: wrap; }
+.dots button {
+  width: 30px; height: 30px; padding: 0;
+  border-radius: 50%;
+  font-size: 0.8rem;
+  border: 1.5px solid var(--mist);
+  color: var(--ink-2);
+}
+.dots button.fw.done { background: var(--mist); border-color: var(--mist); }
+.dots button.rv.done { background: var(--sand); border-color: var(--sand); }
+.dots button.now { border-color: var(--ink); background: var(--ink); color: var(--blush); }
+.dots button.rv.now { border-color: var(--red); background: var(--red); }
+.hint { font-size: 0.85rem; color: var(--muted); }
+
+footer {
+  border-top: 2px solid var(--ink);
+  padding: 14px 0 22px;
+  font-size: 0.92rem;
+  color: var(--ink-2);
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+footer b { font-weight: 700; color: var(--ink); }
+
+/* SVG */
+.edge { stroke: var(--muted); stroke-width: 1.6; fill: none; transition: stroke 0.3s, stroke-width 0.3s; }
+.edge.fan { stroke: var(--ink); stroke-dasharray: 5 4; stroke-width: 2; }
+.edge.fwd { stroke: var(--ink); stroke-width: 3; }
+.edge.rev { stroke: var(--red); stroke-width: 3; }
+.node circle { stroke: var(--ink-2); stroke-width: 1.6; fill: var(--blush); transition: stroke-width 0.3s, stroke 0.3s; }
+.node.leaf circle { fill: var(--sand); }
+.node.root circle { stroke: var(--red); }
+.node.cur circle { stroke-width: 4; stroke: var(--ink); }
+.node.cur.rv circle { stroke: var(--red); }
+.node text { font-family: var(--font); font-size: 22px; font-weight: 600; fill: var(--ink); text-anchor: middle; dominant-baseline: central; }
+.node .nm { font-size: 13px; font-weight: 500; fill: var(--muted); }
+.badge rect { rx: 6; transition: opacity 0.3s; }
+.badge text { font-family: var(--font); font-size: 15px; font-weight: 600; dominant-baseline: central; font-variant-numeric: tabular-nums; }
+.badge.f rect { fill: var(--grey); stroke: var(--mist); stroke-width: 1.2; }
+.badge.f text { fill: var(--ink); }
+.badge.a rect { fill: #fff; stroke: var(--red); stroke-width: 1.4; }
+.badge.a text { fill: var(--red); }
+.badge.a.part rect { stroke-dasharray: 4 3; }
+.badge.a.sum rect { stroke-width: 2.4; }
+.badge { transition: opacity 0.35s; }
+.badge.off, .elab.off { opacity: 0; }
+.elab rect { fill: var(--blush); stroke: var(--red); stroke-width: 1; rx: 9; }
+.elab text { font-family: var(--font); font-size: 12.5px; font-weight: 600; fill: var(--red); text-anchor: middle; dominant-baseline: central; }
+.elab { transition: opacity 0.35s; }
+.pulse circle { stroke: #fff; stroke-width: 2; }
+.pulse text { font-family: var(--font); font-size: 14px; font-weight: 700; text-anchor: middle; paint-order: stroke; stroke: var(--blush); stroke-width: 4px; }
+
+@media (min-width: 901px) {
+  .stage { align-self: start; position: sticky; top: calc(12px + env(safe-area-inset-top, 0px)); }
+}
+@media (max-width: 900px) {
+  main { grid-template-columns: 1fr; }
+  header.top { grid-template-columns: 1fr; }
+  .wrap { padding: 20px 16px 0; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Automatic Differentiation and Chain Rule</h1>
+      <p class="eq">Reverse-mode differentiation of <span class="math">C = (x + y) / (x &minus; y)</span>, one node at a time</p>
+    </div>
+    <div class="inputs" aria-label="Input values">
+      <label>x
+        <span class="row"><input type="range" id="sx" min="-5" max="5" step="0.5" value="3"><output id="ox">3</output></span>
+      </label>
+      <label>y
+        <span class="row"><input type="range" id="sy" min="-5" max="5" step="0.5" value="1"><output id="oy">1</output></span>
+      </label>
+    </div>
+  </header>
+
+  <main>
+    <section class="stage" aria-label="Expression graph">
+      <div class="caption" id="cap" aria-live="polite"></div>
+      <svg id="g" viewBox="0 0 540 540" role="img" aria-label="Expression graph for C equals x plus y over x minus y">
+        <defs>
+          <marker id="mk-n" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1L9 5L1 9z" fill="#8ba0a4"/></marker>
+          <marker id="mk-f" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M1 1L9 5L1 9z" fill="#183e4b"/></marker>
+          <marker id="mk-r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M1 1L9 5L1 9z" fill="#d74a49"/></marker>
+        </defs>
+        <g id="edges"></g>
+        <g id="elabs"></g>
+        <g id="nodes"></g>
+        <g id="badges"></g>
+        <g id="pulses"></g>
+      </svg>
+      <div class="legend">
+        <span><i class="sw f"></i>forward value</span>
+        <span><i class="sw a"></i>adjoint <span class="math">&part;C/&part;v</span></span>
+        <span><i class="sw p"></i>partial adjoint, still waiting</span>
+      </div>
+    </section>
+
+    <section class="panel" aria-live="polite">
+      <div class="phase" id="phase"><b>Setup</b><span id="count">Step 1 of 11</span></div>
+      <h2 id="title">The expression graph</h2>
+      <div class="warn" id="warn">x &minus; y = 0, so the division is undefined. Move x or y to continue past the subtraction.</div>
+      <div class="narr" id="narr"></div>
+      <div class="rule" id="rule"></div>
+
+      <table class="ledger" aria-label="Evaluation trace">
+        <thead><tr><th>node</th><th>definition</th><th>value</th><th>adjoint</th></tr></thead>
+        <tbody id="ledger"></tbody>
+      </table>
+
+      <div id="codewrap" hidden>
+        <pre class="code" id="code"></pre>
+      </div>
+
+      <div class="controls">
+        <button id="bPrev" aria-label="Previous step">Back</button>
+        <button id="bPlay" class="primary">Play</button>
+        <button id="bNext">Next step</button>
+        <button id="bReset">Start over</button>
+      </div>
+      <div class="dots" id="dots" aria-label="Jump to step"></div>
+      <div class="hint">Keys: right and left arrows step, space plays or pauses.</div>
+    </section>
+  </main>
+
+  <footer>
+    <span><b>CPE486/586:</b> Machine Learning for Engineering Applications</span>
+    <span>University of Alabama in Huntsville</span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var SVGNS = "http://www.w3.org/2000/svg";
+  var R = 26;
+  var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var N = {
+    C:   { x: 270, y: 62,  sym: "C", cls: "root", nm: "" },
+    div: { x: 270, y: 170, sym: "\u00f7", cls: "", nm: "v\u2085", nx: 270, ny: 208 },
+    add: { x: 150, y: 300, sym: "+", cls: "", nm: "v\u2083", nx: 114, ny: 262 },
+    sub: { x: 390, y: 300, sym: "\u2212", cls: "", nm: "v\u2084", nx: 426, ny: 262 },
+    x:   { x: 150, y: 440, sym: "x", cls: "leaf", nm: "v\u2081", nx: 116, ny: 472 },
+    y:   { x: 390, y: 440, sym: "y", cls: "leaf", nm: "v\u2082", nx: 424, ny: 472 }
+  };
+
+  // Edges run child to parent, in the forward direction.
+  var E = {
+    "x-add": ["x", "add"], "y-add": ["y", "add"],
+    "x-sub": ["x", "sub"], "y-sub": ["y", "sub"],
+    "add-div": ["add", "div"], "sub-div": ["sub", "div"],
+    "div-C": ["div", "C"]
+  };
+
+  // Local derivative label positions
+  var LPOS = {
+    "div-C": [300, 116], "add-div": [186, 228], "sub-div": [364, 228],
+    "x-add": [120, 370], "y-sub": [420, 370],
+    "x-sub": [232, 414], "y-add": [308, 414]
+  };
+
+  var LAST = 10;
+  var step = 0, playing = false, timer = null, token = 0;
+  var V = {};
+
+  function fmt(n) {
+    if (!isFinite(n)) return "undefined";
+    var r = Math.round(n * 10000) / 10000;
+    if (Object.is(r, -0)) r = 0;
+    return String(r).replace("-", "\u2212");
+  }
+  function term(n) { return n < 0 ? "(" + fmt(n) + ")" : fmt(n); }
+  function py(n) {
+    var r = Math.round(n * 10000) / 10000;
+    if (Object.is(r, -0)) r = 0;
+    return Number.isInteger(r) ? r.toFixed(1) : String(r);
+  }
+
+  function compute() {
+    var x = parseFloat(document.getElementById("sx").value);
+    var y = parseFloat(document.getElementById("sy").value);
+    var v3 = x + y, v4 = x - y, v5 = v3 / v4;
+    var b5 = 1, b3 = 1 / v4, b4 = -v3 / (v4 * v4);
+    V = {
+      x: x, y: y, v3: v3, v4: v4, v5: v5,
+      b5: b5, b3: b3, b4: b4,
+      lx_add: 1, ly_add: 1, lx_sub: 1, ly_sub: -1,
+      bx1: b3, by1: b3, bx2: b4, by2: -b4,
+      bx: b3 + b4, by: b3 - b4,
+      ok: v4 !== 0
+    };
+    document.getElementById("ox").textContent = fmt(x);
+    document.getElementById("oy").textContent = fmt(y);
+  }
+
+  function el(tag, attrs, parent) {
+    var e = document.createElementNS(SVGNS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+
+  function ends(a, b, padA, padB) {
+    var dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy);
+    var ux = dx / L, uy = dy / L;
+    return [a.x + ux * padA, a.y + uy * padA, b.x - ux * padB, b.y - uy * padB];
+  }
+
+  var edgeEls = {}, nodeEls = {}, badgeEls = {}, labEls = {};
+
+  function build() {
+    var gE = document.getElementById("edges");
+    Object.keys(E).forEach(function (id) {
+      var p = ends(N[E[id][0]], N[E[id][1]], R + 2, R + 7);
+      edgeEls[id] = el("line", { x1: p[0], y1: p[1], x2: p[2], y2: p[3], "class": "edge", "marker-end": "url(#mk-n)" }, gE);
+    });
+    var gN = document.getElementById("nodes");
+    Object.keys(N).forEach(function (id) {
+      var n = N[id];
+      var g = el("g", { "class": "node " + n.cls }, gN);
+      el("circle", { cx: n.x, cy: n.y, r: R }, g);
+      var t = el("text", { x: n.x, y: n.y + (id === "sub" ? -1 : 0) }, g);
+      t.textContent = n.sym;
+      if (id === "x" || id === "y") t.setAttribute("font-style", "italic");
+      if (n.nm) {
+        var s = el("text", { x: n.nx, y: n.ny, "class": "nm" }, g);
+        s.textContent = n.nm;
+      }
+      nodeEls[id] = g;
+    });
+    var gB = document.getElementById("badges");
+    function mk(id, kind, ax, ay, anchor) {
+      var g = el("g", { "class": "badge off " + kind }, gB);
+      var r = el("rect", {}, g);
+      var t = el("text", { x: ax, y: ay, "text-anchor": anchor }, g);
+      badgeEls[id] = { g: g, r: r, t: t };
+    }
+    // forward badges
+    mk("fC", "f", N.C.x - 40, N.C.y, "end");
+    mk("fdiv", "f", N.div.x - 40, N.div.y, "end");
+    mk("fadd", "f", N.add.x - 40, N.add.y - 16, "end");
+    mk("fsub", "f", N.sub.x + 40, N.sub.y - 16, "start");
+    mk("fx", "f", N.x.x - 40, N.x.y, "end");
+    mk("fy", "f", N.y.x + 40, N.y.y, "start");
+    // adjoint badges
+    mk("aC", "a", N.C.x + 40, N.C.y, "start");
+    mk("adiv", "a", N.div.x + 40, N.div.y, "start");
+    mk("aadd", "a", N.add.x - 40, N.add.y + 18, "end");
+    mk("asub", "a", N.sub.x + 40, N.sub.y + 18, "start");
+    mk("ax", "a", N.x.x, N.x.y + 56, "middle");
+    mk("ay", "a", N.y.x, N.y.y + 56, "middle");
+
+    var gL = document.getElementById("elabs");
+    Object.keys(LPOS).forEach(function (id) {
+      var g = el("g", { "class": "elab off" }, gL);
+      var r = el("rect", {}, g);
+      var t = el("text", { x: LPOS[id][0], y: LPOS[id][1] }, g);
+      labEls[id] = { g: g, r: r, t: t };
+    });
+  }
+
+  function fit(obj, padX, padY) {
+    var bb = obj.t.getBBox();
+    obj.r.setAttribute("x", bb.x - padX);
+    obj.r.setAttribute("y", bb.y - padY);
+    obj.r.setAttribute("width", bb.width + 2 * padX);
+    obj.r.setAttribute("height", bb.height + 2 * padY);
+  }
+
+  function setBadge(id, text, on, extra) {
+    var b = badgeEls[id];
+    b.t.textContent = text;
+    var base = "badge " + (id.charAt(0) === "f" ? "f" : "a");
+    b.g.setAttribute("class", base + (on ? "" : " off") + (extra ? " " + extra : ""));
+    fit(b, 8, 4);
+  }
+
+  function setLab(id, text, on) {
+    var l = labEls[id];
+    l.t.textContent = text;
+    l.g.setAttribute("class", "elab" + (on ? "" : " off"));
+    fit(l, 7, 3);
+  }
+
+  // Step table
+  function M(s) { return "<span class='math'>" + s + "</span>"; }
+  function B(v) { return "<span class='ov'>" + v + "</span>"; }
+  var f = fmt, t = term;
+
+  var STEPS = [
+    { ph: "Setup", title: "Build the expression graph", cur: ["x", "y"], edges: [], dir: "fan",
+      cap: function () { return "The graph for C = (x + y)/(x \u2212 y). Dashed edges mark the fan-out of x and y."; },
+      rule: function () { return "Notation: the adjoint " + M(B("v") + " = &part;C/&part;v") + " measures how much the output C changes when node v changes."; },
+      text: function () {
+        return "<p>Automatic differentiation starts by breaking the formula into primitive operations. The result is a graph. Here it has two leaves, " + M("x") + " and " + M("y") + ", three operators, and the root " + M("C") + ".</p>" +
+          "<p>Look at the dashed edges. " + M("x") + " feeds the + node and the &minus; node. So does " + M("y") + ". A node with two consumers has <b>fan-out 2</b>. That fan-out is where the chain rule will need a sum.</p>" +
+          "<p>The walk has two phases. The forward pass computes values from the leaves up. The reverse pass computes adjoints from the root down.</p>";
+      } },
+    { ph: "Forward pass", title: "Load the inputs", cur: ["x", "y"], edges: [], dir: "fwd",
+      cap: function () { return "Loading the inputs: v\u2081 = x = " + f(V.x) + " and v\u2082 = y = " + f(V.y) + "."; },
+      rule: function () { return "A leaf takes its value from the input. Nothing is computed yet."; },
+      text: function () {
+        return "<p>The forward pass begins at the leaves. They hold the input values and have no arguments to wait for.</p>" +
+          "<p>In the evaluation trace they become " + M("v<sub>1</sub> = x = " + f(V.x)) + " and " + M("v<sub>2</sub> = y = " + f(V.y)) + ". The trace is the list of intermediate values in the order they're computed. The table below records it as the walk proceeds.</p>";
+      } },
+    { ph: "Forward pass", title: "Compute the sum", cur: ["add"], edges: ["x-add", "y-add"], dir: "fwd",
+      pulse: function () { return [["x-add", f(V.x)], ["y-add", f(V.y)]]; },
+      cap: function () { return "Sending v\u2081 = " + f(V.x) + " and v\u2082 = " + f(V.y) + " up into the + node."; },
+      rule: function () { return "Forward rule: a node runs as soon as its arguments are known."; },
+      text: function () {
+        return "<p>The + node can run once both arguments are ready. The two pulses carry " + M("v<sub>1</sub>") + " and " + M("v<sub>2</sub>") + " up the edges into it.</p>" +
+          "<p>It computes " + M("v<sub>3</sub> = v<sub>1</sub> + v<sub>2</sub> = " + f(V.x) + " + " + t(V.y) + " = " + f(V.v3)) + " and stores the result.</p>" +
+          "<p>This is the first use of " + M("x") + " and the first use of " + M("y") + ".</p>";
+      } },
+    { ph: "Forward pass", title: "Compute the difference", cur: ["sub"], edges: ["x-sub", "y-sub"], dir: "fwd",
+      pulse: function () { return [["x-sub", f(V.x)], ["y-sub", f(V.y)]]; },
+      cap: function () { return "Sending the same x = " + f(V.x) + " and y = " + f(V.y) + " into the \u2212 node."; },
+      rule: function () { return "Fan-out: " + M("x") + " and " + M("y") + " now have two outgoing edges apiece."; },
+      text: function () {
+        return "<p>The &minus; node reads " + M("x") + " and " + M("y") + " as well. It computes " + M("v<sub>4</sub> = v<sub>1</sub> &minus; v<sub>2</sub> = " + f(V.x) + " &minus; " + t(V.y) + " = " + f(V.v4)) + ".</p>" +
+          "<p>This is the second use of both leaves. In the forward direction nothing special happens, since the value is copied along two edges. On the way back, " + M("x") + " will receive two gradient messages and will have to combine them.</p>";
+      } },
+    { ph: "Forward pass", title: "Compute the quotient", cur: ["div"], edges: ["add-div", "sub-div"], dir: "fwd",
+      pulse: function () { return [["add-div", f(V.v3)], ["sub-div", f(V.v4)]]; },
+      cap: function () { return "Sending v\u2083 = " + f(V.v3) + " and v\u2084 = " + f(V.v4) + " into the \u00f7 node."; },
+      rule: function () { return "Stored for the reverse pass: " + M("v<sub>3</sub> = " + f(V.v3)) + " and " + M("v<sub>4</sub> = " + f(V.v4)) + "."; },
+      text: function () {
+        return "<p>The division waits for both intermediate results. It computes " + M("v<sub>5</sub> = v<sub>3</sub> / v<sub>4</sub> = " + f(V.v3) + " / " + t(V.v4) + " = " + f(V.v5)) + ".</p>" +
+          "<p>Reverse-mode AD keeps " + M("v<sub>3</sub>") + " and " + M("v<sub>4</sub>") + " in memory at this point. The division's local derivatives, " + M("1/v<sub>4</sub>") + " and " + M("&minus;v<sub>3</sub>/v<sub>4</sub><sup>2</sup>") + ", depend on them. Storing forward values like these is why training a network uses so much memory.</p>";
+      } },
+    { ph: "Forward pass", title: "Reach the root", cur: ["C"], edges: ["div-C"], dir: "fwd",
+      pulse: function () { return [["div-C", f(V.v5)]]; },
+      cap: function () { return "Passing v\u2085 = " + f(V.v5) + " to the root. C = " + f(V.v5) + "."; },
+      rule: function () { return "Forward pass complete. Six values are stored."; },
+      text: function () {
+        return "<p>The root takes the value of " + M("v<sub>5</sub>") + ", so " + M("C = " + f(V.v5)) + ".</p>" +
+          "<p>The forward pass is done. The graph now holds a value at the six nodes, and the table shows them. The next phase runs in the opposite direction and computes derivatives.</p>";
+      } },
+    { ph: "Reverse pass", title: "Seed the root", cur: ["C", "div"], edges: ["div-C"], dir: "rev",
+      pulse: function () { return [["div-C", "1"]]; },
+      cap: function () { return "Seeding C\u0304 = 1 and sending 1 \u00d7 1 = 1 down to the \u00f7 node."; },
+      rule: function () { return "Reverse rule: the message down an edge equals the parent's adjoint times the edge's local derivative."; },
+      text: function () {
+        return "<p>The reverse pass starts at the root with " + M(B("C") + " = &part;C/&part;C = 1") + ". In PyTorch, calling " + "<code>C.backward()</code> supplies this seed.</p>" +
+          "<p>The edge from " + M("v<sub>5</sub>") + " to " + M("C") + " has local derivative " + M("&part;C/&part;v<sub>5</sub> = 1") + ". The message down that edge is the seed times the local derivative, so " + M(B("v") + "<sub>5</sub> = 1 &times; 1 = 1") + ".</p>";
+      } },
+    { ph: "Reverse pass", title: "Split the adjoint at the division", cur: ["add", "sub"], edges: ["add-div", "sub-div"], dir: "rev",
+      pulse: function () { return [["add-div", f(V.b3)], ["sub-div", f(V.b4)]]; },
+      cap: function () { return "The \u00f7 node sends 1 \u00d7 " + t(V.b3) + " = " + f(V.b3) + " to + and 1 \u00d7 " + t(V.b4) + " = " + f(V.b4) + " to \u2212."; },
+      rule: function () { return "Quotient rule for " + M("c = a/b") + ": " + M("&part;c/&part;a = 1/b") + " and " + M("&part;c/&part;b = &minus;a/b<sup>2</sup>") + "."; },
+      text: function () {
+        return "<p>The division has two arguments, so it sends two messages. Its local derivatives use the values stored in the forward pass:</p>" +
+          "<p>" + M("&part;v<sub>5</sub>/&part;v<sub>3</sub> = 1/v<sub>4</sub> = 1/" + t(V.v4) + " = " + f(V.b3)) + "<br>" +
+          M("&part;v<sub>5</sub>/&part;v<sub>4</sub> = &minus;v<sub>3</sub>/v<sub>4</sub><sup>2</sup> = &minus;" + t(V.v3) + "/" + f(V.v4 * V.v4) + " = " + f(V.b4)) + "</p>" +
+          "<p>Multiplying by " + M(B("v") + "<sub>5</sub> = 1") + " gives " + M(B("v") + "<sub>3</sub> = " + f(V.b3)) + " and " + M(B("v") + "<sub>4</sub> = " + f(V.b4)) + ". The + and &minus; nodes have only one consumer, the division. So their adjoints are final immediately.</p>";
+      } },
+    { ph: "Reverse pass", title: "First messages reach the leaves", cur: ["x", "y"], edges: ["x-add", "y-add"], dir: "rev",
+      pulse: function () { return [["x-add", f(V.bx1)], ["y-add", f(V.by1)]]; },
+      cap: function () { return "The + node sends " + f(V.b3) + " \u00d7 1 = " + f(V.bx1) + " to x and " + f(V.b3) + " \u00d7 1 = " + f(V.by1) + " to y."; },
+      rule: function () { return "Addition " + M("c = a + b") + ": " + M("&part;c/&part;a = 1") + " and " + M("&part;c/&part;b = 1") + "."; },
+      text: function () {
+        return "<p>The + node passes its adjoint " + M(B("v") + "<sub>3</sub> = " + f(V.b3)) + " to its two arguments. Addition has local derivative 1 for both inputs, so " + M("x") + " and " + M("y") + " receive " + M(f(V.bx1)) + " apiece.</p>" +
+          "<p>Neither leaf is finished. With fan-out 2, a leaf must hear from two consumers, and so far only the + node has reported. The dashed badge shows a <b>partial</b> adjoint, " + M(f(V.bx1) + " + ?") + ", waiting for the &minus; node.</p>" +
+          "<p>A hand calculation often goes wrong here. Stopping now would give " + M("&part;C/&part;x = " + f(V.bx1)) + ", which is incorrect.</p>";
+      } },
+    { ph: "Reverse pass", title: "Add the messages at the fan-out", cur: ["x", "y"], edges: ["x-sub", "y-sub"], dir: "rev",
+      pulse: function () { return [["x-sub", f(V.bx2)], ["y-sub", f(V.by2)]]; },
+      cap: function () { return "The \u2212 node sends " + t(V.b4) + " \u00d7 1 = " + f(V.bx2) + " to x and " + t(V.b4) + " \u00d7 (\u22121) = " + f(V.by2) + " to y. The leaves add."; },
+      rule: function () { return "Chain rule at fan-out: " + M("&part;C/&part;x = &Sigma;<sub>u</sub> (&part;C/&part;u)(&part;u/&part;x)") + ", summed over the consumers " + M("u") + " of " + M("x") + "."; },
+      text: function () {
+        return "<p>The &minus; node sends its adjoint " + M(B("v") + "<sub>4</sub> = " + f(V.b4)) + " down. Subtraction has " + M("&part;v<sub>4</sub>/&part;x = 1") + " and " + M("&part;v<sub>4</sub>/&part;y = &minus;1") + ". So " + M("x") + " receives " + M(f(V.bx2)) + " and " + M("y") + " receives " + M(f(V.by2)) + ". The sign flip on the " + M("y") + " edge matters.</p>" +
+          "<p>Both consumers have now reported. The leaves add their messages:<br>" +
+          M(B("x") + " = " + f(V.bx1) + " + " + t(V.bx2) + " = " + f(V.bx)) + "<br>" +
+          M(B("y") + " = " + f(V.by1) + " + " + t(V.by2) + " = " + f(V.by)) + "</p>" +
+          "<p>That addition is the sum over paths in the chain rule. The software never lists the paths. It adds the messages at the node where they meet.</p>";
+      } },
+    { ph: "Check", title: "Compare with calculus and PyTorch", cur: ["x", "y"], edges: [], dir: "rev",
+      cap: function () { return "Result: \u2202C/\u2202x = " + f(V.bx) + " and \u2202C/\u2202y = " + f(V.by) + "."; },
+      rule: function () { return "One reverse pass produced both partial derivatives."; },
+      text: function () {
+        var d = V.v4 * V.v4;
+        return "<p>Differentiating by hand with the quotient rule gives " + M("&part;C/&part;x = &minus;2y/(x &minus; y)<sup>2</sup> = " + f(-2 * V.y / d)) + " and " + M("&part;C/&part;y = 2x/(x &minus; y)<sup>2</sup> = " + f(2 * V.x / d)) + ". Those match the two leaf adjoints.</p>" +
+          "<p>In PyTorch, <code>C.backward()</code> runs this same reverse pass. The results land in <code>x.grad</code> and <code>y.grad</code>.</p>" +
+          "<p>Move the sliders and replay. The graph stays the same, and the numbers change with the inputs.</p>";
+      } }
+  ];
+
+  function maxStep() { return V.ok ? LAST : 3; }
+
+  function render(s, hl) {
+    if (hl === undefined) hl = s;
+    var st = STEPS[hl];
+    var rev = st.dir === "rev" && hl >= 6;
+
+    // Edges
+    Object.keys(edgeEls).forEach(function (id) {
+      var c = "edge", m = "url(#mk-n)", ms = "none";
+      if (hl === 0 && id.indexOf("-div") < 0 && id !== "div-C") { c += " fan"; m = "url(#mk-f)"; }
+      if (st.edges.indexOf(id) >= 0) {
+        if (rev) { c += " rev"; m = "none"; ms = "url(#mk-r)"; } else { c += " fwd"; m = "url(#mk-f)"; }
+      }
+      edgeEls[id].setAttribute("class", c);
+      edgeEls[id].setAttribute("marker-end", m);
+      edgeEls[id].setAttribute("marker-start", ms);
+    });
+
+    // Nodes
+    Object.keys(nodeEls).forEach(function (id) {
+      var n = N[id];
+      var c = "node " + n.cls;
+      if (st.cur.indexOf(id) >= 0 && hl > 0) c += " cur" + (rev ? " rv" : "");
+      nodeEls[id].setAttribute("class", c);
+    });
+
+    // Forward values
+    setBadge("fx", fmt(V.x), s >= 1);
+    setBadge("fy", fmt(V.y), s >= 1);
+    setBadge("fadd", fmt(V.v3), s >= 2);
+    setBadge("fsub", fmt(V.v4), s >= 3);
+    setBadge("fdiv", fmt(V.v5), s >= 4);
+    setBadge("fC", fmt(V.v5), s >= 5);
+
+    // Adjoints
+    setBadge("aC", "1", s >= 6);
+    setBadge("adiv", "1", s >= 6);
+    setBadge("aadd", fmt(V.b3), s >= 7);
+    setBadge("asub", fmt(V.b4), s >= 7);
+    if (s === 8) {
+      setBadge("ax", fmt(V.bx1) + " + ?", true, "part");
+      setBadge("ay", fmt(V.by1) + " + ?", true, "part");
+    } else {
+      setBadge("ax", fmt(V.bx1) + " + " + term(V.bx2) + " = " + fmt(V.bx), s >= 9, "sum");
+      setBadge("ay", fmt(V.by1) + " + " + term(V.by2) + " = " + fmt(V.by), s >= 9, "sum");
+    }
+
+    // Local derivative labels
+    setLab("div-C", "\u00d71", s >= 6);
+    setLab("add-div", "\u00d7" + fmt(1 / V.v4), s >= 7);
+    setLab("sub-div", "\u00d7" + term(-V.v3 / (V.v4 * V.v4)), s >= 7);
+    setLab("x-add", "\u00d71", s >= 8);
+    setLab("y-add", "\u00d71", s >= 8);
+    setLab("x-sub", "\u00d71", s >= 9);
+    setLab("y-sub", "\u00d7(\u22121)", s >= 9);
+
+    // Panel
+    var ph = document.getElementById("phase");
+    ph.className = "phase" + (hl >= 6 ? " rev" : "");
+    ph.querySelector("b").textContent = st.ph;
+    document.getElementById("count").textContent = "Step " + (hl + 1) + " of " + (LAST + 1);
+    document.getElementById("title").textContent = st.title;
+    document.getElementById("narr").innerHTML = st.text();
+    document.getElementById("rule").innerHTML = st.rule();
+    document.getElementById("cap").textContent = st.cap();
+    document.getElementById("cap").className = "caption" + (hl >= 6 ? " rev" : "");
+    document.getElementById("warn").className = "warn" + (V.ok ? "" : " on");
+
+    ledger(s, hl);
+
+    var cw = document.getElementById("codewrap");
+    cw.hidden = hl !== LAST;
+    if (hl === LAST) {
+      document.getElementById("code").innerHTML =
+        "import torch\n\n" +
+        "x = torch.tensor(" + py(V.x) + ", requires_grad=True)\n" +
+        "y = torch.tensor(" + py(V.y) + ", requires_grad=True)\n" +
+        "C = (x + y) / (x - y)\n" +
+        "C.backward()\n" +
+        "print(x.grad.item(), y.grad.item())\n" +
+        "<span class='c'># " + py(V.bx) + " " + py(V.by) + "</span>";
+    }
+
+    // Controls
+    document.getElementById("bPrev").disabled = hl === 0;
+    document.getElementById("bNext").disabled = hl >= maxStep();
+    document.getElementById("bPlay").disabled = hl >= maxStep() && !playing;
+    document.getElementById("bPlay").textContent = playing ? "Pause" : "Play";
+    var dots = document.getElementById("dots").children;
+    for (var i = 0; i < dots.length; i++) {
+      var d = dots[i];
+      d.className = (i >= 6 ? "rv" : "fw") + (i < hl ? " done" : "") + (i === hl ? " now" : "");
+      d.disabled = i > maxStep();
+      d.setAttribute("aria-current", i === hl ? "step" : "false");
+    }
+  }
+
+  function ledger(s, hl) {
+    var rows = [
+      ["v\u2081", "x", s >= 1 ? fmt(V.x) : "", s >= 9 ? fmt(V.bx) : (s === 8 ? fmt(V.bx1) + " + ?" : ""), ["x"]],
+      ["v\u2082", "y", s >= 1 ? fmt(V.y) : "", s >= 9 ? fmt(V.by) : (s === 8 ? fmt(V.by1) + " + ?" : ""), ["y"]],
+      ["v\u2083", "v\u2081 + v\u2082", s >= 2 ? fmt(V.v3) : "", s >= 7 ? fmt(V.b3) : "", ["add"]],
+      ["v\u2084", "v\u2081 \u2212 v\u2082", s >= 3 ? fmt(V.v4) : "", s >= 7 ? fmt(V.b4) : "", ["sub"]],
+      ["v\u2085", "v\u2083 / v\u2084", s >= 4 ? fmt(V.v5) : "", s >= 6 ? "1" : "", ["div"]],
+      ["C", "v\u2085", s >= 5 ? fmt(V.v5) : "", s >= 6 ? "1" : "", ["C"]]
+    ];
+    var cur = STEPS[hl].cur;
+    var html = rows.map(function (r) {
+      var on = hl > 0 && r[4].some(function (k) { return cur.indexOf(k) >= 0; });
+      return "<tr" + (on ? " class='cur'" : "") + "><td><i>" + r[0] + "</i></td><td class='def'><i>" + r[1] + "</i></td>" +
+        "<td class='num'>" + (r[2] || "<span class='empty'>&middot;</span>") + "</td>" +
+        "<td class='num adj'>" + (r[3] || "<span class='empty'>&middot;</span>") + "</td></tr>";
+    }).join("");
+    document.getElementById("ledger").innerHTML = html;
+  }
+
+  // Pulses
+  function clearPulses() { document.getElementById("pulses").innerHTML = ""; }
+
+  function runPulses(list, rev, myToken) {
+    var gP = document.getElementById("pulses");
+    var color = rev ? "#d74a49" : "#183e4b";
+    var dur = 1100;
+    var items = list.map(function (p) {
+      var e = E[p[0]];
+      var a = N[e[0]], b = N[e[1]];
+      var pts = rev ? ends(b, a, R + 2, R + 4) : ends(a, b, R + 2, R + 4);
+      var g = el("g", { "class": "pulse" }, gP);
+      el("circle", { r: 8, fill: color }, g);
+      var t = el("text", { y: -15, fill: color }, g);
+      t.textContent = p[1];
+      return { g: g, pts: pts };
+    });
+    return new Promise(function (resolve) {
+      var t0 = null;
+      function frame(ts) {
+        if (myToken !== token) { resolve(false); return; }
+        if (t0 === null) t0 = ts;
+        var k = Math.min(1, (ts - t0) / dur);
+        var e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+        items.forEach(function (it) {
+          var x = it.pts[0] + (it.pts[2] - it.pts[0]) * e;
+          var y = it.pts[1] + (it.pts[3] - it.pts[1]) * e;
+          it.g.setAttribute("transform", "translate(" + x.toFixed(1) + "," + y.toFixed(1) + ")");
+        });
+        if (k < 1) requestAnimationFrame(frame);
+        else { setTimeout(function () { clearPulses(); resolve(myToken === token); }, 120); }
+      }
+      requestAnimationFrame(frame);
+    });
+  }
+
+  function stopTimer() { if (timer) { clearTimeout(timer); timer = null; } }
+
+  function go(target, animate) {
+    target = Math.max(0, Math.min(maxStep(), target));
+    token++;
+    var my = token;
+    stopTimer();
+    clearPulses();
+    var st = STEPS[target];
+    if (animate && !reduced && target === step + 1 && st.pulse) {
+      render(step, target);
+      runPulses(st.pulse(), st.dir === "rev", my).then(function (done) {
+        if (!done) return;
+        step = target;
+        render(step);
+        schedule();
+      });
+    } else {
+      step = target;
+      render(step);
+      schedule();
+    }
+  }
+
+  function schedule() {
+    if (!playing) return;
+    if (step >= maxStep()) { playing = false; render(step); return; }
+    timer = setTimeout(function () { go(step + 1, true); }, reduced ? 5000 : 4500);
+  }
+
+  function togglePlay() {
+    if (playing) { playing = false; token++; stopTimer(); clearPulses(); render(step); return; }
+    if (step >= maxStep()) return;
+    playing = true;
+    go(step + 1, true);
+  }
+
+  function init() {
+    compute();
+    build();
+    var dots = document.getElementById("dots");
+    for (var i = 0; i <= LAST; i++) {
+      var b = document.createElement("button");
+      b.textContent = String(i + 1);
+      b.setAttribute("aria-label", "Go to step " + (i + 1) + ": " + STEPS[i].title);
+      (function (k) { b.addEventListener("click", function () { playing = false; go(k, false); }); })(i);
+      dots.appendChild(b);
+    }
+    document.getElementById("bNext").addEventListener("click", function () { playing = false; go(step + 1, true); });
+    document.getElementById("bPrev").addEventListener("click", function () { playing = false; go(step - 1, false); });
+    document.getElementById("bReset").addEventListener("click", function () { playing = false; go(0, false); });
+    document.getElementById("bPlay").addEventListener("click", togglePlay);
+    ["sx", "sy"].forEach(function (id) {
+      document.getElementById(id).addEventListener("input", function () {
+        compute();
+        playing = false;
+        go(Math.min(step, maxStep()), false);
+      });
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.target && ev.target.tagName === "INPUT") return;
+      if (ev.key === "ArrowRight") { ev.preventDefault(); playing = false; go(step + 1, true); }
+      else if (ev.key === "ArrowLeft") { ev.preventDefault(); playing = false; go(step - 1, false); }
+      else if (ev.key === " ") { ev.preventDefault(); togglePlay(); }
+    });
+    render(0);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { render(step); });
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
