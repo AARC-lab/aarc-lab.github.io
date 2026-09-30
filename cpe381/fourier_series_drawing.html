@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Drawing with a Fourier Series | CPE 381</title>
+
+<!-- Bricolage Grotesque. The face is also distributed at https://bestfreefonts.com/bricolage-grotesque -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&display=swap" rel="stylesheet">
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23183e4b'/%3E%3Ccircle cx='28' cy='34' r='17' fill='none' stroke='%23fcf1ef' stroke-width='3.5'/%3E%3Ccircle cx='41' cy='23' r='8' fill='none' stroke='%238ba0a4' stroke-width='3'/%3E%3Cpath d='M28 34L41 23l6 5' fill='none' stroke='%23e8d8c9' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='47' cy='28' r='5' fill='%23d74a49'/%3E%3C/svg%3E">
+
+<style>
+:root{
+  --ink:#183e4b; --deep:#1b4552; --accent:#d74a49; --muted:#8ba0a4;
+  --rule:#ced3d7; --sand:#e8d8c9; --paper:#fcf1ef; --mist:#eaeaea;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ink:#183e4b; --deep:#1b4552; --accent:#d74a49; --muted:#8ba0a4;
+    --rule:#ced3d7; --sand:#e8d8c9; --paper:#fcf1ef; --mist:#eaeaea;
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#183e4b; --deep:#1b4552; --accent:#d74a49; --muted:#8ba0a4;
+  --rule:#ced3d7; --sand:#e8d8c9; --paper:#fcf1ef; --mist:#eaeaea;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--mist);color:var(--ink);
+  font-family:'Bricolage Grotesque',Verdana,Geneva,sans-serif;
+  font-optical-sizing:auto;font-variant-numeric:tabular-nums;line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+.shell{max-width:1220px;margin:0 auto;padding:22px 20px 0}
+
+header{display:flex;align-items:flex-end;gap:14px;border-bottom:2px solid var(--ink);padding-bottom:12px}
+h1{font-size:clamp(22px,3.2vw,32px);font-weight:800;letter-spacing:-.02em;margin:0;line-height:1.05}
+.sub{margin:3px 0 0;font-size:13.5px;color:var(--deep);max-width:60ch}
+.course{margin:0 0 3px auto;font-size:13px;color:var(--deep);font-weight:600}
+
+.layout{display:grid;grid-template-columns:292px minmax(0,1fr);gap:20px;margin-top:20px}
+@media (max-width:920px){.layout{grid-template-columns:1fr}}
+
+.panel{background:var(--paper);border:1px solid var(--rule);border-radius:14px;padding:15px 15px 17px}
+.panel + .panel{margin-top:14px}
+.panel h2{font-size:12.5px;font-weight:700;margin:0 0 10px;color:var(--deep)}
+.panel h3{font-size:12px;font-weight:700;margin:14px 0 7px;color:var(--muted)}
+.panel h3:first-child{margin-top:0}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{
+  font:inherit;font-size:12px;font-weight:600;cursor:pointer;
+  border:1px solid var(--rule);background:var(--mist);color:var(--deep);
+  padding:5px 10px;border-radius:999px;transition:background .15s,color .15s,border-color .15s;
+}
+.chip:hover{border-color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--sand);border-color:var(--ink);color:var(--ink)}
+
+.sl{margin-top:11px}
+.sl .row{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.sl .nm{font-size:13px;font-weight:600;color:var(--deep)}
+.sl .vl{font-size:16px;font-weight:700;color:var(--accent)}
+input[type=range]{width:100%;accent-color:var(--accent);margin:4px 0 0;height:22px}
+.hint{font-size:12.5px;color:var(--deep);margin:8px 0 0}
+.bar{display:flex;align-items:center;gap:10px}
+.play{font:inherit;font-size:13px;font-weight:700;cursor:pointer;flex:none;background:var(--accent);color:var(--paper);border:none;border-radius:999px;padding:7px 16px}
+.play:hover{background:#c23f3e}
+.reset{font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;background:transparent;color:var(--deep);border:1px solid var(--rule);border-radius:999px;padding:6px 13px;margin-top:10px}
+.reset:hover{border-color:var(--muted)}
+.reset + .reset{margin-left:7px}
+
+.stage{background:var(--paper);border:1px solid var(--rule);border-radius:14px;padding:16px 16px 12px;min-width:0}
+.eq{font-size:clamp(17px,2.3vw,23px);font-weight:700;letter-spacing:-.01em;margin:0 0 2px;color:var(--ink)}
+.eq b{color:var(--accent)}
+.eq sub{font-size:.62em;font-weight:700}
+.eq sup{font-size:.62em;font-weight:700}
+.eqsub{margin:0 0 12px;font-size:12.5px;color:var(--muted);font-weight:600}
+
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:760px){.pair{grid-template-columns:1fr}}
+.cell{min-width:0}
+.cap{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:0 0 7px}
+.cap .t{font-size:12.5px;font-weight:700;color:var(--deep)}
+.cap .s{font-size:11.5px;font-weight:600;color:var(--muted)}
+.plot{position:relative;width:100%;aspect-ratio:1/1;min-height:270px;max-height:58vh}
+canvas{display:block;width:100%;height:100%;border-radius:10px;touch-action:none}
+#cvDraw{cursor:crosshair}
+#cvEpi{cursor:default}
+
+.readout{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.pill{font-size:12.5px;font-weight:600;background:var(--mist);border:1px solid var(--rule);border-radius:999px;padding:4px 11px;color:var(--deep)}
+.pill b{color:var(--accent);font-weight:700}
+.note{margin:12px 0 0;padding:12px 14px;background:var(--mist);border-left:3px solid var(--sand);border-radius:0 10px 10px 0;font-size:13.5px;max-width:78ch}
+.note strong{color:var(--accent);font-weight:700}
+.note + .note{margin-top:9px}
+
+footer{
+  max-width:1220px;margin:26px auto 0;padding:14px 20px 24px;border-top:1px solid var(--rule);
+  font-size:12.5px;color:var(--deep);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;
+}
+footer span:last-child{color:var(--muted)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <header>
+    <svg width="42" height="42" viewBox="0 0 64 64" aria-hidden="true">
+      <rect width="64" height="64" rx="14" fill="#183e4b"/>
+      <circle cx="28" cy="34" r="17" fill="none" stroke="#fcf1ef" stroke-width="3.5"/>
+      <circle cx="41" cy="23" r="8" fill="none" stroke="#8ba0a4" stroke-width="3"/>
+      <path d="M28 34L41 23l6 5" fill="none" stroke="#e8d8c9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="47" cy="28" r="5" fill="#d74a49"/>
+    </svg>
+    <div>
+      <h1>Drawing with a Fourier series</h1>
+      <p class="sub">Let the signal be complex. Each coefficient becomes a rotating arm, and the tip of the last arm is the pen.</p>
+    </div>
+    <p class="course">Signals and Systems</p>
+  </header>
+
+  <div class="layout">
+    <aside>
+      <div class="panel">
+        <h2>Outline</h2>
+        <div class="chips" id="chipsShape"></div>
+        <p class="hint">Drag inside the left square to draw your own closed figure. The stroke closes itself when you release.</p>
+        <button class="reset" id="clear" type="button">Clear and draw</button>
+      </div>
+
+      <div class="panel">
+        <h2>Series</h2>
+        <div class="sl" id="slM"></div>
+        <div class="sl" id="slPair"></div>
+        <p class="hint">The pair slider picks one k and draws the ellipse traced by the terms k and minus k together.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Animation</h2>
+        <div class="bar">
+          <button class="play" id="play" aria-pressed="false">Play</button>
+          <input type="range" id="scrub" min="0" max="1" step="0.001" value="0" aria-label="Parameter t">
+        </div>
+        <div class="sl" id="slSpeed"></div>
+        <h3>Display</h3>
+        <div class="chips" id="chipsView"></div>
+        <p class="hint">The space bar starts and stops the sweep. The slider sets t by hand.</p>
+        <button class="reset" id="reset" type="button">Reset</button>
+      </div>
+    </aside>
+
+    <section class="stage">
+      <p class="eq" id="eq"></p>
+      <p class="eqsub" id="eqsub"></p>
+
+      <div class="pair">
+        <div class="cell">
+          <p class="cap"><span class="t">Your figure</span><span class="s" id="capL">draw here</span></p>
+          <div class="plot" id="wrapL"><canvas id="cvDraw"></canvas></div>
+        </div>
+        <div class="cell">
+          <p class="cap"><span class="t">The epicycle chain</span><span class="s" id="capR">press Play</span></p>
+          <div class="plot" id="wrapR"><canvas id="cvEpi"></canvas></div>
+        </div>
+      </div>
+
+      <div class="readout" id="readout"></div>
+
+      <p class="note" id="note1"></p>
+      <p class="note" id="note2"></p>
+    </section>
+  </div>
+</div>
+
+<footer>
+  <span>CPE 381</span>
+  <span>Draw on the left, watch the series rebuild it on the right.</span>
+</footer>
+
+<script>
+(function(){
+'use strict';
+
+var C = { ink:'#183e4b', deep:'#1b4552', accent:'#d74a49', muted:'#8ba0a4',
+          rule:'#ced3d7', sand:'#e8d8c9', paper:'#fcf1ef', mist:'#eaeaea' };
+var FONT = '"Bricolage Grotesque", Verdana, sans-serif';
+var TWO_PI = 2*Math.PI;
+
+/* Fixed sizes. The period of the parameter is one, so the fundamental
+   frequency is two pi. Raising N_SAMP refines the rectangle rule that
+   stands in for the analysis integral. */
+var N_SAMP = 512;
+var K_MAX  = 120;
+var STEPS  = 1000;
+
+var cvD = document.getElementById('cvDraw'), ctxD = cvD.getContext('2d');
+var cvE = document.getElementById('cvEpi'),  ctxE = cvE.getContext('2d');
+var WD = 420, HD = 420, WE = 420, HE = 420;
+
+/* State */
+var P = { M:30, pair:0, speed:0.22 };
+var VIEW = { circles:true, arms:true, ghost:true, samples:false, ellipse:false };
+var shapeId = 'star';
+
+var outline = [];     /* the closed polyline in world units */
+var samples = [];     /* N_SAMP points spaced evenly in arc length */
+var coeffs  = [];     /* every coefficient from minus K_MAX to K_MAX */
+var base    = null;   /* the term for k equal to zero */
+var order   = [];     /* the nonzero terms sorted by falling amplitude */
+var active  = [];     /* the subset kept at the present M */
+var recon   = [];     /* the reconstructed path at the present M */
+var errRms  = 0, perim = 0;
+
+var drawing = false, stroke = [];
+var phase = 0, playing = false;
+
+/* Geometry of the two squares. Both share one mapping, so a figure
+   lands in the same place and at the same size in either square. */
+function fitOf(W, H){ return { cx:W/2, cy:H/2, s:Math.min(W,H)*0.43 }; }
+function toWorld(f, px, py){ return { x:(px-f.cx)/f.s, y:(f.cy-py)/f.s }; }
+function PX(f, p){ return f.cx + p.x*f.s; }
+function PY(f, p){ return f.cy - p.y*f.s; }
+
+function font(ctx, w, s){ ctx.font = w + ' ' + s + 'px ' + FONT; }
+
+function board(ctx, W, H, label){
+  var g, step = 0.25, f = fitOf(W, H), a, b;
+  ctx.fillStyle = C.paper; ctx.fillRect(0, 0, W, H);
+  ctx.save();
+  ctx.strokeStyle = C.rule; ctx.lineWidth = 1; ctx.globalAlpha = 0.75;
+  ctx.beginPath();
+  for(g = -2; g <= 2.0001; g += step){
+    a = Math.round(f.cx + g*f.s) + 0.5;
+    b = Math.round(f.cy - g*f.s) + 0.5;
+    ctx.moveTo(a, 0); ctx.lineTo(a, H);
+    ctx.moveTo(0, b); ctx.lineTo(W, b);
+  }
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = C.muted; ctx.lineWidth = 1.3; ctx.globalAlpha = 0.55;
+  ctx.beginPath();
+  ctx.moveTo(0, Math.round(f.cy)+0.5); ctx.lineTo(W, Math.round(f.cy)+0.5);
+  ctx.moveTo(Math.round(f.cx)+0.5, 0); ctx.lineTo(Math.round(f.cx)+0.5, H);
+  ctx.stroke();
+  ctx.restore();
+  ctx.strokeStyle = C.rule; ctx.lineWidth = 1;
+  ctx.strokeRect(0.5, 0.5, W-1, H-1);
+  if(label){
+    ctx.fillStyle = C.deep; font(ctx, 700, 12);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(label, 10, 9);
+  }
+  return f;
+}
+
+function path(ctx, f, pts, i0, i1, color, w, dash, alpha, close){
+  var i;
+  if(!pts || i1 <= i0) return;
+  ctx.save();
+  ctx.globalAlpha = (alpha === undefined) ? 1 : alpha;
+  ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  if(dash) ctx.setLineDash(dash);
+  ctx.beginPath();
+  ctx.moveTo(PX(f, pts[i0]), PY(f, pts[i0]));
+  for(i = i0+1; i <= i1; i++) ctx.lineTo(PX(f, pts[i]), PY(f, pts[i]));
+  if(close) ctx.closePath();
+  ctx.stroke(); ctx.restore();
+}
+
+function dot(ctx, f, p, color, r){
+  ctx.save();
+  ctx.beginPath(); ctx.arc(PX(f,p), PY(f,p), r, 0, TWO_PI);
+  ctx.fillStyle = color; ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = C.paper; ctx.stroke();
+  ctx.restore();
+}
+
+function tag(ctx, W, text, x, y, bg){
+  var w;
+  ctx.save(); font(ctx, 700, 11.5);
+  w = ctx.measureText(text).width + 14;
+  x = Math.max(2, Math.min(x, W - w - 2));
+  ctx.fillStyle = bg || C.sand; ctx.strokeStyle = C.rule; ctx.lineWidth = 1;
+  if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(x, y, w, 20, 6); ctx.fill(); ctx.stroke(); }
+  else { ctx.fillRect(x, y, w, 20); ctx.strokeRect(x, y, w, 20); }
+  ctx.fillStyle = C.ink; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, x+7, y+10.5);
+  ctx.restore();
+}
+
+/* Stored outlines. Each one is a closed list of world points. */
+function build(fn, n){
+  var i, out = [];
+  for(i=0;i<n;i++) out.push(fn(i/n));
+  return out;
+}
+var SHAPES = [
+  { id:'star', name:'Star', pts:function(){
+      return build(function(u){
+        var a = TWO_PI*u - Math.PI/2, k = Math.floor(u*10);
+        var v = (u*10 - k), r0 = (k%2===0) ? 0.95 : 0.40, r1 = (k%2===0) ? 0.40 : 0.95;
+        var a0 = TWO_PI*(k/10) - Math.PI/2, a1 = TWO_PI*((k+1)/10) - Math.PI/2;
+        var x0 = r0*Math.cos(a0), y0 = r0*Math.sin(a0);
+        var x1 = r1*Math.cos(a1), y1 = r1*Math.sin(a1);
+        return { x:x0 + v*(x1-x0), y:y0 + v*(y1-y0), a:a };
+      }, 600);
+    } },
+  { id:'square', name:'Square', pts:function(){
+      return build(function(u){
+        var k = Math.floor(u*4), v = u*4 - k, s = 0.8;
+        var cx = [-s, s, s, -s], cy = [-s, -s, s, s];
+        var j = (k+1)%4;
+        return { x:cx[k] + v*(cx[j]-cx[k]), y:cy[k] + v*(cy[j]-cy[k]) };
+      }, 600);
+    } },
+  { id:'heart', name:'Heart', pts:function(){
+      return build(function(u){
+        var t = TWO_PI*u, k = 0.055;
+        return { x: k*16*Math.pow(Math.sin(t),3),
+                 y: k*(13*Math.cos(t) - 5*Math.cos(2*t) - 2*Math.cos(3*t) - Math.cos(4*t)) };
+      }, 700);
+    } },
+  { id:'cog', name:'Cog', pts:function(){
+      return build(function(u){
+        var t = TWO_PI*u, r = 0.78 + 0.16*(Math.sin(12*t) > 0 ? 1 : -1);
+        return { x:r*Math.cos(t), y:r*Math.sin(t) };
+      }, 900);
+    } },
+  { id:'wave', name:'Lobed', pts:function(){
+      return build(function(u){
+        var t = TWO_PI*u, r = 0.62 + 0.26*Math.cos(3*t);
+        return { x:r*Math.cos(t), y:r*Math.sin(t) };
+      }, 700);
+    } }
+];
+function shapeOf(id){
+  var i;
+  for(i=0;i<SHAPES.length;i++){ if(SHAPES[i].id === id) return SHAPES[i]; }
+  return SHAPES[0];
+}
+
+/* Step one. Space the samples evenly along the outline rather than
+   evenly along the input list. Skipping this makes the coefficients
+   report the speed of the hand instead of the shape of the figure. */
+function resample(pts, N){
+  var L = pts.length, s = [0], i, j = 0, total, out = [], target, seg, u, a, b;
+  if(L < 3) return pts.slice();
+  for(i=1;i<=L;i++){
+    a = pts[i-1]; b = pts[i%L];
+    s.push(s[i-1] + Math.sqrt((b.x-a.x)*(b.x-a.x) + (b.y-a.y)*(b.y-a.y)));
+  }
+  total = s[L];
+  if(total <= 1e-9) return pts.slice();
+  for(i=0;i<N;i++){
+    target = i*total/N;
+    while(j < L-1 && s[j+1] < target) j++;
+    seg = s[j+1] - s[j];
+    u = seg > 1e-12 ? (target - s[j])/seg : 0;
+    a = pts[j]; b = pts[(j+1)%L];
+    out.push({ x:a.x + u*(b.x-a.x), y:a.y + u*(b.y-a.y) });
+  }
+  perim = total;
+  return out;
+}
+
+/* Step two. The analysis integral, evaluated by the rectangle rule.
+   The sample list z is complex, so the coefficient at k and the one
+   at minus k are independent of each other. */
+function coefficients(z, KM){
+  var N = z.length, out = [], k, n, re, im, a, ca, sa;
+  for(k=-KM;k<=KM;k++){
+    re = 0; im = 0;
+    for(n=0;n<N;n++){
+      a = -TWO_PI*k*n/N; ca = Math.cos(a); sa = Math.sin(a);
+      re += z[n].x*ca - z[n].y*sa;
+      im += z[n].x*sa + z[n].y*ca;
+    }
+    re /= N; im /= N;
+    out.push({ k:k, re:re, im:im, amp:Math.sqrt(re*re + im*im), phase:Math.atan2(im, re) });
+  }
+  return out;
+}
+
+function selectM(M){
+  var i, c;
+  active = [];
+  for(i=0;i<order.length;i++){
+    c = order[i];
+    if(Math.abs(c.k) <= M) active.push(c);
+  }
+  buildRecon();
+  measure();
+}
+
+function chainAt(t){
+  var pts = [], x = base.re, y = base.im, i, c, a;
+  pts.push({ x:x, y:y });
+  for(i=0;i<active.length;i++){
+    c = active[i];
+    a = TWO_PI*c.k*t + c.phase;
+    x += c.amp*Math.cos(a); y += c.amp*Math.sin(a);
+    pts.push({ x:x, y:y });
+  }
+  return pts;
+}
+
+function tipAt(t){
+  var x = base.re, y = base.im, i, c, a;
+  for(i=0;i<active.length;i++){
+    c = active[i]; a = TWO_PI*c.k*t + c.phase;
+    x += c.amp*Math.cos(a); y += c.amp*Math.sin(a);
+  }
+  return { x:x, y:y };
+}
+
+function buildRecon(){
+  var i;
+  recon = [];
+  for(i=0;i<=STEPS;i++) recon.push(tipAt(i/STEPS));
+}
+
+function measure(){
+  var i, p, dx, dy, acc = 0, m = 0, n = samples.length, hop = 2;
+  if(!n){ errRms = 0; return; }
+  for(i=0;i<n;i+=hop){
+    p = tipAt(i/n);
+    dx = p.x - samples[i].x; dy = p.y - samples[i].y;
+    acc += dx*dx + dy*dy; m++;
+  }
+  errRms = Math.sqrt(acc/m);
+}
+
+function adopt(pts){
+  outline = pts.slice();
+  samples = resample(outline, N_SAMP);
+  coeffs = coefficients(samples, K_MAX);
+  base = coeffs[K_MAX];
+  order = coeffs.filter(function(c){ return c.k !== 0; })
+                .sort(function(a, b){ return b.amp - a.amp; });
+  phase = 0;
+  selectM(P.M);
+  syncPairSlider();
+}
+
+/* Left square. The figure itself, plus a marker at the present t. */
+function drawLeft(t){
+  var f = board(ctxD, WD, HD, null), i, m;
+  if(drawing && stroke.length > 1){
+    path(ctxD, f, stroke, 0, stroke.length-1, C.accent, 2.6, null, 1, false);
+  } else if(outline.length > 2){
+    path(ctxD, f, outline, 0, outline.length-1, C.ink, 2.4, null, 1, true);
+    if(VIEW.samples){
+      ctxD.save(); ctxD.fillStyle = C.accent; ctxD.globalAlpha = 0.75;
+      for(i=0;i<samples.length;i+=8){
+        ctxD.beginPath();
+        ctxD.arc(PX(f, samples[i]), PY(f, samples[i]), 1.8, 0, TWO_PI);
+        ctxD.fill();
+      }
+      ctxD.restore();
+    }
+    m = samples[Math.floor(t*samples.length) % samples.length];
+    if(m) dot(ctxD, f, m, C.accent, 5.5);
+    tag(ctxD, WD, 'closed outline, ' + outline.length + ' input points', 10, HD - 30);
+  } else {
+    ctxD.fillStyle = C.muted; font(ctxD, 700, 15);
+    ctxD.textAlign = 'center'; ctxD.textBaseline = 'middle';
+    ctxD.fillText('drag to draw a closed figure', WD/2, HD/2);
+  }
+}
+
+/* Right square. The chain of arms, the circles they turn on,
+   and the path swept out by the tip. */
+function drawRight(t){
+  var f = board(ctxE, WE, HE, null), pts, i, r, idx, c, A, B, gam, psi, cen;
+
+  if(!base){ return; }
+
+  if(VIEW.ghost && outline.length > 2){
+    path(ctxE, f, outline, 0, outline.length-1, C.muted, 1.5, [5,5], 0.8, true);
+  }
+
+  pts = chainAt(t);
+
+  if(VIEW.circles){
+    ctxE.save();
+    ctxE.strokeStyle = C.muted; ctxE.lineWidth = 1; ctxE.globalAlpha = 0.5;
+    for(i=0;i<active.length;i++){
+      r = active[i].amp*f.s;
+      if(r < 0.8) continue;
+      ctxE.beginPath();
+      ctxE.arc(PX(f, pts[i]), PY(f, pts[i]), r, 0, TWO_PI);
+      ctxE.stroke();
+    }
+    ctxE.restore();
+  }
+
+  if(VIEW.arms){
+    ctxE.save();
+    ctxE.strokeStyle = C.ink; ctxE.lineWidth = 1.5; ctxE.globalAlpha = 0.85;
+    ctxE.lineJoin = 'round'; ctxE.lineCap = 'round';
+    ctxE.beginPath();
+    ctxE.moveTo(PX(f, pts[0]), PY(f, pts[0]));
+    for(i=1;i<pts.length;i++) ctxE.lineTo(PX(f, pts[i]), PY(f, pts[i]));
+    ctxE.stroke();
+    ctxE.restore();
+  }
+
+  if(VIEW.ellipse && P.pair > 0){
+    A = 0; B = 0;
+    for(i=0;i<coeffs.length;i++){
+      c = coeffs[i];
+      if(c.k === P.pair){ A = c.amp; psi = c.phase; }
+      if(c.k === -P.pair){ B = c.amp; gam = c.phase; }
+    }
+    cen = { x:base.re, y:base.im };
+    ctxE.save();
+    ctxE.strokeStyle = C.accent; ctxE.lineWidth = 2; ctxE.globalAlpha = 0.9;
+    ctxE.setLineDash([6,4]);
+    ctxE.beginPath();
+    ctxE.ellipse(PX(f, cen), PY(f, cen), (A+B)*f.s, Math.abs(A-B)*f.s,
+                 -(psi + gam)/2, 0, TWO_PI);
+    ctxE.stroke();
+    ctxE.restore();
+    tag(ctxE, WE, 'pair k = \u00B1' + P.pair + ', ellipse axes ' +
+        (A+B).toFixed(3) + ' and ' + Math.abs(A-B).toFixed(3), 10, 9, C.sand);
+  }
+
+  idx = Math.floor(t*STEPS);
+  if(idx > 0) path(ctxE, f, recon, 0, idx, C.accent, 2.8, null, 1, false);
+  dot(ctxE, f, pts[pts.length-1], C.accent, 5);
+  dot(ctxE, f, pts[0], C.deep, 3.5);
+
+  tag(ctxE, WE, 'arms in use ' + active.length + ', t = ' + t.toFixed(3), 10, HE - 30);
+}
+
+/* Controls */
+var chipsShape = document.getElementById('chipsShape');
+var chipsView  = document.getElementById('chipsView');
+var readEl = document.getElementById('readout');
+var eqEl = document.getElementById('eq'), eqsubEl = document.getElementById('eqsub');
+var playEl = document.getElementById('play'), scrubEl = document.getElementById('scrub');
+var capREl = document.getElementById('capR'), capLEl = document.getElementById('capL');
+
+SHAPES.forEach(function(s){
+  var b = document.createElement('button');
+  b.className = 'chip'; b.type = 'button'; b.textContent = s.name;
+  b.setAttribute('aria-pressed', shapeId === s.id ? 'true' : 'false');
+  b.addEventListener('click', function(){
+    var kids = chipsShape.children, i;
+    shapeId = s.id;
+    for(i=0;i<kids.length;i++) kids[i].setAttribute('aria-pressed', kids[i] === b ? 'true':'false');
+    adopt(s.pts());
+    capLEl.textContent = s.name.toLowerCase();
+  });
+  chipsShape.appendChild(b);
+});
+
+var TOGGLES = [
+  { key:'circles', name:'Circles' },
+  { key:'arms',    name:'Arms' },
+  { key:'ghost',   name:'Ghost outline' },
+  { key:'samples', name:'Samples' },
+  { key:'ellipse', name:'Pair ellipse' }
+];
+TOGGLES.forEach(function(g){
+  var b = document.createElement('button');
+  b.className = 'chip'; b.type = 'button'; b.textContent = g.name;
+  b.setAttribute('aria-pressed', VIEW[g.key] ? 'true':'false');
+  b.addEventListener('click', function(){
+    VIEW[g.key] = !VIEW[g.key];
+    b.setAttribute('aria-pressed', VIEW[g.key] ? 'true':'false');
+  });
+  chipsView.appendChild(b);
+});
+
+function slider(host, key, label, lo, hi, step, fmt, after){
+  var inp, out;
+  host.innerHTML = '<div class="row"><span class="nm">' + label +
+                   '</span><span class="vl">' + fmt(P[key]) + '</span></div>';
+  inp = document.createElement('input');
+  inp.type = 'range'; inp.min = lo; inp.max = hi; inp.step = step; inp.value = P[key];
+  inp.setAttribute('aria-label', label);
+  out = host.querySelector('.vl');
+  inp.addEventListener('input', function(){
+    P[key] = parseFloat(inp.value);
+    out.textContent = fmt(P[key]);
+    if(after) after();
+  });
+  host.appendChild(inp);
+  return inp;
+}
+var slMHost = document.getElementById('slM');
+var slPairHost = document.getElementById('slPair');
+var slSpeedHost = document.getElementById('slSpeed');
+var pairInput = null;
+
+slider(slMHost, 'M', 'harmonic pairs M', 1, K_MAX, 1,
+       function(v){ return String(Math.round(v)); },
+       function(){ selectM(Math.round(P.M)); });
+
+pairInput = slider(slPairHost, 'pair', 'highlight pair k', 0, 40, 1,
+       function(v){ return v < 1 ? 'off' : '\u00B1' + Math.round(v); },
+       null);
+
+slider(slSpeedHost, 'speed', 'sweep rate', 0.04, 0.9, 0.01,
+       function(v){ return v.toFixed(2); }, null);
+
+function syncPairSlider(){
+  var cap = Math.min(40, Math.round(P.M));
+  pairInput.max = cap;
+  if(P.pair > cap){
+    P.pair = cap;
+    pairInput.value = String(cap);
+    slPairHost.querySelector('.vl').textContent = cap < 1 ? 'off' : '\u00B1' + cap;
+  }
+}
+
+function toggle(){
+  playing = !playing;
+  playEl.textContent = playing ? 'Pause' : 'Play';
+  playEl.setAttribute('aria-pressed', playing ? 'true':'false');
+  capREl.textContent = playing ? 'running' : 'paused';
+}
+playEl.addEventListener('click', toggle);
+scrubEl.addEventListener('input', function(){
+  phase = parseFloat(scrubEl.value);
+  if(playing) toggle();
+});
+document.getElementById('clear').addEventListener('click', function(){
+  outline = []; samples = []; coeffs = []; base = null;
+  order = []; active = []; recon = []; errRms = 0; perim = 0;
+  stroke = []; phase = 0; scrubEl.value = '0';
+  if(playing) toggle();
+  var kids = chipsShape.children, i;
+  for(i=0;i<kids.length;i++) kids[i].setAttribute('aria-pressed', 'false');
+  capLEl.textContent = 'draw here';
+  capREl.textContent = 'waiting for a figure';
+});
+document.getElementById('reset').addEventListener('click', function(){
+  P.M = 30; P.pair = 0; P.speed = 0.22; phase = 0; scrubEl.value = '0';
+  VIEW.circles = true; VIEW.arms = true; VIEW.ghost = true;
+  VIEW.samples = false; VIEW.ellipse = false;
+  var kids = chipsView.children, i;
+  for(i=0;i<kids.length;i++) kids[i].setAttribute('aria-pressed', VIEW[TOGGLES[i].key] ? 'true':'false');
+  slider(slMHost, 'M', 'harmonic pairs M', 1, K_MAX, 1,
+         function(v){ return String(Math.round(v)); },
+         function(){ selectM(Math.round(P.M)); });
+  pairInput = slider(slPairHost, 'pair', 'highlight pair k', 0, 40, 1,
+         function(v){ return v < 1 ? 'off' : '\u00B1' + Math.round(v); }, null);
+  slider(slSpeedHost, 'speed', 'sweep rate', 0.04, 0.9, 0.01,
+         function(v){ return v.toFixed(2); }, null);
+  if(base) selectM(P.M);
+  syncPairSlider();
+});
+document.addEventListener('keydown', function(e){
+  if(e.key === ' '){ e.preventDefault(); toggle(); }
+});
+
+/* Drawing on the left square */
+function pointerWorld(e){
+  var r = cvD.getBoundingClientRect(), f = fitOf(WD, HD);
+  var px = (e.clientX - r.left)*WD/r.width, py = (e.clientY - r.top)*HD/r.height;
+  return toWorld(f, px, py);
+}
+cvD.addEventListener('pointerdown', function(e){
+  drawing = true; stroke = [pointerWorld(e)];
+  cvD.setPointerCapture(e.pointerId);
+  if(playing) toggle();
+  capLEl.textContent = 'drawing';
+  capREl.textContent = 'waiting for a figure';
+});
+cvD.addEventListener('pointermove', function(e){
+  var p, q;
+  if(!drawing) return;
+  p = pointerWorld(e); q = stroke[stroke.length-1];
+  if(Math.abs(p.x-q.x) + Math.abs(p.y-q.y) > 0.004) stroke.push(p);
+});
+function finish(){
+  if(!drawing) return;
+  drawing = false;
+  if(stroke.length >= 10){
+    adopt(stroke.slice());
+    capLEl.textContent = 'your drawing';
+    capREl.textContent = 'press Play';
+    if(!playing) toggle();
+  } else {
+    capLEl.textContent = 'draw here';
+  }
+  stroke = [];
+}
+cvD.addEventListener('pointerup', finish);
+cvD.addEventListener('pointercancel', finish);
+
+/* Text */
+eqEl.innerHTML = 'x(t) = &sum;<sub>k</sub> <b>X<sub>k</sub></b> e<sup>jk&Omega;<sub>0</sub>t</sup>, ' +
+                 '&nbsp; &Omega;<sub>0</sub> = 2&pi;/T<sub>0</sub>';
+eqsubEl.textContent = 'Here x(t) = x\u2081(t) + j x\u2082(t) carries both coordinates of the outline, ' +
+                      'and T\u2080 = 1 is one trip around the figure.';
+
+document.getElementById('note1').innerHTML =
+  'Each term X<sub>k</sub>e<sup>jk&Omega;<sub>0</sub>t</sup> has length |X<sub>k</sub>| and starting angle &ang;X<sub>k</sub>, ' +
+  'and it turns at k&Omega;<sub>0</sub> radians per unit of t. Adding complex numbers puts the arms tip to tail, ' +
+  'so the synthesis equation already is the picture on the right. ' +
+  '<strong>The term for k = 0 is the centroid of the figure, and it places the whole chain in the plane.</strong>';
+
+document.getElementById('note2').innerHTML =
+  'Terms k and minus k, taken together, sweep an ellipse with semi axes |X<sub>k</sub>| + |X<sub>&minus;k</sub>| and ' +
+  '||X<sub>k</sub>| &minus; |X<sub>&minus;k</sub>||. Switch on the pair ellipse and move the slider to see it. ' +
+  'A real signal forces X<sub>&minus;k</sub> = X<sub>k</sub><sup>*</sup>, the two amplitudes match, and the ellipse flattens onto a line. ' +
+  '<strong>That flattened case is the sum of cosines from the earlier lectures.</strong> ' +
+  'Corners cost the most: their coefficients fall off like 1/k, so a square keeps its ripple long after a smooth curve has settled.';
+
+var lastRead = '';
+function syncRead(t){
+  var s, dc;
+  if(!base){
+    s = '<span class="pill">no figure yet</span>' +
+        '<span class="pill">samples per circuit <b>' + N_SAMP + '</b></span>';
+  } else {
+    dc = Math.sqrt(base.re*base.re + base.im*base.im);
+    s = '<span class="pill">harmonic pairs M = <b>' + Math.round(P.M) + '</b></span>' +
+        '<span class="pill">terms kept <b>' + (active.length + 1) + '</b></span>' +
+        '<span class="pill">samples <b>' + N_SAMP + '</b></span>' +
+        '<span class="pill">perimeter <b>' + perim.toFixed(3) + '</b></span>' +
+        '<span class="pill">|X<sub>0</sub>| = <b>' + dc.toFixed(3) + '</b></span>' +
+        '<span class="pill">rms error <b>' + errRms.toFixed(4) + '</b></span>';
+  }
+  if(s !== lastRead){ readEl.innerHTML = s; lastRead = s; }
+}
+
+function resize(){
+  var rl = cvD.getBoundingClientRect(), rr = cvE.getBoundingClientRect();
+  var dpr = window.devicePixelRatio || 1;
+  WD = Math.max(240, Math.round(rl.width)); HD = Math.max(240, Math.round(rl.height));
+  WE = Math.max(240, Math.round(rr.width)); HE = Math.max(240, Math.round(rr.height));
+  cvD.width = Math.round(WD*dpr); cvD.height = Math.round(HD*dpr);
+  cvE.width = Math.round(WE*dpr); cvE.height = Math.round(HE*dpr);
+  ctxD.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctxE.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+var last = 0;
+function loop(ts){
+  var dt;
+  if(!last) last = ts;
+  dt = Math.min(0.05, (ts - last)/1000); last = ts;
+  if(playing && base){
+    phase = (phase + dt*P.speed) % 1;
+    scrubEl.value = String(phase);
+  }
+  drawLeft(phase);
+  drawRight(phase);
+  syncRead(phase);
+  requestAnimationFrame(loop);
+}
+
+resize();
+adopt(shapeOf(shapeId).pts());
+capLEl.textContent = 'star';
+capREl.textContent = 'press Play';
+if(window.ResizeObserver){
+  new ResizeObserver(resize).observe(document.getElementById('wrapL'));
+  new ResizeObserver(resize).observe(document.getElementById('wrapR'));
+}
+window.addEventListener('resize', resize);
+requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
