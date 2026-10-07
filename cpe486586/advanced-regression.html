@@ -1,0 +1,1853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Advanced regression: fitting, diagnostics and remedies</title>
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23183e4b'/%3E%3Cpath d='M6 46C18 46 20 16 32 16s16 30 26 30' fill='none' stroke='%23d74a49' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='40' r='4' fill='%23e8d8c9'/%3E%3Ccircle cx='27' cy='23' r='4' fill='%23e8d8c9'/%3E%3Ccircle cx='38' cy='24' r='4' fill='%23e8d8c9'/%3E%3Ccircle cx='50' cy='39' r='4' fill='%23e8d8c9'/%3E%3C/svg%3E">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --red:#d74a49;
+  --ink:#183e4b;
+  --ink2:#1b4552;
+  --mute:#8ba0a4;
+  --grey:#eaeaea;
+  --blush:#fcf1ef;
+  --sand:#e8d8c9;
+  --stone:#ced3d7;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--blush);color:var(--ink);
+  font-family:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  font-variant-numeric:tabular-nums;font-size:16px;line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1280px;margin:0 auto;padding:26px 22px 0}
+
+header{display:flex;align-items:flex-end;gap:18px;padding-bottom:14px;border-bottom:2px solid var(--ink)}
+header h1{margin:0;font-size:clamp(23px,3.1vw,37px);font-weight:800;font-stretch:92%;letter-spacing:-.02em;line-height:1.05}
+header p{margin:6px 0 0;max-width:68ch;color:var(--ink2);font-size:15px}
+header .tag{
+  margin-left:auto;align-self:flex-start;background:var(--ink);color:var(--blush);
+  font-size:12px;font-weight:600;padding:5px 10px;border-radius:2px;white-space:nowrap;
+}
+
+nav.tabs{display:flex;gap:0;margin-top:0;border-bottom:1px solid var(--stone);flex-wrap:wrap}
+nav.tabs button{
+  font-family:inherit;font-size:14.5px;font-weight:700;color:var(--ink2);
+  background:transparent;border:0;border-bottom:3px solid transparent;
+  padding:13px 18px;cursor:pointer;
+}
+nav.tabs button:hover{color:var(--ink);background:var(--grey)}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--red)}
+nav.tabs button:focus-visible{outline:3px solid var(--red);outline-offset:-3px}
+
+section.tab{display:none;animation:fade .35s ease}
+section.tab.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+.board{display:grid;grid-template-columns:1fr 320px;gap:18px;margin-top:18px;align-items:stretch}
+.rail{display:flex;flex-direction:column;gap:13px}
+.panel{background:var(--grey);border:1px solid var(--stone);padding:13px 15px}
+.panel.sand{background:var(--sand)}
+.panel h2{margin:0 0 9px;font-size:13px;font-weight:700;color:var(--ink2)}
+.panel h2 .sub{font-weight:600;color:var(--mute)}
+
+.plotwrap{position:relative;background:var(--grey);border:1px solid var(--stone);padding:11px 13px 9px;display:flex;flex-direction:column;gap:8px;height:100%}
+.cvbox{position:relative;width:100%}
+canvas{display:block;width:100%;height:100%}
+.cvbox canvas{position:absolute;inset:0}
+.legend{display:flex;flex-wrap:wrap;gap:7px 15px;font-size:12.5px;color:var(--ink2);border-top:1px solid var(--stone);padding-top:7px}
+.legend i{display:inline-block;vertical-align:-1px;margin-right:6px}
+.ln{width:20px;height:0;vertical-align:middle !important}
+.hint{
+  position:absolute;left:58px;top:16px;pointer-events:none;
+  font-size:12px;color:var(--ink2);background:rgba(234,234,234,.9);padding:3px 8px;border-radius:2px;
+  transition:opacity .4s;
+}
+.hint.gone{opacity:0}
+
+.ctl{margin-bottom:11px}
+.ctl:last-child{margin-bottom:0}
+.ctl .row{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}
+.ctl .row span{color:var(--ink2)}
+.ctl .row b{font-weight:800;color:var(--red);font-size:17px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:24px;background:transparent;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:6px;background:var(--blush);border:1px solid var(--ink)}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;width:18px;height:18px;margin-top:-7px;border-radius:50%;
+  background:var(--red);border:3px solid var(--blush);box-shadow:0 0 0 1px var(--ink);
+}
+input[type=range]::-moz-range-track{height:6px;background:var(--blush);border:1px solid var(--ink)}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--red);border:3px solid var(--blush);box-shadow:0 0 0 1px var(--ink)}
+input[type=range]:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+
+.seg{display:flex;border:1px solid var(--ink);border-radius:2px;overflow:hidden;margin-top:4px}
+.seg button{
+  flex:1;border:0;border-radius:0;background:var(--blush);color:var(--ink);
+  font-family:inherit;font-size:13.5px;font-weight:600;padding:7px 3px;cursor:pointer;white-space:nowrap;
+}
+.seg button + button{border-left:1px solid var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--blush)}
+.seg button:focus-visible{outline:3px solid var(--red);outline-offset:-3px}
+.seglabel{font-size:14px;color:var(--ink2)}
+
+.chips{display:flex;flex-direction:column;gap:4px}
+.chip{
+  font-family:inherit;font-size:13.5px;font-weight:600;text-align:left;
+  padding:7px 10px;border:1px solid transparent;background:transparent;color:var(--ink);
+  cursor:pointer;border-radius:2px;
+}
+.chip:hover{background:var(--stone)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--blush)}
+.chip:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+
+.what{font-size:12.5px;color:var(--ink2);line-height:1.4;margin-top:2px;min-height:34px}
+.what b{color:var(--ink);font-weight:700}
+.ctl.off input[type=range]{opacity:.4}
+.ctl.off .row b{color:var(--mute)}
+.toggles{display:flex;flex-direction:column;gap:5px}
+.toggle{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink2);cursor:pointer}
+.toggle input{width:16px;height:16px;accent-color:var(--red);margin:0}
+
+.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+button.act{
+  font-family:inherit;font-size:14px;font-weight:600;padding:8px 8px;border-radius:2px;cursor:pointer;
+  border:1px solid var(--ink);background:var(--blush);color:var(--ink);
+}
+button.act:hover{background:var(--stone)}
+button.act.primary{background:var(--ink);color:var(--blush)}
+button.act.primary:hover{background:var(--ink2)}
+button.act.wide{grid-column:1 / -1}
+button.act:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+button.act:disabled{opacity:.5;cursor:default}
+
+.kv{display:grid;grid-template-columns:1fr auto;gap:5px 10px;font-size:13.5px}
+.kv span:nth-child(odd){color:var(--ink2)}
+.kv span:nth-child(even){font-weight:800;text-align:right}
+.kv span.warn{color:var(--red)}
+.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;align-items:end}
+.facts div{font-size:11.5px;color:var(--ink2)}
+.facts b{display:block;font-size:17px;color:var(--ink);font-weight:800}
+.facts b.warn{color:var(--red)}
+
+.verdict{font-size:13.5px;line-height:1.5;min-height:46px}
+/* Fixed heights here, so text of varying length does not resize the plots. */
+#dVerdict{min-height:156px}
+#mVerdict{min-height:132px}
+.verdict b{color:var(--ink)}
+.verdict .flag{color:var(--red);font-weight:700}
+.verdict .ok{color:var(--ink);font-weight:700}
+
+.lower{display:grid;grid-template-columns:1fr 1fr 320px;gap:18px;margin-top:18px;align-items:stretch}
+.lower.two{grid-template-columns:1fr 320px}
+.note{font-size:13.5px;color:var(--ink2);line-height:1.55}
+.note + .note{margin-top:9px}
+.note b{color:var(--ink)}
+.eq{font-size:15px;line-height:2.1;overflow-x:auto}
+.eq > div{white-space:nowrap}
+.frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;margin:0 3px;line-height:1.15}
+.frac .num{border-bottom:1.5px solid var(--ink);padding:0 4px}
+.frac .den{padding:0 4px}
+sup,sub{font-size:.68em}
+.refs{font-size:11.5px;color:var(--ink2);margin-top:9px;padding-top:7px;border-top:1px solid var(--stone);line-height:1.5}
+
+table.vand{border-collapse:collapse;font-size:12.5px;width:100%}
+table.vand th{font-weight:700;color:var(--ink2);padding:3px 6px;border-bottom:1px solid var(--stone);text-align:right;white-space:nowrap}
+table.vand td{padding:3px 6px;text-align:right;color:var(--ink);white-space:nowrap}
+table.vand tr.dots td{color:var(--mute)}
+.vandwrap{overflow-x:auto;border:1px solid var(--stone);background:var(--blush);padding:6px}
+.coefs{font-size:12.5px;color:var(--ink2);line-height:1.7;max-height:112px;overflow-y:auto}
+.coefs b{color:var(--ink);font-weight:700}
+
+.quad{display:grid;grid-template-columns:1fr 1fr;gap:14px;height:100%}
+.quad.four{grid-template-rows:1fr 1fr}
+.quad .cell{background:var(--grey);border:1px solid var(--stone);padding:10px 12px 8px;display:flex;flex-direction:column;min-height:0}
+.quad h3{margin:0 0 6px;font-size:12.5px;font-weight:700;color:var(--ink2)}
+.quad .cvbox{flex:1;min-height:168px}
+
+footer{margin-top:26px;border-top:2px solid var(--ink)}
+footer .inner{
+  max-width:1280px;margin:0 auto;padding:15px 22px 26px;
+  display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:14px;color:var(--ink2);
+}
+footer b{color:var(--ink);font-weight:700}
+
+@media (max-width:1080px){
+  .lower{grid-template-columns:1fr 1fr}
+  .lower .span{grid-column:1 / -1}
+}
+@media (max-width:900px){
+  .board{grid-template-columns:1fr}
+  .lower,.lower.two{grid-template-columns:1fr}
+  .quad{grid-template-columns:1fr}
+  header{flex-wrap:wrap}
+  header .tag{margin-left:0}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <svg width="52" height="52" viewBox="0 0 64 64" aria-hidden="true">
+      <rect width="64" height="64" rx="12" fill="#183e4b"/>
+      <path d="M6 46C18 46 20 16 32 16s16 30 26 30" fill="none" stroke="#d74a49" stroke-width="5" stroke-linecap="round"/>
+      <circle cx="16" cy="40" r="4" fill="#e8d8c9"/><circle cx="27" cy="23" r="4" fill="#e8d8c9"/>
+      <circle cx="38" cy="24" r="4" fill="#e8d8c9"/><circle cx="50" cy="39" r="4" fill="#e8d8c9"/>
+    </svg>
+    <div>
+      <h1>Advanced regression: fitting, diagnostics and remedies</h1>
+      <p>Four demonstrations for Chapter 7. Polynomial fits and their design matrix, locally weighted kernel regression, residual diagnostics with the matching remedy, and the effect of correlated predictors.</p>
+    </div>
+    <div class="tag">Chapter 7</div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tabPoly" aria-selected="true" aria-controls="panePoly">Polynomial regression</button>
+    <button role="tab" id="tabLoess" aria-selected="false" aria-controls="paneLoess">Locally weighted regression</button>
+    <button role="tab" id="tabDiag" aria-selected="false" aria-controls="paneDiag">Diagnostics and remedies</button>
+    <button role="tab" id="tabMc" aria-selected="false" aria-controls="paneMc">Multicollinearity</button>
+  </nav>
+
+  <!-- ===================== polynomial ===================== -->
+  <section class="tab on" id="panePoly" role="tabpanel" aria-labelledby="tabPoly">
+    <div class="board">
+      <div class="plotwrap">
+        <div class="cvbox" style="flex:1;min-height:320px"><canvas id="cPoly" aria-label="Scatter with polynomial fit"></canvas></div>
+        <div class="legend">
+          <span><i class="ln" style="border-top:3px solid #d74a49"></i>fitted polynomial</span>
+          <span><i class="ln" style="border-top:2px dashed #183e4b"></i>true mean</span>
+          <span><i style="width:11px;height:11px;border-radius:50%;background:#1b4552;border:1.5px solid #fcf1ef"></i>training point</span>
+          <span><i style="width:11px;height:11px;border-radius:50%;background:transparent;border:2px solid #8ba0a4"></i>held out point</span>
+          <span><i class="ln" style="border-top:3px solid #8ba0a4"></i>residual</span>
+        </div>
+      </div>
+      <div class="rail">
+        <div class="panel sand">
+          <h2>Model</h2>
+          <div class="ctl">
+            <div class="row"><span>degree k</span><b id="pK">3</b></div>
+            <input id="pKs" type="range" min="0" max="12" step="1" value="3" aria-label="Polynomial degree">
+          </div>
+          <div class="ctl">
+            <div class="row"><span>training points n</span><b id="pN">30</b></div>
+            <input id="pNs" type="range" min="8" max="90" step="1" value="30" aria-label="Number of training points">
+          </div>
+          <div class="ctl">
+            <div class="row"><span>noise &sigma;</span><b id="pSig">1.00</b></div>
+            <input id="pSigs" type="range" min="0.1" max="2.5" step="0.05" value="1" aria-label="Noise standard deviation">
+          </div>
+          <div class="toggles">
+            <label class="toggle"><input type="checkbox" id="pTrue" checked> show the true mean</label>
+            <label class="toggle"><input type="checkbox" id="pTest"> show held out points</label>
+            <label class="toggle"><input type="checkbox" id="pRes"> show residuals</label>
+            <label class="toggle"><input type="checkbox" id="pLev"> size points by leverage h<sub>ii</sub></label>
+          </div>
+          <div class="buttons">
+            <button class="act primary" id="pNew" type="button">New sample</button>
+            <button class="act" id="pReset" type="button">Reset</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Fit quality</h2>
+          <div class="facts">
+            <div>RMSE train<b id="pRmTr">0</b></div>
+            <div>RMSE held out<b id="pRmTe">0</b></div>
+            <div>R<sup>2</sup><b id="pR2">0</b></div>
+          </div>
+          <div class="kv" style="margin-top:10px">
+            <span>adjusted R<sup>2</sup></span><span id="pAdj">0</span>
+            <span>parameters k + 1</span><span id="pP">4</span>
+            <span>trace of H</span><span id="pTr">4</span>
+            <span>largest |w&#770;<sub>j</sub>|</span><span id="pMaxw">0</span>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Error against degree <span class="sub">click to set k</span></h2>
+          <div class="cvbox" style="height:170px"><canvas id="cRmse" aria-label="Root mean squared error against degree"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <div class="lower">
+      <div class="panel">
+        <h2>Design matrix <span class="sub">first rows</span></h2>
+        <div class="vandwrap"><table class="vand" id="pVand"></table></div>
+        <p class="note" style="margin-top:9px">The predictor is centred and scaled to u = (x &minus; 5)/5 before the powers are formed. Without that scaling the columns of the Vandermonde matrix become nearly parallel and the normal equations lose accuracy at high degree.</p>
+      </div>
+      <div class="panel">
+        <h2>Estimates and formulas</h2>
+        <div class="eq">
+          <div>y&#770; = X w&#770;, &nbsp; w&#770; = (X<sup>&#8868;</sup>X)<sup>&minus;1</sup>X<sup>&#8868;</sup>y</div>
+          <div>H = X(X<sup>&#8868;</sup>X)<sup>&minus;1</sup>X<sup>&#8868;</sup>, &nbsp; e = (I &minus; H)y</div>
+        </div>
+        <div class="coefs" id="pCoefs"></div>
+      </div>
+      <div class="panel span">
+        <h2>What to watch</h2>
+        <p class="note">Training error falls as the degree rises. Held out error falls, reaches a minimum, then climbs. The gap between the two curves is the cost of fitting noise.</p>
+        <p class="note">The trace of the hat matrix equals the number of parameters, so it rises by one with each added power. Leverage spreads unevenly once the degree is high, and points near the ends of the range gain most of it.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== loess ===================== -->
+  <section class="tab" id="paneLoess" role="tabpanel" aria-labelledby="tabLoess">
+    <div class="board">
+      <div class="plotwrap">
+        <div class="cvbox" style="flex:1;min-height:300px">
+          <canvas id="cLo" aria-label="Scatter with local fit at the pivot"></canvas>
+          <div class="hint" id="loHint">Drag inside the plot to move the pivot x&#8320;.</div>
+        </div>
+        <div class="cvbox" style="height:132px"><canvas id="cKer" aria-label="Kernel weights against x"></canvas></div>
+        <div class="legend">
+          <span><i class="ln" style="border-top:3px solid #d74a49"></i>local regression curve</span>
+          <span><i class="ln" style="border-top:3px solid #183e4b"></i>local fit at the pivot</span>
+          <span><i class="ln" style="border-top:2px dashed #183e4b"></i>true mean</span>
+          <span><i style="width:11px;height:11px;border-radius:50%;background:#d74a49"></i>large weight</span>
+          <span><i style="width:11px;height:11px;border-radius:50%;background:#ced3d7"></i>small weight</span>
+        </div>
+      </div>
+      <div class="rail">
+        <div class="panel sand">
+          <h2>Smoother</h2>
+          <div class="ctl">
+            <div class="row"><span>bandwidth h</span><b id="lH">1.00</b></div>
+            <input id="lHs" type="range" min="0.15" max="4" step="0.05" value="1" aria-label="Kernel bandwidth">
+          </div>
+          <div class="ctl">
+            <div class="row"><span>pivot x&#8320;</span><b id="lX0">5.0</b></div>
+            <input id="lX0s" type="range" min="0" max="10" step="0.05" value="5" aria-label="Pivot point">
+          </div>
+          <div class="ctl">
+            <span class="seglabel">kernel &kappa;(z)</span>
+            <div class="seg" role="group" aria-label="Kernel">
+              <button type="button" data-k="gauss" aria-pressed="true">Gaussian</button>
+              <button type="button" data-k="tricube" aria-pressed="false">Tricube</button>
+              <button type="button" data-k="rect" aria-pressed="false">Rectangular</button>
+            </div>
+          </div>
+          <div class="ctl">
+            <span class="seglabel">local polynomial degree</span>
+            <div class="seg" role="group" aria-label="Local degree">
+              <button type="button" data-d="0" aria-pressed="false">0, constant</button>
+              <button type="button" data-d="1" aria-pressed="true">1, linear</button>
+            </div>
+          </div>
+          <div class="buttons">
+            <button class="act primary" id="lSweep" type="button">Sweep the pivot</button>
+            <button class="act" id="lNew" type="button">New sample</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Data</h2>
+          <div class="ctl">
+            <span class="seglabel">shape of the true mean</span>
+            <div class="seg" role="group" aria-label="Data shape">
+              <button type="button" data-s="v" aria-pressed="true">Inverted V</button>
+              <button type="button" data-s="wave" aria-pressed="false">Wave</button>
+            </div>
+          </div>
+          <div class="ctl">
+            <div class="row"><span>points n</span><b id="lN">60</b></div>
+            <input id="lNs" type="range" min="15" max="150" step="1" value="60" aria-label="Number of points">
+          </div>
+          <div class="ctl">
+            <div class="row"><span>noise &sigma;</span><b id="lSig">0.45</b></div>
+            <input id="lSigs" type="range" min="0.05" max="1.5" step="0.05" value="0.45" aria-label="Noise standard deviation">
+          </div>
+        </div>
+        <div class="panel">
+          <h2>At the pivot</h2>
+          <div class="kv">
+            <span>sum of weights</span><span id="lSw">0</span>
+            <span>points with weight above 0.05</span><span id="lNe">0</span>
+            <span>local intercept</span><span id="lA">0</span>
+            <span>local slope</span><span id="lB">0</span>
+            <span>fitted value y&#770;(x&#8320;)</span><span id="lYh">0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="lower two">
+      <div class="panel">
+        <h2>Cost function and estimate</h2>
+        <div class="eq">
+          <div>J(w) = <span class="frac"><span class="num">1</span><span class="den">2n</span></span>(y &minus; Xw)<sup>&#8868;</sup>&kappa;(y &minus; Xw), &nbsp; &kappa; = diag(&kappa;<sub>1</sub>, &hellip;, &kappa;<sub>n</sub>)</div>
+          <div>w&#770; = (X<sup>&#8868;</sup>&kappa;X)<sup>&minus;1</sup>X<sup>&#8868;</sup>&kappa;y, &nbsp; z = <span class="frac"><span class="num">x &minus; x&#8320;</span><span class="den">h</span></span></div>
+          <div id="lKform"></div>
+        </div>
+        <p class="note" style="margin-top:8px">Classwork from the slides. When the pivot moves, the stored data and the response vector stay as they are. The kernel weights, the weighted cross products and the solve are redone, so the cost of the method grows with the number of pivots.</p>
+        <div class="refs">Chapter 18, Applied Regression Analysis and Generalized Linear Models, John Fox, Third Edition, SAGE Publications.<br>Cleveland, W. S. (1979). Robust locally weighted regression and smoothing scatterplots. Journal of the American Statistical Association 74, 829-836.</div>
+      </div>
+      <div class="panel">
+        <h2>What to watch</h2>
+        <p class="note">A small bandwidth follows the data closely and reacts to single points. A large bandwidth approaches the global polynomial fit of the chosen degree.</p>
+        <p class="note">Degree 0 flattens the peak of the inverted V, because a weighted average cannot reproduce a local slope. Degree 1 keeps the two arms straight and rounds only the corner.</p>
+        <p class="note">The rectangular kernel gives a curve with visible steps, since points enter and leave the window with full weight.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== diagnostics ===================== -->
+  <section class="tab" id="paneDiag" role="tabpanel" aria-labelledby="tabDiag">
+    <div class="board">
+      <div style="height:100%">
+        <div class="quad four">
+          <div class="cell"><h3>Data and fit</h3><div class="cvbox"><canvas id="cDFit"></canvas></div></div>
+          <div class="cell"><h3>Residuals against fitted values <span style="color:#8ba0a4">dashed lines at &plusmn;2s</span></h3><div class="cvbox"><canvas id="cDRes"></canvas></div></div>
+          <div class="cell"><h3>Normal quantile plot of standardized residuals</h3><div class="cvbox"><canvas id="cDQQ"></canvas></div></div>
+          <div class="cell"><h3>Residual against previous residual</h3><div class="cvbox"><canvas id="cDLag"></canvas></div></div>
+        </div>
+      </div>
+      <div class="rail">
+        <div class="panel">
+          <h2>Scenario</h2>
+          <div class="chips" id="dChips"></div>
+        </div>
+        <div class="panel sand">
+          <h2>Controls</h2>
+          <div class="ctl" id="dSevCtl">
+            <div class="row"><span>violation strength</span><b id="dSev">0.75</b></div>
+            <input id="dSevs" type="range" min="0" max="1" step="0.01" value="0.75" aria-label="Violation strength">
+            <div class="what" id="dSevWhat"></div>
+          </div>
+          <div class="ctl">
+            <div class="row"><span>points n</span><b id="dN">60</b></div>
+            <input id="dNs" type="range" min="20" max="150" step="1" value="60" aria-label="Number of points">
+          </div>
+          <div class="toggles">
+            <label class="toggle"><input type="checkbox" id="dRem"> apply the remedy</label>
+            <label class="toggle"><input type="checkbox" id="dSm" checked> smoother on the residual plot</label>
+          </div>
+          <div class="buttons">
+            <button class="act primary" id="dNew" type="button">New sample</button>
+            <button class="act" id="dReset" type="button">Reset</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Diagnostic statistics</h2>
+          <div class="kv" id="dStats"></div>
+        </div>
+        <div class="panel">
+          <h2>Reading of the plots</h2>
+          <div class="verdict" id="dVerdict"></div>
+        </div>
+      </div>
+    </div>
+    <div class="lower two">
+      <div class="panel">
+        <h2>Remedy for this scenario</h2>
+        <div class="note" id="dRemedy"></div>
+        <div class="eq" id="dRemEq" style="margin-top:6px"></div>
+        <div class="refs">Chapter 3 and Chapter 12, Applied Linear Regression Models, Kutner, Nachtsheim and Neter.<br>Chapter 9, Regression Analysis by Example, Chatterjee and Hadi.<br>Durbin, J. and Watson, G. S. (1951). Testing for serial correlation in least squares regression II. Biometrika 38, 159-178.<br>Breusch, T. S. and Pagan, A. R. (1979). A simple test for heteroscedasticity and random coefficient variation. Econometrica 47, 1287-1294.</div>
+      </div>
+      <div class="panel">
+        <h2>How to read the four plots</h2>
+        <p class="note"><b>Residuals against fitted values.</b> A horizontal band of constant width supports linearity and equal variance. Curvature points to a missing term. A widening spread points to unequal variance.</p>
+        <p class="note"><b>Normal quantile plot.</b> Points on the straight line support normal errors. A bend at both ends shows heavy tails, and a bend at one end shows skew.</p>
+        <p class="note"><b>Lag plot.</b> A slope through the cloud shows that neighbouring errors carry information about each other. The Durbin-Watson statistic near 2 indicates no first order correlation.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== multicollinearity ===================== -->
+  <section class="tab" id="paneMc" role="tabpanel" aria-labelledby="tabMc">
+    <div class="board">
+      <div class="quad">
+        <div class="cell"><h3>Predictors</h3><div class="cvbox" style="min-height:300px"><canvas id="cMcX"></canvas></div></div>
+        <div class="cell"><h3>Estimates from repeated samples</h3><div class="cvbox" style="min-height:300px"><canvas id="cMcW"></canvas></div></div>
+      </div>
+      <div class="rail">
+        <div class="panel sand">
+          <h2>Design</h2>
+          <div class="ctl">
+            <div class="row"><span>correlation &rho; between x<sub>1</sub> and x<sub>2</sub></span><b id="mR">0.90</b></div>
+            <input id="mRs" type="range" min="-0.98" max="0.98" step="0.01" value="0.9" aria-label="Correlation between predictors">
+          </div>
+          <div class="ctl">
+            <div class="row"><span>points n</span><b id="mN">40</b></div>
+            <input id="mNs" type="range" min="12" max="200" step="1" value="40" aria-label="Number of points">
+          </div>
+          <div class="ctl">
+            <div class="row"><span>noise &sigma;</span><b id="mSig">1.00</b></div>
+            <input id="mSigs" type="range" min="0.2" max="3" step="0.05" value="1" aria-label="Noise standard deviation">
+          </div>
+          <div class="buttons">
+            <button class="act primary" id="mRun" type="button">Refit 400 samples</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Effect on the estimates</h2>
+          <div class="kv">
+            <span>VIF for each predictor</span><span id="mVif">0</span>
+            <span>standard error inflation</span><span id="mInf">0</span>
+            <span>spread of w&#770;<sub>1</sub></span><span id="mS1">0</span>
+            <span>spread of w&#770;<sub>2</sub></span><span id="mS2">0</span>
+            <span>spread of w&#770;<sub>1</sub> + w&#770;<sub>2</sub></span><span id="mSs">0</span>
+            <span>correlation of w&#770;<sub>1</sub> and w&#770;<sub>2</sub></span><span id="mCor">0</span>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Reading</h2>
+          <div class="verdict" id="mVerdict"></div>
+        </div>
+      </div>
+    </div>
+    <div class="lower two">
+      <div class="panel">
+        <h2>Variance inflation</h2>
+        <div class="eq">
+          <div>y = 1 + 2x<sub>1</sub> + 1.5x<sub>2</sub> + &epsilon;, &nbsp; &epsilon; ~ N(0, &sigma;<sup>2</sup>)</div>
+          <div>VIF<sub>j</sub> = <span class="frac"><span class="num">1</span><span class="den">1 &minus; R<sub>j</sub><sup>2</sup></span></span>, &nbsp; with two predictors R<sub>j</sub><sup>2</sup> = &rho;<sup>2</sup></div>
+          <div>var(w&#770;<sub>j</sub>) = <span class="frac"><span class="num">&sigma;<sup>2</sup></span><span class="den">(n &minus; 1)s<sub>j</sub><sup>2</sup></span></span> &times; VIF<sub>j</sub></div>
+        </div>
+        <div class="refs">Chapter 7, Applied Linear Regression Models, Kutner, Nachtsheim and Neter.</div>
+      </div>
+      <div class="panel">
+        <h2>What to watch</h2>
+        <p class="note">The cloud of estimates stretches along a line of slope &minus;1 as the correlation grows. One coefficient can be raised and the other lowered with little change in the fitted values, so the data give weak information about each one separately.</p>
+        <p class="note">The sum of the two coefficients stays well determined. Prediction at predictor values inside the observed cloud stays accurate, and the individual coefficients are the quantities that suffer.</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <div class="inner">
+    <span><b>CPE 486/586: Machine Learning for Engineering Applications</b></span>
+    <span>University of Alabama in Huntsville</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+"use strict";
+
+var COL = {
+  red:"#d74a49", ink:"#183e4b", ink2:"#1b4552", mute:"#8ba0a4",
+  grey:"#eaeaea", blush:"#fcf1ef", sand:"#e8d8c9", stone:"#ced3d7"
+};
+
+/* ---------------- shared numerical routines ---------------- */
+
+function mul32(a){
+  return function(){
+    a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function gaussFrom(r){
+  var u = 1 - r(), v = r();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+/* Gaussian elimination with partial pivoting. */
+function solve(A, b){
+  var n = b.length, i, j, k, M = [];
+  for(i = 0; i < n; i++){
+    var row = [];
+    for(j = 0; j < n; j++) row.push(A[i][j]);
+    row.push(b[i]);
+    M.push(row);
+  }
+  for(i = 0; i < n; i++){
+    var pv = i;
+    for(k = i + 1; k < n; k++) if(Math.abs(M[k][i]) > Math.abs(M[pv][i])) pv = k;
+    if(Math.abs(M[pv][i]) < 1e-13) return null;
+    var tmp = M[i]; M[i] = M[pv]; M[pv] = tmp;
+    for(k = i + 1; k < n; k++){
+      var f = M[k][i] / M[i][i];
+      for(j = i; j <= n; j++) M[k][j] -= f * M[i][j];
+    }
+  }
+  var x = new Float64Array(n);
+  for(i = n - 1; i >= 0; i--){
+    var s = M[i][n];
+    for(j = i + 1; j < n; j++) s -= M[i][j] * x[j];
+    x[i] = s / M[i][i];
+  }
+  return x;
+}
+function matInv(A){
+  var n = A.length, inv = [], i, j;
+  for(j = 0; j < n; j++){
+    var e = new Float64Array(n);
+    e[j] = 1;
+    var col = solve(A, e);
+    if(!col) return null;
+    inv.push(col);
+  }
+  var out = [];
+  for(i = 0; i < n; i++){
+    var row = new Float64Array(n);
+    for(j = 0; j < n; j++) row[j] = inv[j][i];
+    out.push(row);
+  }
+  return out;
+}
+function normalMatrix(xs, k, ws){
+  var p = k + 1, n = xs.length, A = [], i, j, l;
+  for(i = 0; i < p; i++) A.push(new Float64Array(p));
+  for(l = 0; l < n; l++){
+    var w = ws ? ws[l] : 1, po = powers(xs[l], p);
+    for(i = 0; i < p; i++) for(j = 0; j < p; j++) A[i][j] += w * po[i] * po[j];
+  }
+  return A;
+}
+function powers(u, p){
+  var po = new Float64Array(p);
+  po[0] = 1;
+  for(var j = 1; j < p; j++) po[j] = po[j - 1] * u;
+  return po;
+}
+function polyFit(xs, ys, k, ws){
+  var p = k + 1, n = xs.length, A = normalMatrix(xs, k, ws), b = new Float64Array(p), i, l;
+  for(l = 0; l < n; l++){
+    var w = ws ? ws[l] : 1, po = powers(xs[l], p);
+    for(i = 0; i < p; i++) b[i] += w * po[i] * ys[l];
+  }
+  return solve(A, b);
+}
+function polyEval(w, u){
+  var s = 0, pw = 1;
+  for(var j = 0; j < w.length; j++){ s += w[j] * pw; pw *= u; }
+  return s;
+}
+/* Acklam's rational approximation of the standard normal quantile. */
+function norminv(p){
+  var a = [-39.6968302866538, 220.946098424521, -275.928510446969, 138.357751867269, -30.6647980661472, 2.50662827745924];
+  var b = [-54.4760987982241, 161.585836858041, -155.698979859887, 66.8013118877197, -13.2806815528857];
+  var c = [-0.00778489400243029, -0.322396458041136, -2.40075827716184, -2.54973253934373, 4.37466414146497, 2.93816398269878];
+  var d = [0.00778469570904146, 0.32246712907004, 2.445134137143, 3.75440866190742];
+  var pl = 0.02425, q, r;
+  if(p <= 0) return -8;
+  if(p >= 1) return 8;
+  if(p < pl){
+    q = Math.sqrt(-2 * Math.log(p));
+    return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+  }
+  if(p > 1 - pl){
+    q = Math.sqrt(-2 * Math.log(1 - p));
+    return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+  }
+  q = p - 0.5; r = q * q;
+  return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q /
+         (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+}
+function erf(x){
+  var s = x < 0 ? -1 : 1;
+  x = Math.abs(x);
+  var t = 1 / (1 + 0.3275911 * x);
+  var y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+  return s * y;
+}
+function chi1p(c){ return c <= 0 ? 1 : 1 - erf(Math.sqrt(c / 2)); }
+
+function kernelW(z, kind){
+  var a = Math.abs(z);
+  if(kind === "rect") return a < 1 ? 1 : 0;
+  if(kind === "tricube"){
+    if(a >= 1) return 0;
+    var t = 1 - a * a * a;
+    return t * t * t;
+  }
+  return Math.exp(-0.5 * z * z);
+}
+/* One local weighted fit at x0. Returns the coefficients about x0. */
+function localFit(xs, ys, x0, h, kind, deg){
+  var n = xs.length, ws = new Float64Array(n), cx = new Float64Array(n), i, sw = 0, used = 0;
+  for(i = 0; i < n; i++){
+    ws[i] = kernelW((xs[i] - x0) / h, kind);
+    cx[i] = xs[i] - x0;
+    sw += ws[i];
+    if(ws[i] > 0.05) used++;
+  }
+  if(used < deg + 1 || sw < 1e-8) return null;
+  var w = polyFit(cx, ys, deg, ws);
+  if(!w) return null;
+  return {w:w, sw:sw, used:used, ws:ws};
+}
+function loessCurve(xs, ys, grid, h, kind, deg){
+  var out = new Float64Array(grid.length);
+  for(var i = 0; i < grid.length; i++){
+    var f = localFit(xs, ys, grid[i], h, kind, deg);
+    out[i] = f ? f.w[0] : NaN;
+  }
+  return out;
+}
+
+function mean(a){ var s = 0; for(var i = 0; i < a.length; i++) s += a[i]; return s / a.length; }
+function sd(a){
+  var m = mean(a), s = 0;
+  for(var i = 0; i < a.length; i++) s += (a[i] - m) * (a[i] - m);
+  return Math.sqrt(s / Math.max(1, a.length - 1));
+}
+function corr(a, b){
+  var ma = mean(a), mb = mean(b), sa = 0, sb = 0, sab = 0;
+  for(var i = 0; i < a.length; i++){
+    var da = a[i] - ma, db = b[i] - mb;
+    sa += da * da; sb += db * db; sab += da * db;
+  }
+  return sab / Math.sqrt(sa * sb);
+}
+function fmt(v, d){
+  if(v === null || v === undefined || !isFinite(v)) return "\u2013";
+  d = d === undefined ? 3 : d;
+  return (v < 0 ? "\u2212" : "") + Math.abs(v).toFixed(d);
+}
+
+/* ---------------- canvas helpers ---------------- */
+
+function ensure(cv){
+  var r = cv.getBoundingClientRect();
+  if(r.width < 4 || r.height < 4) return null;
+  var dpr = window.devicePixelRatio || 1;
+  if(cv._w !== r.width || cv._h !== r.height || cv._d !== dpr){
+    cv.width = Math.round(r.width * dpr);
+    cv.height = Math.round(r.height * dpr);
+    cv._w = r.width; cv._h = r.height; cv._d = dpr;
+  }
+  var c = cv.getContext("2d");
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return {c:c, W:r.width, H:r.height};
+}
+function mkPlot(c, W, H, L, R, T, B, xa, xb, ya, yb){
+  var p = {c:c, L:L, T:T, w:W - L - R, h:H - T - B, xa:xa, xb:xb, ya:ya, yb:yb, W:W, H:H};
+  p.X = function(x){ return p.L + (x - p.xa) / (p.xb - p.xa) * p.w; };
+  p.Y = function(y){ return p.T + (p.yb - y) / (p.yb - p.ya) * p.h; };
+  p.ix = function(px){ return p.xa + (px - p.L) / p.w * (p.xb - p.xa); };
+  p.iy = function(py){ return p.yb - (py - p.T) / p.h * (p.yb - p.ya); };
+  p.clip = function(){ c.save(); c.beginPath(); c.rect(p.L, p.T, p.w, p.h); c.clip(); };
+  p.done = function(){ c.restore(); };
+  return p;
+}
+function niceStep(range, want){
+  if(!(range > 0)) return 1;
+  var raw = range / want, e = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10)), n = raw / e;
+  return (n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10) * e;
+}
+function tickText(v, step){
+  var d = step < 0.01 ? 3 : step < 0.1 ? 2 : step < 1 ? 1 : 0;
+  var s = Math.abs(v) < step / 1000 ? (0).toFixed(d) : Math.abs(v).toFixed(d);
+  return (v < -step / 1000 ? "\u2212" : "") + s;
+}
+function axes(p, o){
+  var c = p.c, i;
+  o = o || {};
+  c.fillStyle = o.bg || COL.blush;
+  c.fillRect(p.L, p.T, p.w, p.h);
+  c.font = '600 11px "Bricolage Grotesque", sans-serif';
+  c.lineWidth = 1;
+  var sy = niceStep(p.yb - p.ya, o.ny || 5);
+  c.textAlign = "right"; c.textBaseline = "middle";
+  for(i = Math.ceil(p.ya / sy); i * sy <= p.yb + 1e-9; i++){
+    var y = p.Y(i * sy);
+    c.strokeStyle = COL.stone;
+    c.beginPath(); c.moveTo(p.L, y + 0.5); c.lineTo(p.L + p.w, y + 0.5); c.stroke();
+    c.fillStyle = COL.ink2;
+    c.fillText(tickText(i * sy, sy), p.L - 6, y);
+  }
+  var sx = niceStep(p.xb - p.xa, o.nx || 6);
+  c.textAlign = "center"; c.textBaseline = "top";
+  for(i = Math.ceil(p.xa / sx); i * sx <= p.xb + 1e-9; i++){
+    var x = p.X(i * sx);
+    c.strokeStyle = COL.stone;
+    c.beginPath(); c.moveTo(x + 0.5, p.T); c.lineTo(x + 0.5, p.T + p.h); c.stroke();
+    c.fillStyle = COL.ink2;
+    c.fillText(tickText(i * sx, sx), x, p.T + p.h + 5);
+  }
+  if(o.zeroY && p.ya < 0 && p.yb > 0){
+    c.strokeStyle = COL.ink; c.lineWidth = 1.4;
+    c.beginPath(); c.moveTo(p.L, p.Y(0) + 0.5); c.lineTo(p.L + p.w, p.Y(0) + 0.5); c.stroke();
+  }
+  c.strokeStyle = COL.ink; c.lineWidth = 1.4;
+  c.beginPath();
+  c.moveTo(p.L + 0.5, p.T); c.lineTo(p.L + 0.5, p.T + p.h + 0.5); c.lineTo(p.L + p.w, p.T + p.h + 0.5);
+  c.stroke();
+  c.fillStyle = COL.ink2;
+  if(o.xlab){
+    c.textAlign = "right"; c.textBaseline = "bottom";
+    c.fillText(o.xlab, p.L + p.w, p.T + p.h + 30);
+  }
+  if(o.ylab){
+    c.save();
+    c.translate(p.L - 34, p.T + 2);
+    c.textAlign = "left"; c.textBaseline = "top";
+    c.fillText(o.ylab, 0, 0);
+    c.restore();
+  }
+}
+function curve(p, xs, ys, color, width, dash){
+  var c = p.c, started = false;
+  c.save();
+  c.strokeStyle = color; c.lineWidth = width; c.lineJoin = "round";
+  if(dash) c.setLineDash(dash);
+  c.beginPath();
+  for(var i = 0; i < xs.length; i++){
+    if(!isFinite(ys[i])){ started = false; continue; }
+    if(!started){ c.moveTo(p.X(xs[i]), p.Y(ys[i])); started = true; }
+    else c.lineTo(p.X(xs[i]), p.Y(ys[i]));
+  }
+  c.stroke();
+  c.restore();
+}
+function dot(p, x, y, r, fill, stroke, lw){
+  var c = p.c;
+  c.beginPath();
+  c.arc(p.X(x), p.Y(y), r, 0, Math.PI * 2);
+  if(fill){ c.fillStyle = fill; c.fill(); }
+  if(stroke){ c.strokeStyle = stroke; c.lineWidth = lw || 1.5; c.stroke(); }
+}
+function lerpTo(cur, tgt, k){
+  for(var i = 0; i < cur.length; i++) cur[i] += (tgt[i] - cur[i]) * k;
+}
+
+var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+var EASE = reduced ? 1 : 0.18;
+
+/* ---------------- tab controller ---------------- */
+
+var MODULES = {};
+var active = "poly";
+var TABS = [["poly", "tabPoly", "panePoly"], ["loess", "tabLoess", "paneLoess"],
+            ["diag", "tabDiag", "paneDiag"], ["mc", "tabMc", "paneMc"]];
+
+function selectTab(key){
+  active = key;
+  TABS.forEach(function(t){
+    var on = t[0] === key;
+    document.getElementById(t[1]).setAttribute("aria-selected", on ? "true" : "false");
+    document.getElementById(t[2]).className = on ? "tab on" : "tab";
+  });
+  if(MODULES[key] && MODULES[key].shown) MODULES[key].shown();
+}
+TABS.forEach(function(t){
+  document.getElementById(t[1]).addEventListener("click", function(){ selectTab(t[0]); });
+});
+
+function $(id){ return document.getElementById(id); }
+function onInput(id, fn){ $(id).addEventListener("input", fn); }
+function segGroup(root, attr, fn){
+  var bs = root.querySelectorAll("button");
+  for(var i = 0; i < bs.length; i++){
+    (function(b){
+      b.addEventListener("click", function(){
+        for(var j = 0; j < bs.length; j++) bs[j].setAttribute("aria-pressed", bs[j] === b ? "true" : "false");
+        fn(b.getAttribute(attr));
+      });
+    })(bs[i]);
+  }
+}
+
+/* ================= module: polynomial regression ================= */
+
+MODULES.poly = (function(){
+  var st = {n:30, sig:1, k:3, seed:4865, showTrue:true, showTest:false, showRes:false, showLev:false};
+  var NTEST = 120, NC = 240, KMAX = 12;
+  var tr = null, te = null, w = null, lev = null;
+  var gx = new Float64Array(NC), gy = new Float64Array(NC), gyT = new Float64Array(NC);
+  var rmTr = new Float64Array(KMAX + 1), rmTe = new Float64Array(KMAX + 1);
+  var first = true;
+  for(var i = 0; i < NC; i++) gx[i] = 10 * i / (NC - 1);
+
+  function truth(x){ return 2 + 1.6 * Math.sin(0.8 * x) + 0.25 * x; }
+  function u(x){ return (x - 5) / 5; }
+
+  function sample(n, r){
+    var xs = new Float64Array(n), ys = new Float64Array(n);
+    for(var i = 0; i < n; i++){
+      xs[i] = 0.2 + 9.6 * r();
+      ys[i] = truth(xs[i]) + st.sig * gaussFrom(r);
+    }
+    return {x:xs, y:ys, n:n, dx:Float64Array.from(xs), dy:Float64Array.from(ys)};
+  }
+  function gen(){
+    var r = mul32(st.seed);
+    var old = tr;
+    tr = sample(st.n, r);
+    te = sample(NTEST, r);
+    if(old && old.n === tr.n && !first){ tr.dx = old.dx; tr.dy = old.dy; }
+    fit();
+  }
+  function rmse(d, ww){
+    var s = 0;
+    for(var i = 0; i < d.n; i++){
+      var e = d.y[i] - polyEval(ww, u(d.x[i]));
+      s += e * e;
+    }
+    return Math.sqrt(s / d.n);
+  }
+  function fit(){
+    var us = new Float64Array(tr.n), i, j;
+    for(i = 0; i < tr.n; i++) us[i] = u(tr.x[i]);
+    w = polyFit(us, tr.y, Math.min(st.k, tr.n - 1));
+    if(!w) w = polyFit(us, tr.y, 0);
+    for(i = 0; i < NC; i++) gyT[i] = polyEval(w, u(gx[i]));
+    if(first){ gy.set(gyT); first = false; }
+
+    var A = normalMatrix(us, w.length - 1), Ai = matInv(A);
+    lev = new Float64Array(tr.n);
+    for(i = 0; i < tr.n; i++){
+      var po = powers(us[i], w.length), s = 0;
+      for(j = 0; j < w.length; j++){
+        for(var l = 0; l < w.length; l++) s += po[j] * (Ai ? Ai[j][l] : 0) * po[l];
+      }
+      lev[i] = s;
+    }
+    for(var kk = 0; kk <= KMAX; kk++){
+      var wk = polyFit(us, tr.y, Math.min(kk, tr.n - 1));
+      rmTr[kk] = wk ? rmse(tr, wk) : NaN;
+      rmTe[kk] = wk ? rmse(te, wk) : NaN;
+    }
+    report();
+  }
+  function report(){
+    var i, sse = 0, sst = 0, my = mean(Array.prototype.slice.call(tr.y));
+    for(i = 0; i < tr.n; i++){
+      var e = tr.y[i] - polyEval(w, u(tr.x[i]));
+      sse += e * e;
+      sst += (tr.y[i] - my) * (tr.y[i] - my);
+    }
+    var p = w.length, r2 = sst > 0 ? 1 - sse / sst : 1;
+    var adj = tr.n - p > 0 ? 1 - (1 - r2) * (tr.n - 1) / (tr.n - p) : NaN;
+    var mx = 0;
+    for(i = 0; i < p; i++) mx = Math.max(mx, Math.abs(w[i]));
+    $("pRmTr").textContent = fmt(rmse(tr, w));
+    $("pRmTe").textContent = fmt(rmse(te, w));
+    $("pRmTe").className = rmse(te, w) > 2.2 * rmse(tr, w) ? "warn" : "";
+    $("pR2").textContent = fmt(r2);
+    $("pAdj").textContent = fmt(adj);
+    $("pP").textContent = p;
+    var trace = 0;
+    for(i = 0; i < tr.n; i++) trace += lev[i];
+    $("pTr").textContent = fmt(trace, 2);
+    $("pMaxw").textContent = mx > 999 ? mx.toExponential(1) : fmt(mx, 2);
+    $("pMaxw").className = mx > 50 ? "warn" : "";
+
+    var h = "";
+    for(i = 0; i < p; i++) h += "w&#770;<sub>" + i + "</sub> = <b>" + fmt(w[i], 3) + "</b>" + (i < p - 1 ? ", &nbsp;" : "");
+    $("pCoefs").innerHTML = h;
+
+    var cols = "<tr><th>row</th>";
+    for(i = 0; i < p; i++) cols += "<th>" + (i === 0 ? "1" : (i === 1 ? "u" : "u<sup>" + i + "</sup>")) + "</th>";
+    cols += "<th>y</th></tr>";
+    var rows = "";
+    for(var rI = 0; rI < Math.min(3, tr.n); rI++){
+      rows += "<tr><td>" + (rI + 1) + "</td>";
+      var po = powers(u(tr.x[rI]), p);
+      for(i = 0; i < p; i++) rows += "<td>" + po[i].toFixed(3).replace("-", "\u2212") + "</td>";
+      rows += "<td>" + tr.y[rI].toFixed(2).replace("-", "\u2212") + "</td></tr>";
+    }
+    rows += '<tr class="dots"><td>&#8942;</td>';
+    for(i = 0; i < p + 1; i++) rows += "<td>&#8942;</td>";
+    rows += "</tr>";
+    $("pVand").innerHTML = cols + rows;
+  }
+
+  function draw(){
+    var e = ensure($("cPoly"));
+    if(e){
+      var p = mkPlot(e.c, e.W, e.H, 48, 16, 14, 34, 0, 10, -6, 13);
+      e.c.clearRect(0, 0, e.W, e.H);
+      axes(p, {xlab:"x", ylab:"y"});
+      p.clip();
+      if(st.showTrue){
+        var ty = new Float64Array(NC);
+        for(var i = 0; i < NC; i++) ty[i] = truth(gx[i]);
+        curve(p, gx, ty, COL.ink, 1.8, [8, 5]);
+      }
+      if(st.showTest) for(i = 0; i < te.n; i++) dot(p, te.x[i], te.y[i], 3.2, null, COL.mute, 1.6);
+      if(st.showRes){
+        e.c.strokeStyle = COL.mute; e.c.lineWidth = 1.3;
+        e.c.beginPath();
+        for(i = 0; i < tr.n; i++){
+          e.c.moveTo(p.X(tr.dx[i]), p.Y(tr.dy[i]));
+          e.c.lineTo(p.X(tr.dx[i]), p.Y(polyEval(w, u(tr.dx[i]))));
+        }
+        e.c.stroke();
+      }
+      curve(p, gx, gy, COL.red, 2.8);
+      for(i = 0; i < tr.n; i++){
+        var r = st.showLev ? 3 + 14 * Math.sqrt(Math.max(0, lev[i])) : 4.6;
+        dot(p, tr.dx[i], tr.dy[i], r, COL.ink2, COL.blush, 1.5);
+      }
+      p.done();
+    }
+    var e2 = ensure($("cRmse"));
+    if(e2){
+      var lo = 1e9, hi = 1e-9, i2;
+      for(i2 = 0; i2 <= KMAX; i2++){
+        if(isFinite(rmTr[i2])) lo = Math.min(lo, rmTr[i2]);
+        if(isFinite(rmTe[i2])) hi = Math.max(hi, rmTe[i2]);
+      }
+      lo = Math.max(0.02, lo * 0.7); hi = Math.min(400, Math.max(hi * 1.4, lo * 10));
+      var la = Math.log(lo) / Math.LN10, lb = Math.log(hi) / Math.LN10;
+      var q = mkPlot(e2.c, e2.W, e2.H, 42, 10, 10, 26, -0.4, KMAX + 0.4, la, lb);
+      e2.c.clearRect(0, 0, e2.W, e2.H);
+      e2.c.fillStyle = COL.blush;
+      e2.c.fillRect(q.L, q.T, q.w, q.h);
+      e2.c.font = '600 10.5px "Bricolage Grotesque", sans-serif';
+      e2.c.textAlign = "right"; e2.c.textBaseline = "middle";
+      for(var d = Math.ceil(la); d <= lb; d++){
+        var yy = q.Y(d);
+        e2.c.strokeStyle = COL.stone;
+        e2.c.beginPath(); e2.c.moveTo(q.L, yy + 0.5); e2.c.lineTo(q.L + q.w, yy + 0.5); e2.c.stroke();
+        e2.c.fillStyle = COL.ink2;
+        e2.c.fillText(Math.pow(10, d) >= 1 ? String(Math.pow(10, d)) : Math.pow(10, d).toFixed(Math.min(3, -d)), q.L - 5, yy);
+      }
+      e2.c.textAlign = "center"; e2.c.textBaseline = "top";
+      for(var kx = 0; kx <= KMAX; kx += 2){
+        e2.c.fillStyle = COL.ink2;
+        e2.c.fillText(String(kx), q.X(kx), q.T + q.h + 5);
+      }
+      e2.c.strokeStyle = COL.ink; e2.c.lineWidth = 2;
+      e2.c.setLineDash([3, 3]);
+      e2.c.beginPath(); e2.c.moveTo(q.X(st.k), q.T); e2.c.lineTo(q.X(st.k), q.T + q.h); e2.c.stroke();
+      e2.c.setLineDash([]);
+      q.clip();
+      var ks = [], lt = [], lv = [];
+      for(i2 = 0; i2 <= KMAX; i2++){
+        ks.push(i2);
+        lt.push(Math.log(Math.max(1e-6, rmTr[i2])) / Math.LN10);
+        lv.push(Math.log(Math.max(1e-6, rmTe[i2])) / Math.LN10);
+      }
+      curve(q, ks, lv, COL.ink2, 2.2);
+      curve(q, ks, lt, COL.red, 2.2);
+      for(i2 = 0; i2 <= KMAX; i2++){
+        dot(q, i2, lt[i2], 2.6, COL.red, null);
+        dot(q, i2, lv[i2], 2.6, COL.ink2, null);
+      }
+      q.done();
+      e2.c.fillStyle = COL.red; e2.c.textAlign = "left"; e2.c.textBaseline = "top";
+      e2.c.fillText("train", q.L + 6, q.T + 4);
+      e2.c.fillStyle = COL.ink2;
+      e2.c.fillText("held out", q.L + 6, q.T + 17);
+      q.hit = true;
+      lastRmsePlot = q;
+    }
+  }
+  var lastRmsePlot = null;
+
+  function step(){
+    lerpTo(gy, gyT, EASE);
+    for(var i = 0; i < tr.n; i++){
+      tr.dx[i] += (tr.x[i] - tr.dx[i]) * EASE;
+      tr.dy[i] += (tr.y[i] - tr.dy[i]) * EASE;
+    }
+  }
+
+  onInput("pKs", function(){ st.k = +this.value; $("pK").textContent = st.k; fit(); });
+  onInput("pNs", function(){ st.n = +this.value; $("pN").textContent = st.n; gen(); });
+  onInput("pSigs", function(){ st.sig = +this.value; $("pSig").textContent = st.sig.toFixed(2); gen(); });
+  $("pTrue").addEventListener("change", function(){ st.showTrue = this.checked; });
+  $("pTest").addEventListener("change", function(){ st.showTest = this.checked; });
+  $("pRes").addEventListener("change", function(){ st.showRes = this.checked; });
+  $("pLev").addEventListener("change", function(){ st.showLev = this.checked; });
+  $("pNew").addEventListener("click", function(){ st.seed = (Math.random() * 4294967295) >>> 0; gen(); });
+  $("pReset").addEventListener("click", function(){
+    st.n = 30; st.sig = 1; st.k = 3; st.seed = 4865;
+    $("pKs").value = 3; $("pK").textContent = "3";
+    $("pNs").value = 30; $("pN").textContent = "30";
+    $("pSigs").value = 1; $("pSig").textContent = "1.00";
+    gen();
+  });
+  $("cRmse").addEventListener("click", function(ev){
+    if(!lastRmsePlot) return;
+    var r = this.getBoundingClientRect();
+    var k = Math.round(lastRmsePlot.ix(ev.clientX - r.left));
+    k = Math.max(0, Math.min(KMAX, k));
+    st.k = k; $("pKs").value = k; $("pK").textContent = k;
+    fit();
+  });
+
+  gen();
+  return {draw:draw, step:step};
+})();
+
+/* ================= module: locally weighted regression ================= */
+
+MODULES.loess = (function(){
+  var st = {n:60, sig:0.45, h:1, x0:5, kind:"gauss", deg:1, shape:"v", seed:777, sweep:0, sweeping:false};
+  var NG = 170;
+  var gx = new Float64Array(NG), gy = new Float64Array(NG), gyT = new Float64Array(NG);
+  var xs = null, ys = null, dx = null, dy = null;
+  for(var i = 0; i < NG; i++) gx[i] = 10 * i / (NG - 1);
+  var first = true;
+
+  function truth(x){ return st.shape === "v" ? 5 - Math.abs(x - 5) : 3 + 2 * Math.sin(0.9 * x); }
+  function gen(){
+    var r = mul32(st.seed), n = st.n, keep = xs && xs.length === n;
+    var nx = new Float64Array(n), ny = new Float64Array(n);
+    for(var j = 0; j < n; j++){
+      nx[j] = 0.15 + 9.7 * r();
+      ny[j] = truth(nx[j]) + st.sig * gaussFrom(r);
+    }
+    if(!keep){ dx = Float64Array.from(nx); dy = Float64Array.from(ny); }
+    xs = nx; ys = ny;
+    recompute();
+  }
+  function recompute(){
+    var c = loessCurve(xs, ys, gx, st.h, st.kind, st.deg);
+    gyT.set(c);
+    if(first){ gy.set(gyT); first = false; }
+    report();
+  }
+  function report(){
+    var f = localFit(xs, ys, st.x0, st.h, st.kind, st.deg);
+    $("lSw").textContent = f ? fmt(f.sw, 2) : "\u2013";
+    $("lNe").textContent = f ? f.used : "0";
+    $("lA").textContent = f ? fmt(f.w[0]) : "\u2013";
+    $("lB").textContent = f && f.w.length > 1 ? fmt(f.w[1]) : "0";
+    $("lYh").textContent = f ? fmt(f.w[0]) : "\u2013";
+    var kf = st.kind === "gauss" ? "&kappa;(z) = exp(&minus;z<sup>2</sup>/2)" :
+             st.kind === "tricube" ? "&kappa;(z) = (1 &minus; |z|<sup>3</sup>)<sup>3</sup> for |z| &lt; 1, else 0" :
+             "&kappa;(z) = 1 for |z| &lt; 1, else 0";
+    $("lKform").innerHTML = kf;
+  }
+
+  function draw(){
+    var e = ensure($("cLo")), i;
+    var yr = st.shape === "v" ? [-1.5, 8] : [-2.5, 9];
+    if(e){
+      var p = mkPlot(e.c, e.W, e.H, 46, 16, 12, 30, 0, 10, yr[0], yr[1]);
+      e.c.clearRect(0, 0, e.W, e.H);
+      axes(p, {xlab:"x", ylab:"y"});
+      p.clip();
+      var ty = new Float64Array(NG);
+      for(i = 0; i < NG; i++) ty[i] = truth(gx[i]);
+      curve(p, gx, ty, COL.ink, 1.6, [8, 5]);
+
+      var upto = st.sweeping ? st.sweep : 10;
+      var cx = [], cy = [];
+      for(i = 0; i < NG; i++){ if(gx[i] <= upto + 1e-9){ cx.push(gx[i]); cy.push(gy[i]); } }
+      curve(p, cx, cy, COL.red, 3);
+
+      var f = localFit(xs, ys, st.x0, st.h, st.kind, st.deg);
+      for(i = 0; i < xs.length; i++){
+        var wv = f ? f.ws[i] : 0;
+        var t = Math.min(1, wv);
+        var col = "rgb(" + Math.round(139 + (215 - 139) * t) + "," + Math.round(160 + (74 - 160) * t) + "," + Math.round(164 + (73 - 164) * t) + ")";
+        dot(p, dx[i], dy[i], 3.4 + 2.8 * t, col, COL.blush, 1.1);
+      }
+      if(f){
+        var span = st.kind === "gauss" ? 2 * st.h : st.h;
+        var xA = Math.max(0, st.x0 - span), xB = Math.min(10, st.x0 + span);
+        var yA = f.w[0] + (f.w.length > 1 ? f.w[1] * (xA - st.x0) : 0);
+        var yB = f.w[0] + (f.w.length > 1 ? f.w[1] * (xB - st.x0) : 0);
+        e.c.strokeStyle = COL.ink; e.c.lineWidth = 3;
+        e.c.beginPath(); e.c.moveTo(p.X(xA), p.Y(yA)); e.c.lineTo(p.X(xB), p.Y(yB)); e.c.stroke();
+        e.c.setLineDash([3, 4]); e.c.lineWidth = 1.2; e.c.strokeStyle = COL.ink2;
+        e.c.beginPath(); e.c.moveTo(p.X(st.x0), p.T); e.c.lineTo(p.X(st.x0), p.T + p.h); e.c.stroke();
+        e.c.setLineDash([]);
+        dot(p, st.x0, f.w[0], 6, COL.red, COL.blush, 2.5);
+      }
+      p.done();
+      e.c.fillStyle = COL.ink2;
+      e.c.font = '700 12px "Bricolage Grotesque", sans-serif';
+      e.c.textAlign = "center"; e.c.textBaseline = "top";
+      e.c.fillText("x\u2080", Math.max(p.L + 8, Math.min(p.L + p.w - 8, p.X(st.x0))), p.T + p.h + 15);
+    }
+    var e2 = ensure($("cKer"));
+    if(e2){
+      var q = mkPlot(e2.c, e2.W, e2.H, 46, 16, 10, 24, 0, 10, 0, 1.08);
+      e2.c.clearRect(0, 0, e2.W, e2.H);
+      axes(q, {ny:3, ylab:"\u03BA"});
+      q.clip();
+      var kx = [], ky = [];
+      for(i = 0; i <= 300; i++){
+        var x = 10 * i / 300;
+        kx.push(x); ky.push(kernelW((x - st.x0) / st.h, st.kind));
+      }
+      e2.c.fillStyle = "rgba(215,74,73,0.15)";
+      e2.c.beginPath();
+      e2.c.moveTo(q.X(0), q.Y(0));
+      for(i = 0; i < kx.length; i++) e2.c.lineTo(q.X(kx[i]), q.Y(ky[i]));
+      e2.c.lineTo(q.X(10), q.Y(0));
+      e2.c.closePath(); e2.c.fill();
+      curve(q, kx, ky, COL.red, 2);
+      e2.c.strokeStyle = COL.ink2; e2.c.lineWidth = 1.2;
+      e2.c.beginPath();
+      for(i = 0; i < xs.length; i++){
+        var wv2 = kernelW((xs[i] - st.x0) / st.h, st.kind);
+        if(wv2 < 0.005) continue;
+        e2.c.moveTo(q.X(xs[i]), q.Y(0));
+        e2.c.lineTo(q.X(xs[i]), q.Y(wv2));
+      }
+      e2.c.stroke();
+      q.done();
+    }
+  }
+
+  function step(dt){
+    lerpTo(gy, gyT, EASE);
+    for(var i = 0; i < xs.length; i++){
+      dx[i] += (xs[i] - dx[i]) * EASE;
+      dy[i] += (ys[i] - dy[i]) * EASE;
+    }
+    if(st.sweeping){
+      st.sweep += dt * 0.0022 * 10;
+      st.x0 = Math.min(10, st.sweep);
+      $("lX0s").value = st.x0.toFixed(2);
+      $("lX0").textContent = st.x0.toFixed(1);
+      if(st.sweep >= 10){ st.sweeping = false; $("lSweep").textContent = "Sweep the pivot"; }
+      report();
+    }
+  }
+
+  onInput("lHs", function(){ st.h = +this.value; $("lH").textContent = st.h.toFixed(2); recompute(); });
+  onInput("lX0s", function(){ st.x0 = +this.value; $("lX0").textContent = st.x0.toFixed(1); st.sweeping = false; $("lSweep").textContent = "Sweep the pivot"; report(); });
+  onInput("lNs", function(){ st.n = +this.value; $("lN").textContent = st.n; gen(); });
+  onInput("lSigs", function(){ st.sig = +this.value; $("lSig").textContent = st.sig.toFixed(2); gen(); });
+  segGroup(document.querySelector('#paneLoess .seg[aria-label="Kernel"]'), "data-k", function(v){ st.kind = v; recompute(); });
+  segGroup(document.querySelector('#paneLoess .seg[aria-label="Local degree"]'), "data-d", function(v){ st.deg = +v; recompute(); });
+  segGroup(document.querySelector('#paneLoess .seg[aria-label="Data shape"]'), "data-s", function(v){ st.shape = v; gen(); });
+  $("lNew").addEventListener("click", function(){ st.seed = (Math.random() * 4294967295) >>> 0; gen(); });
+  $("lSweep").addEventListener("click", function(){
+    if(st.sweeping){ st.sweeping = false; this.textContent = "Sweep the pivot"; return; }
+    st.sweep = 0; st.sweeping = true; this.textContent = "Stop the sweep";
+    $("loHint").className = "hint gone";
+  });
+  (function(){
+    var cv = $("cLo"), down = false;
+    function set(ev){
+      var r = cv.getBoundingClientRect();
+      var p = mkPlot(cv.getContext("2d"), r.width, r.height, 46, 16, 12, 30, 0, 10, 0, 1);
+      var x = Math.max(0, Math.min(10, p.ix(ev.clientX - r.left)));
+      st.x0 = x; st.sweeping = false;
+      $("lSweep").textContent = "Sweep the pivot";
+      $("lX0s").value = x.toFixed(2);
+      $("lX0").textContent = x.toFixed(1);
+      report();
+    }
+    cv.addEventListener("pointerdown", function(ev){
+      down = true; cv.setPointerCapture(ev.pointerId); set(ev);
+      $("loHint").className = "hint gone";
+    });
+    cv.addEventListener("pointermove", function(ev){ if(down) set(ev); });
+    cv.addEventListener("pointerup", function(){ down = false; });
+    cv.addEventListener("pointercancel", function(){ down = false; });
+  })();
+
+  gen();
+  return {draw:draw, step:step};
+})();
+
+/* ================= module: diagnostics and remedies ================= */
+
+MODULES.diag = (function(){
+  var SC = [
+    {k:"clean",   name:"Well behaved",
+     rem:"Nothing to repair. The residual band is level, the quantile plot is straight and the lag plot shows no slope.", eq:""},
+    {k:"curve",   name:"Curved mean",
+     rem:"Add the missing power of the predictor, or fit a local regression. The residual plot is the place where the missing term shows itself.",
+     eq:"y = w<sub>0</sub> + w<sub>1</sub>x + w<sub>2</sub>x<sup>2</sup> + &epsilon;"},
+    {k:"hetero",  name:"Variance grows with x",
+     rem:"Use weighted least squares with weights equal to the inverse of the modelled variance. A transformation of the response often works as well.",
+     eq:"w&#770; = (X<sup>&#8868;</sup>WX)<sup>&minus;1</sup>X<sup>&#8868;</sup>Wy, &nbsp; W = diag(1/&sigma;<sub>i</sub><sup>2</sup>)"},
+    {k:"auto",    name:"Correlated errors in order",
+     rem:"Estimate the first order correlation from the residuals and refit on transformed variables. This is the Cochrane and Orcutt procedure.",
+     eq:"y*<sub>t</sub> = y<sub>t</sub> &minus; &rho;&#770;y<sub>t&minus;1</sub>, &nbsp; x*<sub>t</sub> = x<sub>t</sub> &minus; &rho;&#770;x<sub>t&minus;1</sub>"},
+    {k:"mult",    name:"Multiplicative errors",
+     rem:"Transform the response. With errors that scale with the mean, the logarithm turns the model into one with additive errors of constant variance.",
+     eq:"log y = w<sub>0</sub> + w<sub>1</sub>x + &epsilon;"},
+    {k:"outlier", name:"Influential point",
+     rem:"Check the flagged observation against its record. Cook's distance above one marks a point whose removal moves the fit. Robust regression downweights such a point instead of dropping it.",
+     eq:"D<sub>i</sub> = <span class='frac'><span class='num'>e<sub>i</sub><sup>2</sup>h<sub>ii</sub></span><span class='den'>p s<sup>2</sup>(1 &minus; h<sub>ii</sub>)<sup>2</sup></span></span>"}
+  ];
+  var st = {sc:"curve", sev:0.75, n:60, rem:false, sm:true, seed:20261007};
+  var base = null, A = null;
+  var D = {ax:[], ay:[], bx:[], by:[], cx:[], cy:[], dx:[], dy:[]};
+  var rg = {a:[0, 10, -2, 14], b:[0, 10, -3, 3], c:[-3, 3, -3, 3], d:[-3, 3, -3, 3]};
+  var rgT = rg.a.slice ? {a:rg.a.slice(), b:rg.b.slice(), c:rg.c.slice(), d:rg.d.slice()} : null;
+  var first = true;
+
+  function makeBase(){
+    var r = mul32(st.seed), n = st.n, i;
+    base = {x:new Float64Array(n), z:new Float64Array(n), z2:new Float64Array(n)};
+    for(i = 0; i < n; i++){
+      base.x[i] = 0.3 + 9.4 * (i + 0.5) / n + (r() - 0.5) * (6 / n);
+      base.z[i] = gaussFrom(r);
+      base.z2[i] = gaussFrom(r);
+    }
+  }
+  function data(){
+    var n = st.n, s = st.sev, x = base.x, z = base.z, y = new Float64Array(n), i;
+    var sc = st.sc, flag = -1;
+    if(sc === "clean"){ for(i = 0; i < n; i++) y[i] = 2 + 0.8 * x[i] + z[i]; }
+    else if(sc === "curve"){ for(i = 0; i < n; i++) y[i] = 2 + 0.8 * x[i] + s * 0.52 * ((x[i] - 5) * (x[i] - 5) - 8.33) + z[i]; }
+    else if(sc === "hetero"){ for(i = 0; i < n; i++) y[i] = 2 + 0.8 * x[i] + z[i] * (1 + s * 9 * x[i] / 10); }
+    else if(sc === "auto"){
+      var rho = 0.97 * s, e = 0;
+      for(i = 0; i < n; i++){
+        e = rho * e + Math.sqrt(1 - rho * rho) * z[i];
+        y[i] = 2 + 0.8 * x[i] + 1.8 * e;
+      }
+    }
+    else if(sc === "mult"){
+      var sl = 0.08 + 0.55 * s;
+      for(i = 0; i < n; i++) y[i] = Math.exp(0.55 + 0.165 * x[i]) * Math.exp(sl * z[i] - sl * sl / 2);
+    }
+    else {
+      for(i = 0; i < n; i++) y[i] = 2 + 0.8 * x[i] + z[i];
+      flag = n - 1;
+      x = Float64Array.from(x);
+      x[flag] = 9.7;
+      y[flag] = 2 + 0.8 * 9.7 - s * 20;
+    }
+    return {x:x, y:y, flag:flag};
+  }
+
+  /* One least squares fit on centred powers of the predictor. */
+  function ols(xv, yv, deg, ws){
+    var n = xv.length, i, j, l, u = new Float64Array(n);
+    for(i = 0; i < n; i++) u[i] = (xv[i] - 5) / 5;
+    var w = polyFit(u, yv, deg, ws);
+    if(!w) return null;
+    var M = normalMatrix(u, deg, ws), Mi = matInv(M);
+    var fitted = new Float64Array(n), resid = new Float64Array(n), lev = new Float64Array(n), sse = 0, sw = 0;
+    for(i = 0; i < n; i++){
+      fitted[i] = polyEval(w, u[i]);
+      resid[i] = yv[i] - fitted[i];
+      var wt = ws ? ws[i] : 1;
+      sse += wt * resid[i] * resid[i];
+      sw += wt;
+      var po = powers(u[i], deg + 1), h = 0;
+      for(j = 0; j <= deg; j++) for(l = 0; l <= deg; l++) h += po[j] * (Mi ? Mi[j][l] : 0) * po[l] * wt;
+      lev[i] = h;
+    }
+    var p = deg + 1, s2 = sse / Math.max(1, n - p), my = 0;
+    for(i = 0; i < n; i++) my += (ws ? ws[i] : 1) * yv[i];
+    my /= sw;
+    var sst = 0;
+    for(i = 0; i < n; i++) sst += (ws ? ws[i] : 1) * (yv[i] - my) * (yv[i] - my);
+    return {w:w, fitted:fitted, resid:resid, lev:lev, s:Math.sqrt(s2), p:p,
+            r2:sst > 0 ? 1 - sse / sst : 1, deg:deg, ws:ws};
+  }
+  function evalAt(f, x){ return polyEval(f.w, (x - 5) / 5); }
+
+  function analyze(){
+    var d = data(), n = d.x.length, i;
+    var xv = d.x, yv = d.y, flag = d.flag;
+    var useX = xv, useY = yv, deg = 1, ws = null, f, resid, fitted, lev, s, p, logSpace = false, keep = null;
+    var rho = 0, dropped = -1;
+
+    if(st.rem && st.sc === "curve") deg = 2;
+    if(st.rem && st.sc === "hetero"){
+      ws = new Float64Array(n);
+      for(i = 0; i < n; i++){
+        var sdi = 1 + st.sev * 9 * xv[i] / 10;
+        ws[i] = 1 / (sdi * sdi);
+      }
+    }
+    if(st.rem && st.sc === "mult"){
+      useY = new Float64Array(n);
+      for(i = 0; i < n; i++) useY[i] = Math.log(Math.max(1e-6, yv[i]));
+      logSpace = true;
+    }
+    if(st.rem && st.sc === "outlier"){
+      var f0 = ols(xv, yv, 1), best = -1, bd = -1;
+      for(i = 0; i < n; i++){
+        var cd = f0.resid[i] * f0.resid[i] * f0.lev[i] / (2 * f0.s * f0.s * Math.pow(1 - f0.lev[i], 2));
+        if(cd > bd){ bd = cd; best = i; }
+      }
+      dropped = best;
+      keep = [];
+      for(i = 0; i < n; i++) if(i !== best) keep.push(i);
+      useX = new Float64Array(keep.length);
+      useY = new Float64Array(keep.length);
+      for(i = 0; i < keep.length; i++){ useX[i] = xv[keep[i]]; useY[i] = yv[keep[i]]; }
+    }
+    if(st.rem && st.sc === "auto"){
+      var fa = ols(xv, yv, 1), num = 0, den = 0;
+      for(i = 1; i < n; i++) num += fa.resid[i] * fa.resid[i - 1];
+      for(i = 0; i < n; i++) den += fa.resid[i] * fa.resid[i];
+      rho = den > 0 ? num / den : 0;
+      useX = new Float64Array(n - 1);
+      useY = new Float64Array(n - 1);
+      for(i = 1; i < n; i++){
+        useX[i - 1] = xv[i] - rho * xv[i - 1];
+        useY[i - 1] = yv[i] - rho * yv[i - 1];
+      }
+    }
+
+    f = ols(useX, useY, deg, ws);
+    fitted = f.fitted; resid = f.resid; lev = f.lev; s = f.s; p = f.p;
+    var m = resid.length;
+
+    /* residuals put on a common scale for the quantile plot */
+    var std = new Float64Array(m);
+    for(i = 0; i < m; i++){
+      var wt = ws ? Math.sqrt(ws[i]) : 1;
+      std[i] = wt * resid[i] / (s * Math.sqrt(Math.max(1e-6, 1 - lev[i])));
+    }
+    var shown = new Float64Array(m);
+    for(i = 0; i < m; i++) shown[i] = (ws ? Math.sqrt(ws[i]) : 1) * resid[i];
+
+    /* Statistics use the residuals on the working scale, so a weighted fit is
+       judged by its weighted residuals. */
+    var dwNum = 0, dwDen = 0;
+    for(i = 1; i < m; i++) dwNum += (shown[i] - shown[i - 1]) * (shown[i] - shown[i - 1]);
+    for(i = 0; i < m; i++) dwDen += shown[i] * shown[i];
+    var dw = dwDen > 0 ? dwNum / dwDen : 2;
+
+    var e2 = new Float64Array(m);
+    for(i = 0; i < m; i++) e2[i] = shown[i] * shown[i];
+    var aux = ols(useX, e2, 1), bp = m * Math.max(0, aux ? aux.r2 : 0), bpp = chi1p(bp);
+
+    var ms = 0, m2 = 0, m3 = 0, m4 = 0;
+    for(i = 0; i < m; i++) ms += std[i];
+    ms /= m;
+    for(i = 0; i < m; i++){
+      var dd = std[i] - ms;
+      m2 += dd * dd; m3 += dd * dd * dd; m4 += dd * dd * dd * dd;
+    }
+    m2 /= m; m3 /= m; m4 /= m;
+    var skew = m3 / Math.pow(m2, 1.5), kurt = m4 / (m2 * m2) - 3;
+
+    var sorted = Array.prototype.slice.call(std).sort(function(a, b){ return a - b; });
+    var tq = new Float64Array(m);
+    for(i = 0; i < m; i++) tq[i] = norminv((i + 0.5) / m);
+    var qc = corr(tq, sorted);
+
+    var cookMax = 0, cookIdx = -1;
+    for(i = 0; i < m; i++){
+      var cdi = shown[i] * shown[i] * lev[i] / (p * s * s * Math.pow(1 - lev[i], 2));
+      if(cdi > cookMax){ cookMax = cdi; cookIdx = i; }
+    }
+
+    /* curve for the first panel */
+    var cxs = [], cys = [];
+    for(i = 0; i <= 160; i++){
+      var x = 10 * i / 160;
+      cxs.push(x);
+      if(st.rem && st.sc === "auto"){
+        /* The transformed fit gives a = b0(1 - rho) and b = b1, so the line in
+           the original variables is recovered by dividing the intercept. */
+        var aT = f.w[0] - f.w[1], bT = f.w[1] / 5;
+        cys.push(aT / (1 - rho) + bT * x);
+      }
+      else if(logSpace) cys.push(Math.exp(evalAt(f, x)));
+      else cys.push(evalAt(f, x));
+    }
+
+    /* smoother through the residual plot */
+    var sm = null;
+    if(st.sm && m > 8){
+      var fa2 = Array.prototype.slice.call(fitted), lo = Math.min.apply(null, fa2), hi = Math.max.apply(null, fa2);
+      var grid = [], gstep = (hi - lo) / 40;
+      for(i = 0; i <= 40; i++) grid.push(lo + gstep * i);
+      sm = {x:grid, y:loessCurve(fa2, Array.prototype.slice.call(shown), grid, Math.max(1e-6, 0.3 * (hi - lo)), "gauss", 1)};
+    }
+    var smMax = 0;
+    if(sm) for(i = 0; i < sm.y.length; i++) if(isFinite(sm.y[i])) smMax = Math.max(smMax, Math.abs(sm.y[i]));
+
+    return {x:xv, y:yv, flag:flag, dropped:dropped, cx:cxs, cy:cys, fitted:fitted, resid:shown,
+            std:sorted, tq:tq, sm:sm, m:m, logSpace:logSpace,
+            stats:{r2:f.r2, s:s, dw:dw, rho:1 - dw / 2, bp:bp, bpp:bpp, skew:skew, kurt:kurt,
+                   qc:qc, cookMax:cookMax, cookIdx:cookIdx, smMax:smMax / s, rhoHat:rho}};
+  }
+
+  /* Targets for the morph. A change in the number of points snaps the display. */
+  function setArr(name, vals){
+    var T = name + "T";
+    if(!D[T] || D[T].length !== vals.length || D[name].length !== vals.length){
+      D[T] = Float64Array.from(vals);
+      D[name] = Float64Array.from(vals);
+      return;
+    }
+    for(var i = 0; i < vals.length; i++) D[T][i] = vals[i];
+  }
+
+  /* Robust limits, so one far point does not flatten the rest. */
+  function qspan(arr, pad, sym, extra){
+    var a = [], i;
+    for(i = 0; i < arr.length; i++) if(isFinite(arr[i])) a.push(arr[i]);
+    a.sort(function(x, y){ return x - y; });
+    if(!a.length) return [-1, 1];
+    function q(t){
+      var k = (a.length - 1) * t, lo = Math.floor(k), hi = Math.ceil(k);
+      return a[lo] + (a[hi] - a[lo]) * (k - lo);
+    }
+    var lo2 = q(0.01), hi2 = q(0.99);
+    if(extra !== undefined && isFinite(extra)){ lo2 = Math.min(lo2, extra); hi2 = Math.max(hi2, extra); }
+    if(sym){
+      var r = Math.max(Math.abs(lo2), Math.abs(hi2)) * (1 + pad);
+      return [-r, r];
+    }
+    var d = (hi2 - lo2) * pad || 1;
+    return [lo2 - d, hi2 + d];
+  }
+  /* The frames are built once from the strongest setting of the scenario, so
+     moving the strength slider moves the points instead of the axis. */
+  function computeRanges(){
+    var save = st.sev, probe = [1, 0.55, 0.1], k;
+    var ya = [Infinity, -Infinity], xb = [Infinity, -Infinity], yb = 0, qs = 3.4;
+    /* The widest setting is not always the strongest one. Correlated errors
+       spread most when the correlation is weak, so several are tried. */
+    for(k = 0; k < probe.length; k++){
+      st.sev = probe[k];
+      var B = analyze();
+      var flagY = B.flag >= 0 ? B.y[B.flag] : undefined;
+      var a1 = qspan(Array.prototype.slice.call(B.y).concat(B.cy), 0.10, false, flagY);
+      var b1 = qspan(B.fitted, 0.07, false);
+      var c1 = qspan(B.resid, 0.12, true);
+      ya[0] = Math.min(ya[0], a1[0]); ya[1] = Math.max(ya[1], a1[1]);
+      xb[0] = Math.min(xb[0], b1[0]); xb[1] = Math.max(xb[1], b1[1]);
+      yb = Math.max(yb, c1[1]);
+      qs = Math.max(qs, Math.abs(B.std[0]) * 1.06, Math.abs(B.std[B.std.length - 1]) * 1.06);
+    }
+    st.sev = save;
+    rgT = {a:[0, 10, ya[0], ya[1]], b:[xb[0], xb[1], -yb, yb],
+           c:[-qs, qs, -qs, qs], d:[-yb, yb, -yb, yb]};
+  }
+
+  function update(rescale){
+    A = analyze();
+    var i, n = A.x.length, m = A.m;
+    setArr("ax", A.x); setArr("ay", A.y);
+    var bx = [], by = [];
+    for(i = 0; i < m; i++){ bx.push(A.fitted[i]); by.push(A.resid[i]); }
+    setArr("bx", bx); setArr("by", by);
+    setArr("cx", A.tq); setArr("cy", A.std);
+    var dx = [], dy = [];
+    for(i = 1; i < m; i++){ dx.push(A.resid[i - 1]); dy.push(A.resid[i]); }
+    if(!dx.length){ dx = [0]; dy = [0]; }
+    setArr("dx", dx); setArr("dy", dy);
+
+    if(rescale) computeRanges();
+    if(first){
+      rg = {a:rgT.a.slice(), b:rgT.b.slice(), c:rgT.c.slice(), d:rgT.d.slice()};
+      first = false;
+    }
+    report();
+  }
+
+  function report(){
+    var s = A.stats, h = "";
+    function row(lab, val, bad){ h += "<span>" + lab + "</span><span class='" + (bad ? "warn" : "") + "'>" + val + "</span>"; }
+    row("R<sup>2</sup>", fmt(s.r2), false);
+    row("residual s", fmt(s.s), false);
+    row("Durbin-Watson", fmt(s.dw, 2), s.dw < 1.6 || s.dw > 2.4);
+    row("first order &rho;&#770;", fmt(s.rho, 2), Math.abs(s.rho) > 0.2);
+    row("Breusch-Pagan LM", fmt(s.bp, 2), s.bpp < 0.05);
+    row("its p value", s.bpp < 0.001 ? "&lt; 0.001" : fmt(s.bpp, 3), s.bpp < 0.05);
+    row("residual skewness", fmt(s.skew, 2), Math.abs(s.skew) > 0.75);
+    row("excess kurtosis", fmt(s.kurt, 2), Math.abs(s.kurt) > 1.2);
+    row("quantile plot correlation", fmt(s.qc, 4), s.qc < 0.985);
+    row("largest Cook distance", fmt(s.cookMax, 3), s.cookMax > 0.5);
+    $("dStats").innerHTML = h;
+
+    var flags = [];
+    if(s.smMax > 0.45) flags.push("the mean is not linear in x, since the smoother on the residual plot departs from zero");
+    if(s.bpp < 0.05) flags.push("the error variance is not constant, by the Breusch-Pagan test");
+    if(s.dw < 1.6 || s.dw > 2.4) flags.push("neighbouring errors are correlated, with first order estimate " + fmt(s.rho, 2));
+    if(s.qc < 0.985 || Math.abs(s.skew) > 0.75) flags.push("the errors depart from normality, with skewness " + fmt(s.skew, 2));
+    if(s.cookMax > 0.5) flags.push("one observation carries heavy influence, with Cook distance " + fmt(s.cookMax, 2));
+    var both = s.smMax > 0.45 && (s.dw < 1.6 || s.dw > 2.4);
+    var v;
+    if(!flags.length) v = "<span class='ok'>No violation stands out at this strength.</span> The four plots agree with the assumptions of the linear model.";
+    else {
+      v = "<span class='flag'>Flags raised:</span><br>";
+      for(var i = 0; i < flags.length; i++) v += "&bull; " + flags[i] + "<br>";
+    }
+    if(both) v += "<br>These two flags feed each other. Residuals that follow a curve keep the same sign in runs, and strongly correlated errors wander in a way the smoother follows. Press New sample to tell them apart, since a missing term in the mean returns in the same place and a wandering path does not.";
+    if(st.rem) v += "<br>The remedy is applied, so these figures describe the repaired model.";
+    $("dVerdict").innerHTML = v;
+
+    /* Name the quantity the strength slider is moving, in the units of the model. */
+    var sv = st.sev, what;
+    if(st.sc === "clean") what = "This scenario holds no violation, so the strength has nothing to move.";
+    else if(st.sc === "curve") what = "quadratic coefficient <b>" + fmt(0.52 * sv, 2) + "</b>";
+    else if(st.sc === "hetero") what = "error deviation at x = 10 is <b>" + fmt(1 + 9 * sv, 1) + "</b> times its value at x = 0";
+    else if(st.sc === "auto") what = "error correlation <b>&rho; = " + fmt(0.97 * sv, 2) + "</b>";
+    else if(st.sc === "mult") what = "deviation on the log scale <b>" + fmt(0.08 + 0.55 * sv, 2) + "</b>";
+    else what = "the flagged point sits <b>" + fmt(20 * sv, 1) + "</b> below the line";
+    $("dSevWhat").innerHTML = what;
+    $("dSevs").disabled = st.sc === "clean";
+    $("dSevCtl").className = st.sc === "clean" ? "ctl off" : "ctl";
+
+    var scd = SC.filter(function(c){ return c.k === st.sc; })[0];
+    $("dRemedy").innerHTML = scd.rem;
+    $("dRemEq").innerHTML = scd.eq + (st.sc === "auto" && st.rem ? " &nbsp; with &rho;&#770; = " + fmt(s.rhoHat, 3) : "");
+  }
+
+  function drawPanel(cvId, key, opts){
+    var e = ensure($(cvId));
+    if(!e) return null;
+    var r = rg[key];
+    var p = mkPlot(e.c, e.W, e.H, 44, 12, 10, 28, r[0], r[1], r[2], r[3]);
+    e.c.clearRect(0, 0, e.W, e.H);
+    axes(p, opts);
+    return p;
+  }
+
+  function draw(){
+    var i, p;
+    p = drawPanel("cDFit", "a", {xlab:"x", ylab:"y", ny:4});
+    if(p){
+      p.clip();
+      curve(p, A.cx, A.cy, COL.red, 2.6);
+      for(i = 0; i < D.ax.length; i++){
+        var isFlag = (i === A.flag && st.sc === "outlier");
+        var isDrop = (i === A.dropped);
+        if(isDrop) dot(p, D.ax[i], D.ay[i], 6, null, COL.mute, 2);
+        else dot(p, D.ax[i], D.ay[i], isFlag ? 5.6 : 4.2, isFlag ? COL.red : COL.ink2, COL.blush, 1.4);
+      }
+      p.done();
+    }
+    p = drawPanel("cDRes", "b", {xlab:"fitted", ylab:"e", zeroY:true, ny:4});
+    if(p){
+      p.clip();
+      var sg = 2 * A.stats.s;
+      curve(p, [rg.b[0], rg.b[1]], [sg, sg], COL.mute, 1.4, [6, 4]);
+      curve(p, [rg.b[0], rg.b[1]], [-sg, -sg], COL.mute, 1.4, [6, 4]);
+      for(i = 0; i < D.bx.length; i++) dot(p, D.bx[i], D.by[i], 3.8, COL.ink2, COL.blush, 1.2);
+      if(A.sm) curve(p, A.sm.x, A.sm.y, COL.red, 2.4);
+      p.done();
+    }
+    p = drawPanel("cDQQ", "c", {xlab:"normal quantile", ylab:"standardized e", ny:4});
+    if(p){
+      p.clip();
+      curve(p, [rg.c[0], rg.c[1]], [rg.c[0], rg.c[1]], COL.red, 2, [7, 4]);
+      for(i = 0; i < D.cx.length; i++) dot(p, D.cx[i], D.cy[i], 3.6, COL.ink2, COL.blush, 1.2);
+      p.done();
+    }
+    p = drawPanel("cDLag", "d", {xlab:"e at t \u2212 1", ylab:"e at t", zeroY:true, ny:4});
+    if(p){
+      p.clip();
+      var rh = A.stats.rho;
+      curve(p, [rg.d[0], rg.d[1]], [rg.d[0] * rh, rg.d[1] * rh], COL.red, 2.2);
+      for(i = 0; i < D.dx.length; i++) dot(p, D.dx[i], D.dy[i], 3.6, COL.ink2, COL.blush, 1.2);
+      p.done();
+      p.c.fillStyle = COL.ink;
+      p.c.font = '700 11.5px "Bricolage Grotesque", sans-serif';
+      p.c.textAlign = "left"; p.c.textBaseline = "top";
+      p.c.fillText("DW " + fmt(A.stats.dw, 2), p.L + 7, p.T + 5);
+    }
+  }
+
+  function step(){
+    ["ax", "ay", "bx", "by", "cx", "cy", "dx", "dy"].forEach(function(k){
+      if(D[k + "T"] && D[k].length === D[k + "T"].length) lerpTo(D[k], D[k + "T"], EASE);
+    });
+    ["a", "b", "c", "d"].forEach(function(k){
+      for(var i = 0; i < 4; i++) rg[k][i] += (rgT[k][i] - rg[k][i]) * EASE;
+    });
+  }
+
+  (function build(){
+    var host = $("dChips");
+    SC.forEach(function(c){
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip";
+      b.textContent = c.name;
+      b.setAttribute("aria-pressed", c.k === st.sc ? "true" : "false");
+      b.addEventListener("click", function(){
+        st.sc = c.k;
+        var all = host.querySelectorAll(".chip");
+        for(var i = 0; i < all.length; i++) all[i].setAttribute("aria-pressed", all[i] === b ? "true" : "false");
+        update(true);
+      });
+      host.appendChild(b);
+    });
+  })();
+  onInput("dSevs", function(){ st.sev = +this.value; $("dSev").textContent = st.sev.toFixed(2); update(false); });
+  onInput("dNs", function(){ st.n = +this.value; $("dN").textContent = st.n; makeBase(); update(true); });
+  $("dRem").addEventListener("change", function(){ st.rem = this.checked; update(true); });
+  $("dSm").addEventListener("change", function(){ st.sm = this.checked; update(false); });
+  $("dNew").addEventListener("click", function(){ st.seed = (Math.random() * 4294967295) >>> 0; makeBase(); update(true); });
+  $("dReset").addEventListener("click", function(){
+    st.sc = "curve"; st.sev = 0.75; st.n = 60; st.rem = false; st.seed = 20261007;
+    var chips = $("dChips").querySelectorAll(".chip");
+    for(var ci = 0; ci < chips.length; ci++) chips[ci].setAttribute("aria-pressed", ci === 1 ? "true" : "false");
+    $("dSevs").value = 0.75; $("dSev").textContent = "0.75";
+    $("dNs").value = 60; $("dN").textContent = "60";
+    $("dRem").checked = false;
+    makeBase(); update(true);
+  });
+
+  makeBase();
+  update(true);
+  return {draw:draw, step:step};
+})();
+
+/* ================= module: multicollinearity ================= */
+
+MODULES.mc = (function(){
+  var st = {rho:0.9, n:40, sig:1, seed:3101};
+  var M = 400;
+  var W1 = new Float64Array(M), W2 = new Float64Array(M);
+  var D1 = new Float64Array(M), D2 = new Float64Array(M);
+  var px = null, py = null, dpx = null, dpy = null;
+  var rg = [0, 4, -1, 4], rgT = [0, 4, -1, 4];
+  var stats = {};
+  var first = true;
+
+  function run(){
+    var r = mul32(st.seed), n = st.n, rho = st.rho, k = Math.sqrt(1 - rho * rho), i, j, t;
+    px = new Float64Array(n); py = new Float64Array(n);
+    for(t = 0; t < M; t++){
+      var sxx = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], sxy = [0, 0, 0];
+      var A = [new Float64Array(3), new Float64Array(3), new Float64Array(3)], b = new Float64Array(3);
+      for(i = 0; i < n; i++){
+        var a1 = gaussFrom(r), a2 = rho * a1 + k * gaussFrom(r);
+        var yv = 1 + 2 * a1 + 1.5 * a2 + st.sig * gaussFrom(r);
+        var v = [1, a1, a2];
+        for(j = 0; j < 3; j++){
+          b[j] += v[j] * yv;
+          for(var l = 0; l < 3; l++) A[j][l] += v[j] * v[l];
+        }
+        if(t === 0){ px[i] = a1; py[i] = a2; }
+      }
+      var w = solve(A, b);
+      W1[t] = w ? w[1] : NaN;
+      W2[t] = w ? w[2] : NaN;
+    }
+    if(first || !dpx || dpx.length !== n){
+      dpx = Float64Array.from(px); dpy = Float64Array.from(py);
+      D1.set(W1); D2.set(W2);
+    }
+    measure();
+  }
+  function measure(){
+    var a = Array.prototype.slice.call(W1), b = Array.prototype.slice.call(W2), i;
+    var s1 = sd(a), s2 = sd(b), sum = [];
+    for(i = 0; i < M; i++) sum.push(W1[i] + W2[i]);
+    var vif = 1 / (1 - st.rho * st.rho);
+    stats = {vif:vif, inf:Math.sqrt(vif), s1:s1, s2:s2, ss:sd(sum), cw:corr(a, b)};
+    $("mVif").textContent = fmt(vif, 2);
+    $("mVif").className = vif > 10 ? "warn" : "";
+    $("mInf").textContent = fmt(stats.inf, 2) + "\u00D7";
+    $("mS1").textContent = fmt(s1);
+    $("mS2").textContent = fmt(s2);
+    $("mSs").textContent = fmt(stats.ss);
+    $("mCor").textContent = fmt(stats.cw, 2);
+    /* The frame follows n and the noise, never the correlation, so the cloud
+       is seen to stretch when the correlation is raised. */
+    var hw = Math.max(0.8, 12 * st.sig / Math.sqrt(st.n));
+    rgT = [2 - hw, 2 + hw, 1.5 - hw, 1.5 + hw];
+    if(first){ rg = rgT.slice(); first = false; }
+
+    var v;
+    if(stats.vif < 2.5) v = "<span class='ok'>The predictors carry nearly separate information.</span> The cloud of estimates is round and both coefficients are pinned down about equally well.";
+    else if(stats.vif < 10) v = "Moderate overlap. The spread of each coefficient is " + fmt(stats.inf, 2) + " times what it would be with uncorrelated predictors.";
+    else v = "<span class='flag'>Severe overlap.</span> A variance inflation factor above 10 is the usual point at which the separate coefficients stop being interpretable. Their spread is " + fmt(stats.inf, 2) + " times the uncorrelated case, while the spread of the sum stays near " + fmt(stats.ss, 2) + ".";
+    $("mVerdict").innerHTML = v;
+  }
+
+  function draw(){
+    var e = ensure($("cMcX")), i;
+    if(e){
+      /* Equal units on both axes, so a round cloud is drawn round. */
+      var lim = 3.4, bw = e.W - 58, bh = e.H - 42;
+      var lx = bw >= bh ? lim * bw / bh : lim, ly = bw >= bh ? lim : lim * bh / bw;
+      var p = mkPlot(e.c, e.W, e.H, 44, 14, 12, 30, -lx, lx, -ly, ly);
+      e.c.clearRect(0, 0, e.W, e.H);
+      axes(p, {xlab:"x\u2081", ylab:"x\u2082", ny:4});
+      p.clip();
+      for(i = 0; i < dpx.length; i++) dot(p, dpx[i], dpy[i], 4.2, COL.ink2, COL.blush, 1.3);
+      p.done();
+      e.c.fillStyle = COL.ink;
+      e.c.font = '700 12px "Bricolage Grotesque", sans-serif';
+      e.c.textAlign = "left"; e.c.textBaseline = "top";
+      e.c.fillText("\u03C1 = " + fmt(st.rho, 2) + ",  VIF = " + fmt(stats.vif, 2), p.L + 8, p.T + 6);
+    }
+    var e2 = ensure($("cMcW"));
+    if(e2){
+      var bw2 = e2.W - 60, bh2 = e2.H - 42;
+      var hx = (rg[1] - rg[0]) / 2, hy = (rg[3] - rg[2]) / 2;
+      if(bw2 >= bh2) hx = hy * bw2 / bh2; else hy = hx * bh2 / bw2;
+      var q = mkPlot(e2.c, e2.W, e2.H, 46, 14, 12, 30, 2 - hx, 2 + hx, 1.5 - hy, 1.5 + hy);
+      e2.c.clearRect(0, 0, e2.W, e2.H);
+      axes(q, {xlab:"w\u03021", ylab:"w\u03022", ny:4});
+      q.clip();
+      for(i = 0; i < M; i++) dot(q, D1[i], D2[i], 2.6, "rgba(27,69,82,0.5)", null);
+      /* two standard deviation ellipse of the cloud */
+      var m1 = mean(Array.prototype.slice.call(D1)), m2 = mean(Array.prototype.slice.call(D2));
+      var c11 = 0, c22 = 0, c12 = 0;
+      for(i = 0; i < M; i++){
+        var u1 = D1[i] - m1, u2 = D2[i] - m2;
+        c11 += u1 * u1; c22 += u2 * u2; c12 += u1 * u2;
+      }
+      c11 /= M - 1; c22 /= M - 1; c12 /= M - 1;
+      var tr = c11 + c22, det = c11 * c22 - c12 * c12;
+      var l1 = tr / 2 + Math.sqrt(Math.max(0, tr * tr / 4 - det));
+      var l2 = tr / 2 - Math.sqrt(Math.max(0, tr * tr / 4 - det));
+      var th = 0.5 * Math.atan2(2 * c12, c11 - c22);
+      e2.c.strokeStyle = COL.red; e2.c.lineWidth = 2;
+      e2.c.beginPath();
+      for(i = 0; i <= 90; i++){
+        var a = 2 * Math.PI * i / 90;
+        var ex = 2 * Math.sqrt(Math.max(0, l1)) * Math.cos(a), ey = 2 * Math.sqrt(Math.max(0, l2)) * Math.sin(a);
+        var gxp = m1 + ex * Math.cos(th) - ey * Math.sin(th);
+        var gyp = m2 + ex * Math.sin(th) + ey * Math.cos(th);
+        if(i === 0) e2.c.moveTo(q.X(gxp), q.Y(gyp)); else e2.c.lineTo(q.X(gxp), q.Y(gyp));
+      }
+      e2.c.closePath(); e2.c.stroke();
+      e2.c.strokeStyle = COL.ink; e2.c.lineWidth = 2.4;
+      e2.c.beginPath();
+      e2.c.moveTo(q.X(2) - 8, q.Y(1.5)); e2.c.lineTo(q.X(2) + 8, q.Y(1.5));
+      e2.c.moveTo(q.X(2), q.Y(1.5) - 8); e2.c.lineTo(q.X(2), q.Y(1.5) + 8);
+      e2.c.stroke();
+      q.done();
+      e2.c.fillStyle = COL.ink2;
+      e2.c.font = '600 11.5px "Bricolage Grotesque", sans-serif';
+      e2.c.textAlign = "left"; e2.c.textBaseline = "top";
+      e2.c.fillText("cross marks the true pair (2, 1.5)", q.L + 8, q.T + 6);
+    }
+  }
+
+  function step(){
+    for(var i = 0; i < M; i++){
+      D1[i] += (W1[i] - D1[i]) * EASE;
+      D2[i] += (W2[i] - D2[i]) * EASE;
+    }
+    for(i = 0; i < dpx.length; i++){
+      dpx[i] += (px[i] - dpx[i]) * EASE;
+      dpy[i] += (py[i] - dpy[i]) * EASE;
+    }
+    for(i = 0; i < 4; i++) rg[i] += (rgT[i] - rg[i]) * EASE;
+  }
+
+  onInput("mRs", function(){ st.rho = +this.value; $("mR").textContent = st.rho.toFixed(2); run(); });
+  onInput("mNs", function(){ st.n = +this.value; $("mN").textContent = st.n; run(); });
+  onInput("mSigs", function(){ st.sig = +this.value; $("mSig").textContent = st.sig.toFixed(2); run(); });
+  $("mRun").addEventListener("click", function(){ st.seed = (Math.random() * 4294967295) >>> 0; run(); });
+
+  run();
+  return {draw:draw, step:step};
+})();
+
+/* ================= animation loop ================= */
+
+var last = 0;
+function frame(now){
+  var dt = last ? Math.min(60, now - last) : 16;
+  last = now;
+  var m = MODULES[active];
+  if(m){
+    if(m.step) m.step(dt);
+    if(m.draw) m.draw();
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+})();
+</script>
+
+</body>
+</html>
