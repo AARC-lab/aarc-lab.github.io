@@ -1,0 +1,1746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Principal component analysis</title>
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23183e4b'/%3E%3Cellipse cx='32' cy='32' rx='25' ry='12' transform='rotate(-32 32 32)' fill='none' stroke='%238ba0a4' stroke-width='3'/%3E%3Cpath d='M11 45L53 19' stroke='%23d74a49' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M25 40L39 24' stroke='%23e8d8c9' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --red:#d74a49;
+  --ink:#183e4b;
+  --ink2:#1b4552;
+  --mute:#8ba0a4;
+  --grey:#eaeaea;
+  --blush:#fcf1ef;
+  --sand:#e8d8c9;
+  --stone:#ced3d7;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--blush);color:var(--ink);
+  font-family:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  font-variant-numeric:tabular-nums;font-size:16px;line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1280px;margin:0 auto;padding:26px 22px 0}
+
+header{display:flex;align-items:flex-end;gap:18px;padding-bottom:14px;border-bottom:2px solid var(--ink)}
+header h1{margin:0;font-size:clamp(23px,3.1vw,37px);font-weight:800;font-stretch:92%;letter-spacing:-.02em;line-height:1.05}
+header p{margin:6px 0 0;max-width:68ch;color:var(--ink2);font-size:15px}
+header .tag{
+  margin-left:auto;align-self:flex-start;background:var(--ink);color:var(--blush);
+  font-size:12px;font-weight:600;padding:5px 10px;border-radius:2px;white-space:nowrap;
+}
+
+nav.tabs{display:flex;border-bottom:1px solid var(--stone);flex-wrap:wrap}
+nav.tabs button{
+  font-family:inherit;font-size:14.5px;font-weight:700;color:var(--ink2);
+  background:transparent;border:0;border-bottom:3px solid transparent;
+  padding:13px 18px;cursor:pointer;
+}
+nav.tabs button:hover{color:var(--ink);background:var(--grey)}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--red)}
+nav.tabs button:focus-visible{outline:3px solid var(--red);outline-offset:-3px}
+
+section.tab{display:none;animation:fade .35s ease}
+section.tab.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+.board{display:grid;grid-template-columns:1fr 322px;gap:18px;margin-top:18px;align-items:stretch}
+.rail{display:flex;flex-direction:column;gap:13px}
+.panel{background:var(--grey);border:1px solid var(--stone);padding:13px 15px}
+.panel.sand{background:var(--sand)}
+.panel h2{margin:0 0 9px;font-size:13px;font-weight:700;color:var(--ink2)}
+.panel h2 .sub{font-weight:600;color:var(--mute)}
+
+.plotwrap{position:relative;background:var(--grey);border:1px solid var(--stone);padding:11px 13px 9px;display:flex;flex-direction:column;gap:8px;height:100%}
+.cvbox{position:relative;width:100%}
+canvas{display:block;width:100%;height:100%}
+.cvbox canvas{position:absolute;inset:0}
+.legend{display:flex;flex-wrap:wrap;gap:7px 15px;font-size:12.5px;color:var(--ink2);border-top:1px solid var(--stone);padding-top:7px}
+.legend i{display:inline-block;vertical-align:-1px;margin-right:6px}
+.ln{width:20px;height:0;vertical-align:middle !important}
+.hint{
+  position:absolute;left:58px;top:14px;pointer-events:none;
+  font-size:12px;color:var(--ink2);background:rgba(234,234,234,.9);padding:3px 8px;border-radius:2px;
+  transition:opacity .4s;
+}
+.hint.gone{opacity:0}
+
+.ctl{margin-bottom:11px}
+.ctl:last-child{margin-bottom:0}
+.ctl .row{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}
+.ctl .row span{color:var(--ink2)}
+.ctl .row b{font-weight:800;color:var(--red);font-size:17px}
+.what{font-size:12.5px;color:var(--ink2);line-height:1.4;margin-top:2px}
+.what b{color:var(--ink);font-weight:700}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:24px;background:transparent;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:6px;background:var(--blush);border:1px solid var(--ink)}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;width:18px;height:18px;margin-top:-7px;border-radius:50%;
+  background:var(--red);border:3px solid var(--blush);box-shadow:0 0 0 1px var(--ink);
+}
+input[type=range]::-moz-range-track{height:6px;background:var(--blush);border:1px solid var(--ink)}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--red);border:3px solid var(--blush);box-shadow:0 0 0 1px var(--ink)}
+input[type=range]:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+
+.seg{display:flex;border:1px solid var(--ink);border-radius:2px;overflow:hidden;margin-top:4px}
+.seg button{
+  flex:1;border:0;border-radius:0;background:var(--blush);color:var(--ink);
+  font-family:inherit;font-size:13.5px;font-weight:600;padding:7px 3px;cursor:pointer;white-space:nowrap;
+}
+.seg button + button{border-left:1px solid var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--blush)}
+.seg button:focus-visible{outline:3px solid var(--red);outline-offset:-3px}
+.seglabel{font-size:14px;color:var(--ink2)}
+
+.toggles{display:flex;flex-direction:column;gap:5px}
+.toggle{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink2);cursor:pointer}
+.toggle input{width:16px;height:16px;accent-color:var(--red);margin:0}
+
+.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+button.act{
+  font-family:inherit;font-size:14px;font-weight:600;padding:8px 8px;border-radius:2px;cursor:pointer;
+  border:1px solid var(--ink);background:var(--blush);color:var(--ink);
+}
+button.act:hover{background:var(--stone)}
+button.act.primary{background:var(--ink);color:var(--blush)}
+button.act.primary:hover{background:var(--ink2)}
+button.act.wide{grid-column:1 / -1}
+button.act:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+button.act:disabled{opacity:.5;cursor:default}
+
+.kv{display:grid;grid-template-columns:1fr auto;gap:5px 10px;font-size:13.5px}
+.kv span:nth-child(odd){color:var(--ink2)}
+.kv span:nth-child(even){font-weight:800;text-align:right}
+.kv span.hi{color:var(--red)}
+.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;align-items:end}
+.facts div{font-size:11.5px;color:var(--ink2)}
+.facts b{display:block;font-size:17px;color:var(--ink);font-weight:800}
+.facts b.hi{color:var(--red)}
+
+/* variance budget bar */
+.budget{margin-top:11px}
+.bbar{height:20px;display:flex;border:1px solid var(--ink);overflow:hidden;background:var(--blush)}
+.bbar i{display:block;height:100%}
+.bbar .bv{background:var(--red)}
+.bbar .br{background:var(--mute)}
+.bkey{display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink2);margin-top:4px}
+.bkey b{color:var(--ink);font-weight:800}
+
+/* matrix */
+.mat{display:flex;align-items:center;gap:7px;font-size:14px;margin:4px 0 2px}
+.mat .br2{font-size:42px;font-weight:200;line-height:.86;color:var(--ink2)}
+.mat table{border-collapse:collapse}
+.mat td{padding:2px 9px;text-align:right;font-weight:700;font-size:14.5px;min-width:62px}
+.mat td.off{color:var(--mute)}
+.mat td.on{color:var(--red)}
+.matlab{font-size:12.5px;color:var(--ink2);margin-top:4px}
+
+.verdict{font-size:13.5px;line-height:1.5}
+.verdict b{color:var(--ink)}
+.verdict .flag{color:var(--red);font-weight:700}
+.verdict .ok{color:var(--ink);font-weight:700}
+
+.lower{display:grid;grid-template-columns:1fr 1fr 322px;gap:18px;margin-top:18px;align-items:stretch}
+.lower.two{grid-template-columns:1fr 322px}
+.panel.wide2{grid-column:span 2}
+.lower .span{grid-column:1 / -1}
+@media (max-width:1080px){.panel.wide2{grid-column:1 / -1}}
+.note{font-size:13.5px;color:var(--ink2);line-height:1.55}
+.note + .note{margin-top:9px}
+.note b{color:var(--ink)}
+.eq{font-size:15px;line-height:2.1;overflow-x:auto}
+.eq > div{white-space:nowrap}
+.frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;margin:0 3px;line-height:1.15}
+.frac .num{border-bottom:1.5px solid var(--ink);padding:0 4px}
+.frac .den{padding:0 4px}
+sup,sub{font-size:.68em}
+.refs{font-size:11.5px;color:var(--ink2);margin-top:9px;padding-top:7px;border-top:1px solid var(--stone);line-height:1.5}
+
+.quad{display:grid;grid-template-columns:1fr 1fr;gap:14px;height:100%}
+.quad .cell{background:var(--grey);border:1px solid var(--stone);padding:10px 12px 8px;display:flex;flex-direction:column;min-height:0}
+.quad h3{margin:0 0 6px;font-size:12.5px;font-weight:700;color:var(--ink2)}
+.quad h3 .sub{font-weight:600;color:var(--mute)}
+.quad .cvbox{flex:1;min-height:250px}
+
+footer{margin-top:26px;border-top:2px solid var(--ink)}
+footer .inner{
+  max-width:1280px;margin:0 auto;padding:15px 22px 26px;
+  display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:14px;color:var(--ink2);
+}
+footer b{color:var(--ink);font-weight:700}
+
+@media (max-width:1080px){
+  .lower{grid-template-columns:1fr 1fr}
+  .lower .span{grid-column:1 / -1}
+}
+@media (max-width:900px){
+  .board{grid-template-columns:1fr}
+  .lower,.lower.two{grid-template-columns:1fr}
+  .quad{grid-template-columns:1fr}
+  header{flex-wrap:wrap}
+  header .tag{margin-left:0}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <svg width="52" height="52" viewBox="0 0 64 64" aria-hidden="true">
+      <rect width="64" height="64" rx="12" fill="#183e4b"/>
+      <ellipse cx="32" cy="32" rx="25" ry="12" transform="rotate(-32 32 32)" fill="none" stroke="#8ba0a4" stroke-width="3"/>
+      <path d="M11 45L53 19" stroke="#d74a49" stroke-width="5" stroke-linecap="round"/>
+      <path d="M25 40L39 24" stroke="#e8d8c9" stroke-width="3.5" stroke-linecap="round"/>
+    </svg>
+    <div>
+      <h1>Principal component analysis</h1>
+      <p>Four demonstrations. The direction that carries the most variance, the covariance matrix and its eigenvectors, reduction of many dimensions to a few, and the effect of the units the data arrive in.</p>
+    </div>
+    <div class="tag">Unsupervised learning</div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tabProj" aria-selected="true" aria-controls="paneProj">The projection direction</button>
+    <button role="tab" id="tabEig" aria-selected="false" aria-controls="paneEig">Covariance and eigenvectors</button>
+    <button role="tab" id="tabRed" aria-selected="false" aria-controls="paneRed">Reduction and reconstruction</button>
+    <button role="tab" id="tabScale" aria-selected="false" aria-controls="paneScale">Units and standardization</button>
+  </nav>
+
+  <!-- ============ 1. projection direction ============ -->
+  <section class="tab on" id="paneProj" role="tabpanel" aria-labelledby="tabProj">
+    <div class="board">
+      <div class="plotwrap">
+        <div class="cvbox" style="flex:1;min-height:400px">
+          <canvas id="cProj" aria-label="Scatter with a projection direction"></canvas>
+          <div class="hint" id="projHint">Drag inside the plot to turn the direction w.</div>
+        </div>
+        <div class="legend">
+          <span><i class="ln" style="border-top:3px solid #d74a49"></i>direction w</span>
+          <span><i style="width:11px;height:11px;border-radius:50%;background:#1b4552;border:1.5px solid #fcf1ef"></i>observation</span>
+          <span><i style="width:11px;height:11px;border-radius:50%;background:#d74a49"></i>its projection onto w</span>
+          <span><i class="ln" style="border-top:2px solid #8ba0a4"></i>residual, the part w misses</span>
+          <span><i class="ln" style="border-top:2px dashed #183e4b"></i>second eigenvector</span>
+        </div>
+      </div>
+      <div class="rail">
+        <div class="panel sand">
+          <h2>Direction</h2>
+          <div class="ctl">
+            <div class="row"><span>angle of w</span><b id="pAng">30&deg;</b></div>
+            <input id="pAngs" type="range" min="0" max="180" step="0.5" value="30" aria-label="Angle of the projection direction">
+            <div class="what" id="pWhat"></div>
+          </div>
+          <div class="buttons">
+            <button class="act primary" id="pSolve" type="button">Turn to the maximum</button>
+            <button class="act" id="pSpin" type="button">Sweep 180&deg;</button>
+          </div>
+          <div class="toggles" style="margin-top:11px">
+            <label class="toggle"><input type="checkbox" id="pResid" checked> show residual segments</label>
+            <label class="toggle"><input type="checkbox" id="pProjPts" checked> show projected points</label>
+            <label class="toggle"><input type="checkbox" id="pEll"> show the covariance ellipse</label>
+            <label class="toggle"><input type="checkbox" id="pPc2"> show the second eigenvector</label>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>The variance budget <span class="sub">fixed total</span></h2>
+          <div class="facts">
+            <div>variance along w<b class="hi" id="pVar">0</b></div>
+            <div>mean sq. residual<b id="pRes">0</b></div>
+            <div>their sum<b id="pSum">0</b></div>
+          </div>
+          <div class="budget">
+            <div class="bbar"><i class="bv" id="pBarV"></i><i class="br" id="pBarR"></i></div>
+            <div class="bkey"><span>kept, <b id="pPct">0%</b></span><span>lost, <b id="pPctR">0%</b></span></div>
+          </div>
+          <p class="note" style="margin-top:9px">The total is the trace of the covariance matrix. Turning w moves variance between the two parts and never changes the sum.</p>
+        </div>
+
+        <div class="panel">
+          <h2>Data</h2>
+          <div class="ctl">
+            <div class="row"><span>correlation &rho;</span><b id="pRho">0.80</b></div>
+            <input id="pRhos" type="range" min="-0.97" max="0.97" step="0.01" value="0.8" aria-label="Correlation between the two features">
+          </div>
+          <div class="ctl">
+            <div class="row"><span>points n</span><b id="pN">120</b></div>
+            <input id="pNs" type="range" min="12" max="400" step="1" value="120" aria-label="Number of points">
+          </div>
+          <button class="act wide" id="pNew" type="button">New sample</button>
+        </div>
+      </div>
+    </div>
+    <div class="lower">
+      <div class="panel wide2">
+        <h2>Variance as the direction turns <span class="sub">click to set the angle</span></h2>
+        <div class="cvbox" style="height:238px"><canvas id="cQuad" aria-label="Variance against angle"></canvas></div>
+        <div class="legend">
+          <span><i class="ln" style="border-top:3px solid #d74a49"></i>variance along w</span>
+          <span><i class="ln" style="border-top:3px solid #8ba0a4"></i>mean squared residual</span>
+          <span><i class="ln" style="border-top:2px dashed #1b4552"></i>their sum, the trace of S</span>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Two readings of the same problem</h2>
+        <div class="eq">
+          <div>maximize &nbsp; w<sup>&#8868;</sup>Sw &nbsp; subject to &nbsp; &Vert;w&Vert; = 1</div>
+          <div>minimize &nbsp; <span class="frac"><span class="num">1</span><span class="den">n &minus; 1</span></span> &sum;<sub>i</sub> &Vert;x<sub>i</sub> &minus; (w<sup>&#8868;</sup>x<sub>i</sub>)w&Vert;<sup>2</sup></div>
+          <div>w<sup>&#8868;</sup>Sw + mean squared residual = tr(S)</div>
+        </div>
+        <p class="note" style="margin-top:7px">The two statements have the same solution, and the third line is why. Their sum is fixed, so whatever one gains the other gives up. Drag w and watch the two readouts move in opposite directions by equal amounts.</p>
+      </div>
+      <div class="panel span">
+        <h2>What to watch</h2>
+        <p class="note">The variance curve is a sinusoid in twice the angle. Its two peaks lie 180&deg; apart and name the same line, since w and &minus;w give the same projection.</p>
+        <p class="note">At &rho; = 0 with equal spreads the curve flattens. Every direction is then as good as every other, the two eigenvalues agree, and the principal direction is not defined. Set the correlation to zero and turn w to see the budget bar hold still.</p>
+        <p class="note">Variance is not the same thing as usefulness. Nothing here consults a response variable, so the direction found is the one the predictors vary along most, which need not be the one that predicts. A feature with small spread can still carry the signal, and this method will discard it first.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 2. covariance and eigenvectors ============ -->
+  <section class="tab" id="paneEig" role="tabpanel" aria-labelledby="tabEig">
+    <div class="board">
+      <div class="plotwrap">
+        <div class="cvbox" style="flex:1;min-height:430px"><canvas id="cEig" aria-label="Data through the stages of the transform"></canvas></div>
+        <div class="legend">
+          <span><i class="ln" style="border-top:3px solid #d74a49"></i>first eigenvector, drawn at 2&radic;&lambda;<sub>1</sub></span>
+          <span><i class="ln" style="border-top:3px solid #183e4b"></i>second eigenvector, drawn at 2&radic;&lambda;<sub>2</sub></span>
+          <span><i style="width:18px;height:11px;border:1.5px solid #8ba0a4"></i>two standard deviation ellipse</span>
+          <span><i style="width:11px;height:11px;border-radius:50%;background:#1b4552;border:1.5px solid #fcf1ef"></i>observation</span>
+        </div>
+      </div>
+      <div class="rail">
+        <div class="panel sand">
+          <h2>Stage of the transform</h2>
+          <div class="ctl">
+            <input id="eStage" type="range" min="0" max="3" step="0.01" value="0" aria-label="Stage of the transform">
+            <div class="what" id="eWhat"></div>
+          </div>
+          <div class="seg" role="group" aria-label="Stage">
+            <button type="button" data-s="0" aria-pressed="true">Raw</button>
+            <button type="button" data-s="1" aria-pressed="false">Centred</button>
+            <button type="button" data-s="2" aria-pressed="false">Rotated</button>
+            <button type="button" data-s="3" aria-pressed="false">Whitened</button>
+          </div>
+          <div class="buttons">
+            <button class="act primary wide" id="ePlay" type="button">Run the whole sequence</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Covariance matrix at this stage</h2>
+          <div class="mat">
+            <span class="br2">(</span>
+            <table><tbody>
+              <tr><td class="on" id="eS11">0</td><td class="off" id="eS12">0</td></tr>
+              <tr><td class="off" id="eS21">0</td><td class="on" id="eS22">0</td></tr>
+            </tbody></table>
+            <span class="br2">)</span>
+          </div>
+          <div class="matlab" id="eMatLab"></div>
+          <div class="kv" style="margin-top:10px">
+            <span>&lambda;<sub>1</sub>, first eigenvalue</span><span class="hi" id="eL1">0</span>
+            <span>&lambda;<sub>2</sub>, second eigenvalue</span><span id="eL2">0</span>
+            <span>angle of the first eigenvector</span><span id="eTh">0</span>
+            <span>trace, &lambda;<sub>1</sub> + &lambda;<sub>2</sub></span><span id="eTr">0</span>
+            <span>share carried by the first</span><span id="eShare">0</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Data</h2>
+          <div class="ctl">
+            <div class="row"><span>correlation &rho;</span><b id="eRho">0.85</b></div>
+            <input id="eRhos" type="range" min="-0.97" max="0.97" step="0.01" value="0.85" aria-label="Correlation">
+          </div>
+          <div class="ctl">
+            <div class="row"><span>spread of x<sub>2</sub> against x<sub>1</sub></span><b id="eAsp">0.60</b></div>
+            <input id="eAsps" type="range" min="0.2" max="1" step="0.01" value="0.6" aria-label="Relative spread of the second feature">
+          </div>
+          <button class="act wide" id="eNew" type="button">New sample</button>
+        </div>
+      </div>
+    </div>
+    <div class="lower two">
+      <div class="panel">
+        <h2>The decomposition</h2>
+        <div class="eq">
+          <div>S = <span class="frac"><span class="num">1</span><span class="den">n &minus; 1</span></span> X<sub>c</sub><sup>&#8868;</sup>X<sub>c</sub>, &nbsp; X<sub>c</sub> = X &minus; 1x&#772;<sup>&#8868;</sup></div>
+          <div>S = V&Lambda;V<sup>&#8868;</sup>, &nbsp; V<sup>&#8868;</sup>V = I, &nbsp; &Lambda; = diag(&lambda;<sub>1</sub>, &lambda;<sub>2</sub>), &nbsp; &lambda;<sub>1</sub> &ge; &lambda;<sub>2</sub></div>
+          <div>rotate: Z = X<sub>c</sub>V &nbsp; gives &nbsp; cov(Z) = &Lambda;</div>
+          <div>whiten: Z&Lambda;<sup>&minus;1/2</sup> &nbsp; gives &nbsp; cov = I</div>
+          <div>&lambda; = <span class="frac"><span class="num">s<sub>11</sub> + s<sub>22</sub></span><span class="den">2</span></span> &plusmn; <span class="frac"><span class="num">&radic;((s<sub>11</sub> &minus; s<sub>22</sub>)<sup>2</sup> + 4s<sub>12</sub><sup>2</sup>)</span><span class="den">2</span></span></div>
+        </div>
+        <p class="note" style="margin-top:7px">In two dimensions the eigenvalues have the closed form on the last line, and the first eigenvector lies at &frac12;atan2(2s<sub>12</sub>, s<sub>11</sub> &minus; s<sub>22</sub>). The page uses that form here and the Jacobi method on the larger matrix in the next tab.</p>
+        <div class="refs">Pearson, K. (1901). On lines and planes of closest fit to systems of points in space. Philosophical Magazine 2, 559-572.<br>Hotelling, H. (1933). Analysis of a complex of statistical variables into principal components. Journal of Educational Psychology 24, 417-441.</div>
+      </div>
+      <div class="panel">
+        <h2>What to watch</h2>
+        <p class="note">Centring moves the cloud to the origin and leaves the covariance matrix untouched. The numbers do not change at all between the first two stages.</p>
+        <p class="note">Rotating into the eigenvector basis drives the off diagonal entries to zero. The two new coordinates are uncorrelated, which is the property that earns the name principal components.</p>
+        <p class="note">Whitening divides each new coordinate by its own standard deviation. The matrix becomes the identity and the cloud becomes round, so the direction of greatest spread is lost. Whitening is useful before some algorithms and destructive before others.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 3. reduction and reconstruction ============ -->
+  <section class="tab" id="paneRed" role="tabpanel" aria-labelledby="tabRed">
+    <div class="board">
+      <div>
+        <div class="quad">
+          <div class="cell"><h3>The sample of curves <span class="sub">each is one observation in 24 dimensions</span></h3><div class="cvbox"><canvas id="cCurves"></canvas></div></div>
+          <div class="cell"><h3>One observation and its reconstruction</h3><div class="cvbox"><canvas id="cRecon"></canvas></div></div>
+          <div class="cell"><h3>Eigenvalue spectrum <span class="sub">click a bar to set k</span></h3><div class="cvbox"><canvas id="cScree"></canvas></div></div>
+          <div class="cell"><h3>The leading components as curves</h3><div class="cvbox"><canvas id="cModes"></canvas></div></div>
+        </div>
+      </div>
+      <div class="rail">
+        <div class="panel sand">
+          <h2>Reduction</h2>
+          <div class="ctl">
+            <div class="row"><span>components kept k</span><b id="rK">2</b></div>
+            <input id="rKs" type="range" min="0" max="12" step="1" value="2" aria-label="Number of components kept">
+            <div class="what" id="rWhat"></div>
+          </div>
+          <div class="buttons">
+            <button class="act primary" id="rPlay" type="button">Add components one by one</button>
+            <button class="act" id="rPick" type="button">Another observation</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Cost of the reduction</h2>
+          <div class="facts">
+            <div>variance kept<b class="hi" id="rPct">0</b></div>
+            <div>numbers stored<b id="rStore">0</b></div>
+            <div>against 24<b id="rRatio">0</b></div>
+          </div>
+          <div class="kv" style="margin-top:11px">
+            <span>reconstruction error, this curve</span><span id="rErr">0</span>
+            <span>mean error over the sample</span><span id="rErrAll">0</span>
+            <span>discarded eigenvalue sum</span><span id="rTail">0</span>
+            <span>true number of modes</span><span id="rTrue">4</span>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Data</h2>
+          <div class="ctl">
+            <div class="row"><span>true modes in the signal</span><b id="rMode">4</b></div>
+            <input id="rModes" type="range" min="1" max="8" step="1" value="4" aria-label="Number of true modes">
+          </div>
+          <div class="ctl">
+            <div class="row"><span>noise &sigma;</span><b id="rSig">0.18</b></div>
+            <input id="rSigs" type="range" min="0" max="0.8" step="0.01" value="0.18" aria-label="Noise standard deviation">
+          </div>
+          <div class="ctl">
+            <div class="row"><span>observations n</span><b id="rN">120</b></div>
+            <input id="rNs" type="range" min="10" max="300" step="1" value="120" aria-label="Number of observations">
+          </div>
+          <button class="act wide" id="rNew" type="button">New sample</button>
+        </div>
+      </div>
+    </div>
+    <div class="lower two">
+      <div class="panel">
+        <h2>Reconstruction from k components</h2>
+        <div class="eq">
+          <div>z<sub>i</sub> = V<sub>k</sub><sup>&#8868;</sup>(x<sub>i</sub> &minus; x&#772;) &nbsp; carries k numbers in place of p</div>
+          <div>x&#770;<sub>i</sub> = x&#772; + V<sub>k</sub>z<sub>i</sub></div>
+          <div>mean &Vert;x<sub>i</sub> &minus; x&#770;<sub>i</sub>&Vert;<sup>2</sup> = &lambda;<sub>k+1</sub> + &hellip; + &lambda;<sub>p</sub></div>
+        </div>
+        <p class="note" style="margin-top:7px">The error left after keeping k components equals the sum of the eigenvalues thrown away. The readout above reports both quantities, and they agree to the precision shown.</p>
+        <div class="refs">Eckart, C. and Young, G. (1936). The approximation of one matrix by another of lower rank. Psychometrika 1, 211-218.</div>
+      </div>
+      <div class="panel">
+        <h2>What to watch</h2>
+        <p class="note">Raise the number of true modes and the spectrum grows a longer shoulder before it drops. The position of the drop estimates the rank of the signal, and noise fills in the floor beneath it.</p>
+        <p class="note">Push the noise up and the shoulder sinks into that floor. The rank stops being readable from the spectrum well before the signal becomes invisible in the curves themselves.</p>
+        <p class="note">With n smaller than 24 the sample covariance matrix is singular. At most n &minus; 1 eigenvalues can be positive, and the rest are zero whatever the data hold. Drop n below 25 and watch the tail of the spectrum vanish.</p>
+        <p class="note">That case also inflates the share of variance kept. At n = 15 the first twelve components account for 99.9% of the total, which sounds like success and reports only how well the components fit the very sample that produced them. Every figure on this page is measured in sample, and a held out set would give smaller numbers.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 4. units and standardization ============ -->
+  <section class="tab" id="paneScale" role="tabpanel" aria-labelledby="tabScale">
+    <div class="board">
+      <div class="quad" style="height:auto">
+        <div class="cell">
+          <h3>The measurements <span class="sub">on a standardized grid, so the cloud never moves</span></h3>
+          <div class="cvbox" style="height:392px;flex:none"><canvas id="cRaw"></canvas></div>
+          <div class="legend" style="border-top:0;padding-top:6px">
+            <span><i class="ln" style="border-top:3px solid #d74a49"></i>first component on covariance</span>
+            <span><i class="ln" style="border-top:2px dashed #183e4b"></i>first component on correlation</span>
+          </div>
+        </div>
+        <div class="cell">
+          <h3>Weight the first component puts on mass <span class="sub">against the unit it is written in</span></h3>
+          <div class="cvbox" style="height:392px;flex:none"><canvas id="cStd"></canvas></div>
+          <div class="legend" style="border-top:0;padding-top:6px">
+            <span><i class="ln" style="border-top:3px solid #d74a49"></i>on the covariance matrix</span>
+            <span><i class="ln" style="border-top:2px dashed #183e4b"></i>on the correlation matrix, 0.707</span>
+          </div>
+        </div>
+      </div>
+      <div class="rail">
+        <div class="panel sand">
+          <h2>Units of the second feature</h2>
+          <div class="ctl">
+            <div class="row"><span>mass recorded in</span><b id="sUnit">kg</b></div>
+            <input id="sUnits" type="range" min="0" max="3" step="1" value="1" aria-label="Unit of the second feature">
+            <div class="what" id="sWhat"></div>
+          </div>
+          <p class="note" style="margin-top:4px">The people measured are the same throughout. Only the unit the mass is written in changes, which multiplies the recorded numbers by a constant.</p>
+          <div class="ctl" style="margin-top:9px">
+            <div class="row"><span>correlation of the two</span><b id="sRho">0.75</b></div>
+            <input id="sRhos" type="range" min="0.05" max="0.97" step="0.01" value="0.75" aria-label="Correlation between height and mass">
+          </div>
+          <div class="buttons">
+            <button class="act primary wide" id="sCycle" type="button">Cycle through the units</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>First component in each case</h2>
+          <div class="kv">
+            <span>on covariance, weight on mass</span><span class="hi" id="sLoadRaw">0</span>
+            <span>on covariance, weight on height</span><span id="sLoadRawH">0</span>
+            <span>on covariance, share of variance</span><span id="sShareRaw">0</span>
+            <span>on correlation, weight on mass</span><span id="sLoadStd">0</span>
+            <span>on correlation, share of variance</span><span id="sShareStd">0</span>
+          </div>
+          <div class="verdict" id="sVerdict" style="margin-top:10px;padding-top:9px;border-top:1px solid var(--stone)"></div>
+        </div>
+        <div class="panel">
+          <h2>Correlation of the two features</h2>
+          <div class="kv">
+            <span>height against mass</span><span id="sCorr">0</span>
+            <span>variance of height, cm<sup>2</sup></span><span id="sV1">0</span>
+            <span>variance of mass, current unit</span><span id="sV2">0</span>
+          </div>
+          <p class="note" style="margin-top:9px">The correlation is a pure number and never moves with the unit. The variances do, and the covariance matrix is built from the variances.</p>
+        </div>
+      </div>
+    </div>
+    <div class="lower two">
+      <div class="panel">
+        <h2>Why the unit matters</h2>
+        <div class="eq">
+          <div>x<sub>2</sub> &rarr; cx<sub>2</sub> &nbsp; sends &nbsp; s<sub>22</sub> &rarr; c<sup>2</sup>s<sub>22</sub>, &nbsp; s<sub>12</sub> &rarr; cs<sub>12</sub></div>
+          <div>standardize: &nbsp; x&#771;<sub>j</sub> = <span class="frac"><span class="num">x<sub>j</sub> &minus; x&#772;<sub>j</sub></span><span class="den">s<sub>j</sub></span></span>, &nbsp; so cov(x&#771;) = corr(x)</div>
+        </div>
+        <p class="note" style="margin-top:7px">Principal components are not invariant under a change of scale on one variable. The eigenvectors of the covariance matrix turn toward whichever feature carries the larger numbers, and that feature can be made larger by writing it in a smaller unit. Running the method on the correlation matrix removes the choice, at the price of declaring every feature equally important beforehand.</p>
+        <p class="note">Standardization is a choice rather than a repair. It declares every feature to carry equal weight, which is wrong whenever the features share a unit already and their spreads mean something, as with pixels of one image or repeated readings from one instrument. Neither matrix is the right default, and the question of which to use is a question about the measurements rather than about the method.</p>
+        <p class="note">A third route avoids the dilemma. Where a feature has a natural reference scale, divide by that rather than by the sample standard deviation, which is itself an estimate that moves with the sample.</p>
+        <div class="refs">Chapter 2, Principal Component Analysis, I. T. Jolliffe, Second Edition, Springer.</div>
+      </div>
+      <div class="panel">
+        <h2>What to watch</h2>
+        <p class="note">In grams the mass dominates the total variance and the first component lies almost along it, with weight 1.000 on mass and 0.000 on height. In tonnes the mass is numerically tiny and the two weights trade places.</p>
+        <p class="note">The flat line does not move at all. Standardizing first gives an answer the unit cannot touch, and it sits at 0.707 on each feature whenever the two are positively correlated.</p>
+        <p class="note">Read the share of variance with suspicion here. At both extremes the first component accounts for almost 100% of the total, which looks like a triumph and means only that one column of numbers is far larger than the other.</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <div class="inner">
+    <span><b>CPE 486/586: Machine Learning for Engineering Applications</b></span>
+    <span>University of Alabama in Huntsville</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+"use strict";
+
+var COL = {
+  red:"#d74a49", ink:"#183e4b", ink2:"#1b4552", mute:"#8ba0a4",
+  grey:"#eaeaea", blush:"#fcf1ef", sand:"#e8d8c9", stone:"#ced3d7"
+};
+
+/* ---------------- shared numerical routines ---------------- */
+
+function mul32(a){
+  return function(){
+    a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function gaussFrom(r){
+  var u = 1 - r(), v = r();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+/* Covariance of a two column sample. */
+function cov2(xs, ys){
+  var n = xs.length, i, mx = 0, my = 0;
+  for(i = 0; i < n; i++){ mx += xs[i]; my += ys[i]; }
+  mx /= n; my /= n;
+  var a = 0, b = 0, d = 0;
+  for(i = 0; i < n; i++){
+    var u = xs[i] - mx, v = ys[i] - my;
+    a += u * u; b += u * v; d += v * v;
+  }
+  var m = Math.max(1, n - 1);
+  return {a:a / m, b:b / m, d:d / m, mx:mx, my:my};
+}
+/* Closed form eigenpairs of a symmetric two by two matrix. */
+function eig2(S){
+  var m = (S.a + S.d) / 2;
+  var q = Math.sqrt(((S.a - S.d) / 2) * ((S.a - S.d) / 2) + S.b * S.b);
+  var th = 0.5 * Math.atan2(2 * S.b, S.a - S.d);
+  return {l1:m + q, l2:Math.max(0, m - q), th:th};
+}
+/* Variance of the projection onto a unit vector at angle th. */
+function quadForm(S, th){
+  var c = Math.cos(th), s = Math.sin(th);
+  return S.a * c * c + 2 * S.b * c * s + S.d * s * s;
+}
+
+/* Cyclic Jacobi for a symmetric matrix, used on the 24 by 24 covariance. */
+function jacobi(Ain, N){
+  var A = [], V = [], i, j, p, q, sweep;
+  for(i = 0; i < N; i++){
+    A.push(Float64Array.from(Ain[i]));
+    var v = new Float64Array(N);
+    v[i] = 1;
+    V.push(v);
+  }
+  for(sweep = 0; sweep < 80; sweep++){
+    var off = 0;
+    for(p = 0; p < N; p++) for(q = p + 1; q < N; q++) off += A[p][q] * A[p][q];
+    if(off < 1e-20) break;
+    for(p = 0; p < N; p++) for(q = p + 1; q < N; q++){
+      if(Math.abs(A[p][q]) < 1e-15) continue;
+      var th = (A[q][q] - A[p][p]) / (2 * A[p][q]);
+      var sg = th >= 0 ? 1 : -1;
+      var t = sg / (Math.abs(th) + Math.sqrt(th * th + 1));
+      var c = 1 / Math.sqrt(t * t + 1), s = t * c;
+      for(i = 0; i < N; i++){
+        var aip = A[i][p], aiq = A[i][q];
+        A[i][p] = c * aip - s * aiq;
+        A[i][q] = s * aip + c * aiq;
+      }
+      for(i = 0; i < N; i++){
+        var api = A[p][i], aqi = A[q][i];
+        A[p][i] = c * api - s * aqi;
+        A[q][i] = s * api + c * aqi;
+      }
+      for(i = 0; i < N; i++){
+        var vip = V[i][p], viq = V[i][q];
+        V[i][p] = c * vip - s * viq;
+        V[i][q] = s * vip + c * viq;
+      }
+    }
+  }
+  var order = [];
+  for(i = 0; i < N; i++) order.push(i);
+  order.sort(function(x, y){ return A[y][y] - A[x][x]; });
+  var lam = new Float64Array(N), vec = [];
+  for(i = 0; i < N; i++){
+    lam[i] = Math.max(0, A[order[i]][order[i]]);
+    var col = new Float64Array(N);
+    for(j = 0; j < N; j++) col[j] = V[j][order[i]];
+    /* Fix the sign so a redraw does not flip the component upside down. */
+    var big = 0, bi = 0;
+    for(j = 0; j < N; j++) if(Math.abs(col[j]) > big){ big = Math.abs(col[j]); bi = j; }
+    if(col[bi] < 0) for(j = 0; j < N; j++) col[j] = -col[j];
+    vec.push(col);
+  }
+  return {lam:lam, vec:vec};
+}
+
+function fmt(v, d){
+  if(v === null || v === undefined || !isFinite(v)) return "–";
+  d = d === undefined ? 3 : d;
+  return (v < 0 ? "−" : "") + Math.abs(v).toFixed(d);
+}
+function deg(th){
+  var t = th * 180 / Math.PI;
+  while(t < 0) t += 180;
+  while(t >= 180) t -= 180;
+  return t;
+}
+
+/* ---------------- canvas helpers ---------------- */
+
+function ensure(cv){
+  var r = cv.getBoundingClientRect();
+  if(r.width < 4 || r.height < 4) return null;
+  var dpr = window.devicePixelRatio || 1;
+  if(cv._w !== r.width || cv._h !== r.height || cv._d !== dpr){
+    cv.width = Math.round(r.width * dpr);
+    cv.height = Math.round(r.height * dpr);
+    cv._w = r.width; cv._h = r.height; cv._d = dpr;
+  }
+  var c = cv.getContext("2d");
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return {c:c, W:r.width, H:r.height};
+}
+function mkPlot(c, W, H, L, R, T, B, xa, xb, ya, yb){
+  var p = {c:c, L:L, T:T, w:W - L - R, h:H - T - B, xa:xa, xb:xb, ya:ya, yb:yb, W:W, H:H};
+  p.X = function(x){ return p.L + (x - p.xa) / (p.xb - p.xa) * p.w; };
+  p.Y = function(y){ return p.T + (p.yb - y) / (p.yb - p.ya) * p.h; };
+  p.ix = function(px){ return p.xa + (px - p.L) / p.w * (p.xb - p.xa); };
+  p.iy = function(py){ return p.yb - (py - p.T) / p.h * (p.yb - p.ya); };
+  p.clip = function(){ c.save(); c.beginPath(); c.rect(p.L, p.T, p.w, p.h); c.clip(); };
+  p.done = function(){ c.restore(); };
+  return p;
+}
+/* Equal units on both axes about a centre, so a round cloud is drawn round. */
+function mkSquare(c, W, H, L, R, T, B, cx, cy, half){
+  var w = W - L - R, h = H - T - B;
+  var hx = half, hy = half;
+  if(w >= h) hx = half * w / h; else hy = half * h / w;
+  return mkPlot(c, W, H, L, R, T, B, cx - hx, cx + hx, cy - hy, cy + hy);
+}
+function niceStep(range, want){
+  if(!(range > 0)) return 1;
+  var raw = range / want, e = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10)), n = raw / e;
+  return (n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10) * e;
+}
+function tickText(v, step){
+  var d = step < 0.01 ? 3 : step < 0.1 ? 2 : step < 1 ? 1 : 0;
+  var s = Math.abs(v) < step / 1000 ? (0).toFixed(d) : Math.abs(v).toFixed(d);
+  return (v < -step / 1000 ? "−" : "") + s;
+}
+function axes(p, o){
+  var c = p.c, i;
+  o = o || {};
+  c.fillStyle = o.bg || COL.blush;
+  c.fillRect(p.L, p.T, p.w, p.h);
+  c.font = '600 11px "Bricolage Grotesque", sans-serif';
+  c.lineWidth = 1;
+  var sy = o.sy || niceStep(p.yb - p.ya, o.ny || 5);
+  c.textAlign = "right"; c.textBaseline = "middle";
+  for(i = Math.ceil(p.ya / sy); i * sy <= p.yb + 1e-9; i++){
+    var y = p.Y(i * sy);
+    c.strokeStyle = COL.stone;
+    c.beginPath(); c.moveTo(p.L, y + 0.5); c.lineTo(p.L + p.w, y + 0.5); c.stroke();
+    if(o.noYLab) continue;
+    c.fillStyle = COL.ink2;
+    c.fillText(tickText(i * sy, sy), p.L - 6, y);
+  }
+  var sx = o.sx || niceStep(p.xb - p.xa, o.nx || 6);
+  c.textAlign = "center"; c.textBaseline = "top";
+  for(i = Math.ceil(p.xa / sx); i * sx <= p.xb + 1e-9; i++){
+    var x = p.X(i * sx);
+    c.strokeStyle = COL.stone;
+    c.beginPath(); c.moveTo(x + 0.5, p.T); c.lineTo(x + 0.5, p.T + p.h); c.stroke();
+    if(o.noXLab) continue;
+    c.fillStyle = COL.ink2;
+    c.fillText(tickText(i * sx, sx), x, p.T + p.h + 5);
+  }
+  if(o.zero){
+    c.strokeStyle = COL.ink; c.lineWidth = 1.3;
+    if(p.ya < 0 && p.yb > 0){ c.beginPath(); c.moveTo(p.L, p.Y(0) + 0.5); c.lineTo(p.L + p.w, p.Y(0) + 0.5); c.stroke(); }
+    if(p.xa < 0 && p.xb > 0){ c.beginPath(); c.moveTo(p.X(0) + 0.5, p.T); c.lineTo(p.X(0) + 0.5, p.T + p.h); c.stroke(); }
+  }
+  c.strokeStyle = COL.ink; c.lineWidth = 1.4;
+  c.beginPath();
+  c.moveTo(p.L + 0.5, p.T); c.lineTo(p.L + 0.5, p.T + p.h + 0.5); c.lineTo(p.L + p.w, p.T + p.h + 0.5);
+  c.stroke();
+  c.fillStyle = COL.ink2;
+  if(o.xlab){
+    c.textAlign = "right"; c.textBaseline = "bottom";
+    c.fillText(o.xlab, p.L + p.w, p.T + p.h + 30);
+  }
+  if(o.ylab){
+    c.save();
+    c.translate(p.L - 36, p.T + 2);
+    c.textAlign = "left"; c.textBaseline = "top";
+    c.fillText(o.ylab, 0, 0);
+    c.restore();
+  }
+}
+function curve(p, xs, ys, color, width, dash){
+  var c = p.c, started = false;
+  c.save();
+  c.strokeStyle = color; c.lineWidth = width; c.lineJoin = "round";
+  if(dash) c.setLineDash(dash);
+  c.beginPath();
+  for(var i = 0; i < xs.length; i++){
+    if(!isFinite(ys[i])){ started = false; continue; }
+    if(!started){ c.moveTo(p.X(xs[i]), p.Y(ys[i])); started = true; }
+    else c.lineTo(p.X(xs[i]), p.Y(ys[i]));
+  }
+  c.stroke();
+  c.restore();
+}
+function dot(p, x, y, r, fill, stroke, lw){
+  var c = p.c;
+  c.beginPath();
+  c.arc(p.X(x), p.Y(y), r, 0, Math.PI * 2);
+  if(fill){ c.fillStyle = fill; c.fill(); }
+  if(stroke){ c.strokeStyle = stroke; c.lineWidth = lw || 1.5; c.stroke(); }
+}
+function arrow(p, x0, y0, x1, y1, color, width, head){
+  var c = p.c;
+  var ax = p.X(x0), ay = p.Y(y0), bx = p.X(x1), by = p.Y(y1);
+  var dx = bx - ax, dy = by - ay, L = Math.sqrt(dx * dx + dy * dy);
+  if(L < 1) return;
+  var ux = dx / L, uy = dy / L;
+  head = head || 11;
+  c.save();
+  c.strokeStyle = color; c.fillStyle = color; c.lineWidth = width; c.lineCap = "round";
+  c.beginPath(); c.moveTo(ax, ay); c.lineTo(bx - ux * head * 0.8, by - uy * head * 0.8); c.stroke();
+  c.beginPath();
+  c.moveTo(bx, by);
+  c.lineTo(bx - ux * head - uy * head * 0.44, by - uy * head + ux * head * 0.44);
+  c.lineTo(bx - ux * head + uy * head * 0.44, by - uy * head - ux * head * 0.44);
+  c.closePath(); c.fill();
+  c.restore();
+}
+/* Ellipse of constant Mahalanobis radius for a two by two covariance. */
+function covEllipse(p, S, E, radius, color, width, dash){
+  var c = p.c, i;
+  c.save();
+  c.strokeStyle = color; c.lineWidth = width;
+  if(dash) c.setLineDash(dash);
+  c.beginPath();
+  var r1 = radius * Math.sqrt(Math.max(0, E.l1)), r2 = radius * Math.sqrt(Math.max(0, E.l2));
+  var ct = Math.cos(E.th), st = Math.sin(E.th);
+  for(i = 0; i <= 120; i++){
+    var a = 2 * Math.PI * i / 120;
+    var ex = r1 * Math.cos(a), ey = r2 * Math.sin(a);
+    var gx = S.mx + ex * ct - ey * st, gy = S.my + ex * st + ey * ct;
+    if(i === 0) c.moveTo(p.X(gx), p.Y(gy)); else c.lineTo(p.X(gx), p.Y(gy));
+  }
+  c.closePath(); c.stroke();
+  c.restore();
+}
+function lerpTo(cur, tgt, k){
+  for(var i = 0; i < cur.length; i++) cur[i] += (tgt[i] - cur[i]) * k;
+}
+function angLerp(cur, tgt, k){
+  /* Shortest turn on a half circle, since w and minus w are the same line. */
+  var d = tgt - cur;
+  while(d > Math.PI / 2) d -= Math.PI;
+  while(d < -Math.PI / 2) d += Math.PI;
+  return cur + d * k;
+}
+
+var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+var EASE = reduced ? 1 : 0.18;
+
+/* ---------------- tab controller ---------------- */
+
+var MODULES = {};
+var active = "proj";
+var TABS = [["proj", "tabProj", "paneProj"], ["eig", "tabEig", "paneEig"],
+            ["red", "tabRed", "paneRed"], ["scale", "tabScale", "paneScale"]];
+
+function $(id){ return document.getElementById(id); }
+function onInput(id, fn){ $(id).addEventListener("input", fn); }
+function segGroup(root, attr, fn){
+  var bs = root.querySelectorAll("button");
+  for(var i = 0; i < bs.length; i++){
+    (function(b){
+      b.addEventListener("click", function(){
+        for(var j = 0; j < bs.length; j++) bs[j].setAttribute("aria-pressed", bs[j] === b ? "true" : "false");
+        fn(b.getAttribute(attr));
+      });
+    })(bs[i]);
+  }
+}
+function segMark(root, attr, val){
+  var bs = root.querySelectorAll("button");
+  for(var i = 0; i < bs.length; i++) bs[i].setAttribute("aria-pressed", bs[i].getAttribute(attr) === String(val) ? "true" : "false");
+}
+
+function selectTab(key){
+  active = key;
+  TABS.forEach(function(t){
+    var on = t[0] === key;
+    $(t[1]).setAttribute("aria-selected", on ? "true" : "false");
+    $(t[2]).className = on ? "tab on" : "tab";
+  });
+}
+TABS.forEach(function(t){
+  $(t[1]).addEventListener("click", function(){ selectTab(t[0]); });
+});
+
+/* ================= 1. the projection direction ================= */
+
+MODULES.proj = (function(){
+  var SPREAD = 1.4, HALF = 4.6;
+  var st = {th:Math.PI / 6, rho:0.8, n:120, seed:48658, spin:false, solve:false,
+            resid:true, pts:true, ell:false, pc2:false};
+  var xs = null, ys = null, dx = null, dy = null, S = null, E = null;
+  var first = true;
+
+  /* Both marginals keep variance SPREAD squared for every rho, so the total
+     variance and the plot frame never move when the correlation changes. */
+  function gen(){
+    var r = mul32(st.seed), n = st.n, k = Math.sqrt(1 - st.rho * st.rho), i;
+    var nx = new Float64Array(n), ny = new Float64Array(n);
+    for(i = 0; i < n; i++){
+      var z1 = gaussFrom(r), z2 = gaussFrom(r);
+      nx[i] = SPREAD * z1;
+      ny[i] = SPREAD * (st.rho * z1 + k * z2);
+    }
+    if(!dx || dx.length !== n){ dx = Float64Array.from(nx); dy = Float64Array.from(ny); }
+    xs = nx; ys = ny;
+    recompute();
+  }
+  function recompute(){
+    S = cov2(xs, ys);
+    E = eig2(S);
+    report();
+  }
+  function report(){
+    var v = quadForm(S, st.th), tr = S.a + S.d, res = tr - v;
+    $("pAng").textContent = deg(st.th).toFixed(1) + "°";
+    $("pVar").textContent = fmt(v, 3);
+    $("pRes").textContent = fmt(res, 3);
+    $("pSum").textContent = fmt(tr, 3);
+    var pc = tr > 0 ? v / tr : 0;
+    $("pBarV").style.width = (100 * pc).toFixed(2) + "%";
+    $("pBarR").style.width = (100 * (1 - pc)).toFixed(2) + "%";
+    $("pPct").textContent = (100 * pc).toFixed(1) + "%";
+    $("pPctR").textContent = (100 * (1 - pc)).toFixed(1) + "%";
+    var gap = Math.abs(deg(st.th) - deg(E.th));
+    if(gap > 90) gap = 180 - gap;
+    var best = 100 * (tr > 0 ? E.l1 / tr : 0);
+    var w;
+    if(E.l1 - E.l2 < 1e-6) w = "The two eigenvalues agree, so no direction beats any other.";
+    else if(gap < 0.6) w = "This is the first eigenvector. No direction carries more, and the best possible share here is <b>" + best.toFixed(1) + "%</b>.";
+    else w = "The first eigenvector lies at <b>" + deg(E.th).toFixed(1) + "°</b>, which is <b>" + gap.toFixed(1) + "°</b> away and would carry <b>" + best.toFixed(1) + "%</b>.";
+    $("pWhat").innerHTML = w;
+  }
+
+  function draw(){
+    var e = ensure($("cProj")), i;
+    if(e){
+      var p = mkSquare(e.c, e.W, e.H, 48, 16, 14, 34, 0, 0, HALF);
+      e.c.clearRect(0, 0, e.W, e.H);
+      axes(p, {xlab:"x₁", ylab:"x₂", zero:true, ny:5});
+      p.clip();
+      var c = Math.cos(st.th), s = Math.sin(st.th);
+
+      if(st.ell) covEllipse(p, S, E, 2, COL.mute, 1.6, [6, 4]);
+
+      /* The line through the mean along w, drawn across the whole frame. */
+      var reach = HALF * 3;
+      e.c.strokeStyle = COL.red; e.c.lineWidth = 1.2;
+      e.c.setLineDash([5, 5]);
+      e.c.beginPath();
+      e.c.moveTo(p.X(S.mx - c * reach), p.Y(S.my - s * reach));
+      e.c.lineTo(p.X(S.mx + c * reach), p.Y(S.my + s * reach));
+      e.c.stroke();
+      e.c.setLineDash([]);
+
+      if(st.pc2){
+        var c2 = Math.cos(E.th + Math.PI / 2), s2 = Math.sin(E.th + Math.PI / 2);
+        e.c.strokeStyle = COL.ink; e.c.lineWidth = 2;
+        e.c.setLineDash([8, 5]);
+        e.c.beginPath();
+        e.c.moveTo(p.X(S.mx - c2 * reach), p.Y(S.my - s2 * reach));
+        e.c.lineTo(p.X(S.mx + c2 * reach), p.Y(S.my + s2 * reach));
+        e.c.stroke();
+        e.c.setLineDash([]);
+      }
+
+      if(st.resid){
+        e.c.strokeStyle = COL.mute; e.c.lineWidth = 1.3;
+        e.c.beginPath();
+        for(i = 0; i < dx.length; i++){
+          var u = dx[i] - S.mx, v = dy[i] - S.my, t = u * c + v * s;
+          e.c.moveTo(p.X(dx[i]), p.Y(dy[i]));
+          e.c.lineTo(p.X(S.mx + t * c), p.Y(S.my + t * s));
+        }
+        e.c.stroke();
+      }
+      for(i = 0; i < dx.length; i++) dot(p, dx[i], dy[i], 4, COL.ink2, COL.blush, 1.3);
+      if(st.pts){
+        for(i = 0; i < dx.length; i++){
+          var u2 = dx[i] - S.mx, v2 = dy[i] - S.my, t2 = u2 * c + v2 * s;
+          dot(p, S.mx + t2 * c, S.my + t2 * s, 3.1, COL.red, null);
+        }
+      }
+
+      /* The arrow is drawn at one standard deviation of the projection. */
+      var len = Math.sqrt(Math.max(1e-9, quadForm(S, st.th)));
+      arrow(p, S.mx, S.my, S.mx + c * len, S.my + s * len, COL.red, 3.4, 13);
+      dot(p, S.mx, S.my, 5.5, COL.ink, COL.blush, 2);
+      p.done();
+
+      /* Offset perpendicular to the arrow, so the label never sits on the line. */
+      var lx = p.X(S.mx + c * len), ly = p.Y(S.my + s * len);
+      var nx = -(-s), ny = -c;
+      lx += nx * 15; ly += ny * 15;
+      lx = Math.max(p.L + 12, Math.min(p.L + p.w - 12, lx));
+      ly = Math.max(p.T + 12, Math.min(p.T + p.h - 12, ly));
+      e.c.fillStyle = COL.blush;
+      e.c.beginPath(); e.c.arc(lx, ly, 10, 0, Math.PI * 2); e.c.fill();
+      e.c.fillStyle = COL.red;
+      e.c.font = '800 15px "Bricolage Grotesque", sans-serif';
+      e.c.textAlign = "center"; e.c.textBaseline = "middle";
+      e.c.fillText("w", lx, ly);
+    }
+
+    var e2 = ensure($("cQuad"));
+    if(e2){
+      var tr = S.a + S.d;
+      var q = mkPlot(e2.c, e2.W, e2.H, 48, 16, 14, 38, 0, 180, 0, Math.max(0.1, 2 * SPREAD * SPREAD * 2.1));
+      e2.c.clearRect(0, 0, e2.W, e2.H);
+      axes(q, {xlab:"angle of w, degrees", sx:30, ny:4});
+      q.clip();
+      /* The whole budget, which the two parts split. */
+      curve(q, [0, 180], [tr, tr], COL.ink2, 1.5, [5, 4]);
+      var ax = [], av = [], ar = [];
+      for(i = 0; i <= 180; i++){
+        var t3 = i * Math.PI / 180, vv = quadForm(S, t3);
+        ax.push(i); av.push(vv); ar.push(tr - vv);
+      }
+      curve(q, ax, ar, COL.mute, 2.2);
+      curve(q, ax, av, COL.red, 2.8);
+      var atNow = deg(st.th);
+      e2.c.strokeStyle = COL.ink; e2.c.lineWidth = 2;
+      e2.c.beginPath(); e2.c.moveTo(q.X(atNow), q.T); e2.c.lineTo(q.X(atNow), q.T + q.h); e2.c.stroke();
+      dot(q, atNow, quadForm(S, st.th), 5, COL.red, COL.blush, 2);
+      var e1d = deg(E.th), e2d = deg(E.th + Math.PI / 2);
+      [[e1d, COL.red], [e2d, COL.ink]].forEach(function(m){
+        e2.c.strokeStyle = m[1]; e2.c.lineWidth = 1.2; e2.c.setLineDash([3, 3]);
+        e2.c.beginPath(); e2.c.moveTo(q.X(m[0]), q.T); e2.c.lineTo(q.X(m[0]), q.T + q.h); e2.c.stroke();
+        e2.c.setLineDash([]);
+      });
+      q.done();
+      e2.c.font = '700 11px "Bricolage Grotesque", sans-serif';
+      e2.c.textAlign = "center"; e2.c.textBaseline = "top";
+      e2.c.fillStyle = COL.red;
+      e2.c.fillText("first", q.X(e1d), q.T + 3);
+      e2.c.fillStyle = COL.ink;
+      e2.c.fillText("second", q.X(e2d), q.T + 3);
+      lastQuad = q;
+    }
+  }
+  var lastQuad = null;
+
+  function step(dt){
+    for(var i = 0; i < dx.length; i++){
+      dx[i] += (xs[i] - dx[i]) * EASE;
+      dy[i] += (ys[i] - dy[i]) * EASE;
+    }
+    if(st.solve){
+      st.th = angLerp(st.th, E.th, reduced ? 1 : 0.14);
+      var g = Math.abs(deg(st.th) - deg(E.th));
+      if(g > 90) g = 180 - g;
+      if(g < 0.05){ st.th = E.th; st.solve = false; }
+      $("pAngs").value = deg(st.th).toFixed(1);
+      report();
+    } else if(st.spin){
+      st.th += dt * 0.00052;
+      $("pAngs").value = deg(st.th).toFixed(1);
+      report();
+    }
+  }
+  function stopAnim(){
+    st.spin = false; st.solve = false;
+    $("pSpin").textContent = "Sweep 180°";
+  }
+
+  onInput("pAngs", function(){ stopAnim(); st.th = +this.value * Math.PI / 180; report(); });
+  onInput("pRhos", function(){ st.rho = +this.value; $("pRho").textContent = st.rho.toFixed(2); gen(); });
+  onInput("pNs", function(){ st.n = +this.value; $("pN").textContent = st.n; gen(); });
+  $("pResid").addEventListener("change", function(){ st.resid = this.checked; });
+  $("pProjPts").addEventListener("change", function(){ st.pts = this.checked; });
+  $("pEll").addEventListener("change", function(){ st.ell = this.checked; });
+  $("pPc2").addEventListener("change", function(){ st.pc2 = this.checked; });
+  $("pNew").addEventListener("click", function(){ st.seed = (Math.random() * 4294967295) >>> 0; gen(); });
+  $("pSolve").addEventListener("click", function(){ st.spin = false; $("pSpin").textContent = "Sweep 180°"; st.solve = true; });
+  $("pSpin").addEventListener("click", function(){
+    if(st.spin){ stopAnim(); return; }
+    st.solve = false; st.spin = true; this.textContent = "Stop the sweep";
+  });
+  (function(){
+    var cv = $("cProj"), down = false;
+    function set(ev){
+      var r = cv.getBoundingClientRect();
+      var p = mkSquare(cv.getContext("2d"), r.width, r.height, 48, 16, 14, 34, 0, 0, HALF);
+      var gx = p.ix(ev.clientX - r.left) - S.mx, gy = p.iy(ev.clientY - r.top) - S.my;
+      if(Math.abs(gx) < 1e-9 && Math.abs(gy) < 1e-9) return;
+      stopAnim();
+      st.th = Math.atan2(gy, gx);
+      $("pAngs").value = deg(st.th).toFixed(1);
+      report();
+    }
+    cv.addEventListener("pointerdown", function(ev){
+      down = true; cv.setPointerCapture(ev.pointerId); set(ev);
+      $("projHint").className = "hint gone";
+    });
+    cv.addEventListener("pointermove", function(ev){ if(down) set(ev); });
+    cv.addEventListener("pointerup", function(){ down = false; });
+    cv.addEventListener("pointercancel", function(){ down = false; });
+  })();
+  $("cQuad").addEventListener("click", function(ev){
+    if(!lastQuad) return;
+    var r = this.getBoundingClientRect();
+    var a = Math.max(0, Math.min(180, lastQuad.ix(ev.clientX - r.left)));
+    stopAnim();
+    st.th = a * Math.PI / 180;
+    $("pAngs").value = a.toFixed(1);
+    report();
+  });
+
+  gen();
+  first = false;
+  return {draw:draw, step:step};
+})();
+
+/* ================= 2. covariance and eigenvectors ================= */
+
+MODULES.eig = (function(){
+  var MX = 2.0, MY = 1.4, S1 = 1.3;
+  var CX = 0.9, CY = 0.6, HALF = 4.4;
+  var STAGE = ["Raw. The cloud sits where the measurements put it.",
+               "Centred. Each feature has had its mean removed. The covariance matrix is unchanged by this step.",
+               "Rotated into the eigenvector basis. The off diagonal entries are now zero, so the two new coordinates are uncorrelated.",
+               "Whitened. Each coordinate has been divided by its own standard deviation, so the matrix is the identity and the cloud is round."];
+  var st = {stage:0, rho:0.85, asp:0.6, seed:9112, playing:false};
+  var rawX = null, rawY = null, px = null, py = null, dx = null, dy = null;
+  var S0 = null, E0 = null;
+
+  function gen(){
+    var r = mul32(st.seed), n = 170, k = Math.sqrt(1 - st.rho * st.rho), i;
+    var s2 = S1 * st.asp;
+    rawX = new Float64Array(n); rawY = new Float64Array(n);
+    for(i = 0; i < n; i++){
+      var z1 = gaussFrom(r), z2 = gaussFrom(r);
+      rawX[i] = MX + S1 * z1;
+      rawY[i] = MY + s2 * (st.rho * z1 + k * z2);
+    }
+    if(!dx || dx.length !== n){ dx = new Float64Array(n); dy = new Float64Array(n); }
+    S0 = cov2(rawX, rawY);
+    E0 = eig2(S0);
+    place(true);
+  }
+
+  /* Positions at a continuous stage value. The three legs are centring,
+     rotation into the eigenbasis, and division by the standard deviations. */
+  function place(snap){
+    var n = rawX.length, s = st.stage, i;
+    if(!px || px.length !== n){ px = new Float64Array(n); py = new Float64Array(n); }
+    var ct = Math.cos(E0.th), stn = Math.sin(E0.th);
+    var legA = Math.min(1, s), legB = Math.max(0, Math.min(1, s - 1)), legC = Math.max(0, Math.min(1, s - 2));
+    var ra = -E0.th * legB;
+    var cr = Math.cos(ra), sr = Math.sin(ra);
+    var f1 = Math.pow(Math.max(1e-9, E0.l1), -legC / 2);
+    var f2 = Math.pow(Math.max(1e-9, E0.l2), -legC / 2);
+    for(i = 0; i < n; i++){
+      var u = rawX[i] - S0.mx, v = rawY[i] - S0.my;
+      var ox = S0.mx * (1 - legA), oy = S0.my * (1 - legA);
+      var qx = u * cr - v * sr, qy = u * sr + v * cr;
+      if(legC > 0){
+        /* Once the rotation is complete the axes are the eigenvectors, so the
+           two scale factors act on the rotated coordinates directly. */
+        var z1 = u * ct + v * stn, z2 = -u * stn + v * ct;
+        qx = z1 * f1; qy = z2 * f2;
+      }
+      px[i] = ox + qx; py[i] = oy + qy;
+    }
+    if(snap){ dx.set(px); dy.set(py); }
+    report();
+  }
+
+  function stageCov(){
+    var s = st.stage;
+    var legB = Math.max(0, Math.min(1, s - 1)), legC = Math.max(0, Math.min(1, s - 2));
+    if(legC > 0){
+      return {a:Math.pow(E0.l1, 1 - legC), b:0, d:Math.pow(E0.l2, 1 - legC), mx:0, my:0};
+    }
+    var ra = -E0.th * legB, c = Math.cos(ra), sn = Math.sin(ra);
+    return {a:S0.a * c * c - 2 * S0.b * c * sn + S0.d * sn * sn,
+            b:(S0.a - S0.d) * c * sn + S0.b * (c * c - sn * sn),
+            d:S0.a * sn * sn + 2 * S0.b * c * sn + S0.d * c * c,
+            mx:0, my:0};
+  }
+
+  function report(){
+    var C = stageCov(), s = st.stage;
+    $("eS11").textContent = fmt(C.a, 3);
+    $("eS12").textContent = fmt(C.b, 3);
+    $("eS21").textContent = fmt(C.b, 3);
+    $("eS22").textContent = fmt(C.d, 3);
+    var offZero = Math.abs(C.b) < 5e-4;
+    $("eS12").className = offZero ? "off" : "on";
+    $("eS21").className = offZero ? "off" : "on";
+    var lab;
+    if(s < 1.001) lab = "Entries unchanged by centring.";
+    else if(s < 1.99) lab = "The off diagonal entry is shrinking toward zero.";
+    else if(s < 2.02) lab = "Diagonal. The two coordinates are now uncorrelated.";
+    else if(s < 2.999) lab = "Diagonal, and the entries are falling toward one.";
+    else lab = "The identity matrix.";
+    $("eMatLab").textContent = lab;
+    $("eL1").textContent = fmt(E0.l1, 3);
+    $("eL2").textContent = fmt(E0.l2, 3);
+    $("eTh").textContent = deg(E0.th).toFixed(1) + "°";
+    $("eTr").textContent = fmt(E0.l1 + E0.l2, 3);
+    var tot = E0.l1 + E0.l2;
+    $("eShare").textContent = tot > 0 ? (100 * E0.l1 / tot).toFixed(1) + "%" : "–";
+    var idx = Math.max(0, Math.min(3, Math.round(s)));
+    $("eWhat").innerHTML = STAGE[idx];
+    segMark(document.querySelector('#paneEig .seg[aria-label="Stage"]'), "data-s", idx);
+  }
+
+  function draw(){
+    var e = ensure($("cEig")), i;
+    if(!e) return;
+    var p = mkSquare(e.c, e.W, e.H, 48, 16, 14, 34, CX, CY, HALF);
+    e.c.clearRect(0, 0, e.W, e.H);
+    axes(p, {xlab:"", ylab:"", zero:true, ny:5});
+    p.clip();
+
+    var C = stageCov(), s = st.stage;
+    var legB = Math.max(0, Math.min(1, s - 1)), legC = Math.max(0, Math.min(1, s - 2));
+    var cen = {mx:S0.mx * (1 - Math.min(1, s)), my:S0.my * (1 - Math.min(1, s))};
+    var thNow = E0.th * (1 - legB);
+    var r1 = Math.sqrt(Math.max(0, E0.l1)) * Math.pow(Math.max(1e-9, E0.l1), -legC / 2);
+    var r2 = Math.sqrt(Math.max(0, E0.l2)) * Math.pow(Math.max(1e-9, E0.l2), -legC / 2);
+
+    covEllipse(p, {mx:cen.mx, my:cen.my}, {l1:r1 * r1, l2:r2 * r2, th:thNow}, 2, COL.mute, 1.6, [6, 4]);
+
+    for(i = 0; i < dx.length; i++) dot(p, dx[i], dy[i], 4, COL.ink2, COL.blush, 1.3);
+
+    var c1 = Math.cos(thNow), s1v = Math.sin(thNow);
+    var c2 = Math.cos(thNow + Math.PI / 2), s2v = Math.sin(thNow + Math.PI / 2);
+    /* Drawn at twice the root eigenvalue, so each tip meets the ellipse. */
+    r1 *= 2; r2 *= 2;
+    arrow(p, cen.mx, cen.my, cen.mx + c1 * r1, cen.my + s1v * r1, COL.red, 3.6, 13);
+    arrow(p, cen.mx, cen.my, cen.mx + c2 * r2, cen.my + s2v * r2, COL.ink, 3.2, 12);
+    dot(p, cen.mx, cen.my, 5.5, COL.ink, COL.blush, 2);
+    p.done();
+
+    e.c.font = '800 13px "Bricolage Grotesque", sans-serif';
+    e.c.textAlign = "left"; e.c.textBaseline = "middle";
+    e.c.fillStyle = COL.red;
+    e.c.fillText("v₁", p.X(cen.mx + c1 * r1) + 9, p.Y(cen.my + s1v * r1) - 7);
+    e.c.fillStyle = COL.ink;
+    e.c.fillText("v₂", p.X(cen.mx + c2 * r2) + 9, p.Y(cen.my + s2v * r2) - 7);
+    e.c.font = '600 11.5px "Bricolage Grotesque", sans-serif';
+    e.c.fillStyle = COL.ink2;
+    e.c.textAlign = "right"; e.c.textBaseline = "bottom";
+    e.c.fillText(s < 1.5 ? "x₁" : "first component", p.L + p.w - 4, p.T + p.h - 6);
+  }
+
+  function step(dt){
+    lerpTo(dx, px, EASE);
+    lerpTo(dy, py, EASE);
+    if(st.playing){
+      st.stage += dt * 0.00085;
+      if(st.stage >= 3){ st.stage = 3; st.playing = false; $("ePlay").textContent = "Run the whole sequence"; }
+      $("eStage").value = st.stage.toFixed(2);
+      place(false);
+    }
+  }
+
+  onInput("eStage", function(){
+    st.playing = false; $("ePlay").textContent = "Run the whole sequence";
+    st.stage = +this.value; place(false);
+  });
+  segGroup(document.querySelector('#paneEig .seg[aria-label="Stage"]'), "data-s", function(v){
+    st.playing = false; $("ePlay").textContent = "Run the whole sequence";
+    st.stage = +v; $("eStage").value = v; place(false);
+  });
+  $("ePlay").addEventListener("click", function(){
+    if(st.playing){ st.playing = false; this.textContent = "Run the whole sequence"; return; }
+    st.stage = 0; $("eStage").value = 0; place(false);
+    st.playing = true; this.textContent = "Pause";
+  });
+  onInput("eRhos", function(){ st.rho = +this.value; $("eRho").textContent = st.rho.toFixed(2); gen(); });
+  onInput("eAsps", function(){ st.asp = +this.value; $("eAsp").textContent = st.asp.toFixed(2); gen(); });
+  $("eNew").addEventListener("click", function(){ st.seed = (Math.random() * 4294967295) >>> 0; gen(); });
+
+  gen();
+  return {draw:draw, step:step};
+})();
+
+/* ================= 3. reduction and reconstruction ================= */
+
+MODULES.red = (function(){
+  var P = 24, KMAX = 12;
+  var st = {modes:4, sig:0.18, n:120, k:2, seed:777, pick:0, playing:false, kAnim:2};
+  var tt = new Float64Array(P);
+  for(var ii = 0; ii < P; ii++) tt[ii] = ii / (P - 1);
+  var Xd = null, mu = null, lam = null, vec = null, nEff = 0;
+  var recon = new Float64Array(P), reconT = new Float64Array(P);
+  var stats = {};
+
+  function base(j, t){ return Math.sin(Math.PI * (j + 1) * t); }
+  function trueMean(t){ return 1.6 + 0.9 * Math.exp(-Math.pow((t - 0.35) / 0.28, 2)); }
+
+  function gen(){
+    var r = mul32(st.seed), n = st.n, i, j, k;
+    Xd = [];
+    for(i = 0; i < n; i++){
+      var row = new Float64Array(P), a = [];
+      for(j = 0; j < st.modes; j++) a.push(gaussFrom(r));
+      for(k = 0; k < P; k++){
+        var v = trueMean(tt[k]);
+        for(j = 0; j < st.modes; j++) v += (1 / (j + 1)) * a[j] * base(j, tt[k]);
+        row[k] = v + st.sig * gaussFrom(r);
+      }
+      Xd.push(row);
+    }
+    st.pick = Math.min(st.pick, n - 1);
+    fit();
+  }
+  function fit(){
+    var n = Xd.length, i, j, k;
+    mu = new Float64Array(P);
+    for(i = 0; i < n; i++) for(k = 0; k < P; k++) mu[k] += Xd[i][k];
+    for(k = 0; k < P; k++) mu[k] /= n;
+    var C = [];
+    for(j = 0; j < P; j++) C.push(new Float64Array(P));
+    for(i = 0; i < n; i++){
+      for(j = 0; j < P; j++){
+        var uj = Xd[i][j] - mu[j];
+        for(k = j; k < P; k++) C[j][k] += uj * (Xd[i][k] - mu[k]);
+      }
+    }
+    var m = Math.max(1, n - 1);
+    for(j = 0; j < P; j++) for(k = j; k < P; k++){ C[j][k] /= m; C[k][j] = C[j][k]; }
+    var J = jacobi(C, P);
+    lam = J.lam; vec = J.vec;
+    /* With n observations the sample covariance has at most n - 1 positive
+       eigenvalues, whatever the number of features. */
+    nEff = Math.min(P, n - 1);
+    update();
+  }
+  function project(row, k){
+    var out = Float64Array.from(mu), j, d;
+    for(j = 0; j < k; j++){
+      var z = 0;
+      for(d = 0; d < P; d++) z += (row[d] - mu[d]) * vec[j][d];
+      for(d = 0; d < P; d++) out[d] += z * vec[j][d];
+    }
+    return out;
+  }
+  function update(){
+    var k = Math.round(st.kAnim), i, d;
+    reconT.set(project(Xd[st.pick], k));
+    var errOne = 0;
+    for(d = 0; d < P; d++){ var e = Xd[st.pick][d] - reconT[d]; errOne += e * e; }
+    var n = Xd.length, errAll = 0;
+    for(i = 0; i < n; i++){
+      var rec = project(Xd[i], k);
+      for(d = 0; d < P; d++){ var e2 = Xd[i][d] - rec[d]; errAll += e2 * e2; }
+    }
+    errAll /= Math.max(1, n - 1);
+    var tot = 0, tail = 0;
+    for(i = 0; i < P; i++) tot += lam[i];
+    for(i = k; i < P; i++) tail += lam[i];
+    stats = {errOne:errOne, errAll:errAll, tail:tail, tot:tot, kept:tot > 0 ? (tot - tail) / tot : 1};
+    report();
+  }
+  function report(){
+    var k = Math.round(st.kAnim);
+    $("rK").textContent = k;
+    $("rPct").textContent = (100 * stats.kept).toFixed(1) + "%";
+    $("rStore").textContent = k;
+    $("rRatio").textContent = (100 * k / P).toFixed(0) + "%";
+    $("rErr").textContent = fmt(stats.errOne, 4);
+    $("rErrAll").textContent = fmt(stats.errAll, 4);
+    $("rTail").textContent = fmt(stats.tail, 4);
+    $("rTrue").textContent = st.modes;
+    var w;
+    if(k === 0) w = "Nothing kept. The reconstruction is the mean curve, the same for every observation.";
+    else if(k < st.modes) w = "Fewer components than the <b>" + st.modes + "</b> modes in the signal, so part of the structure is still missing.";
+    else if(k === st.modes) w = "Exactly as many components as the signal holds. Adding more now buys only noise.";
+    else w = "<b>" + (k - st.modes) + "</b> component" + (k - st.modes > 1 ? "s" : "") + " beyond the signal. These fit noise and do not generalize.";
+    if(k > nEff) w += " Only <b>" + nEff + "</b> components exist with n = " + Xd.length + ".";
+    $("rWhat").innerHTML = w;
+  }
+
+  function draw(){
+    var i, k, e, p;
+    e = ensure($("cCurves"));
+    if(e){
+      p = mkPlot(e.c, e.W, e.H, 40, 12, 10, 26, 0, 1, -1.2, 5.0);
+      e.c.clearRect(0, 0, e.W, e.H);
+      axes(p, {ny:4, nx:5});
+      p.clip();
+      var show = Math.min(Xd.length, 70);
+      for(i = 0; i < show; i++){
+        e.c.globalAlpha = 0.3;
+        curve(p, tt, Xd[i], COL.mute, 1.1);
+      }
+      e.c.globalAlpha = 1;
+      curve(p, tt, mu, COL.ink, 2.6);
+      curve(p, tt, Xd[st.pick], COL.red, 2.2);
+      p.done();
+      e.c.font = '600 11px "Bricolage Grotesque", sans-serif';
+      e.c.textAlign = "left"; e.c.textBaseline = "top";
+      e.c.fillStyle = COL.ink; e.c.fillText("sample mean", p.L + 7, p.T + 4);
+      e.c.fillStyle = COL.red; e.c.fillText("the selected observation", p.L + 7, p.T + 17);
+    }
+
+    e = ensure($("cRecon"));
+    if(e){
+      p = mkPlot(e.c, e.W, e.H, 40, 12, 10, 26, 0, 1, -1.2, 5.0);
+      e.c.clearRect(0, 0, e.W, e.H);
+      axes(p, {ny:4, nx:5});
+      p.clip();
+      curve(p, tt, mu, COL.mute, 1.6, [6, 4]);
+      curve(p, tt, Xd[st.pick], COL.ink2, 2.2);
+      for(i = 0; i < P; i++) dot(p, tt[i], Xd[st.pick][i], 2.6, COL.ink2, null);
+      curve(p, tt, recon, COL.red, 3);
+      e.c.strokeStyle = COL.mute; e.c.lineWidth = 1.1;
+      e.c.beginPath();
+      for(i = 0; i < P; i++){
+        e.c.moveTo(p.X(tt[i]), p.Y(Xd[st.pick][i]));
+        e.c.lineTo(p.X(tt[i]), p.Y(recon[i]));
+      }
+      e.c.stroke();
+      p.done();
+      e.c.font = '600 11px "Bricolage Grotesque", sans-serif';
+      e.c.textAlign = "left"; e.c.textBaseline = "top";
+      e.c.fillStyle = COL.ink2; e.c.fillText("observed", p.L + 7, p.T + 4);
+      e.c.fillStyle = COL.red; e.c.fillText("rebuilt from " + Math.round(st.kAnim) + " component" + (Math.round(st.kAnim) === 1 ? "" : "s"), p.L + 7, p.T + 17);
+    }
+
+    e = ensure($("cScree"));
+    if(e){
+      var LO = -3, HI = 2;
+      p = mkPlot(e.c, e.W, e.H, 42, 40, 12, 26, -0.6, P - 0.4, LO, HI);
+      e.c.clearRect(0, 0, e.W, e.H);
+      e.c.fillStyle = COL.blush;
+      e.c.fillRect(p.L, p.T, p.w, p.h);
+      e.c.font = '600 10.5px "Bricolage Grotesque", sans-serif';
+      e.c.textAlign = "right"; e.c.textBaseline = "middle";
+      for(k = LO; k <= HI; k++){
+        var y = p.Y(k);
+        e.c.strokeStyle = COL.stone; e.c.lineWidth = 1;
+        e.c.beginPath(); e.c.moveTo(p.L, y + 0.5); e.c.lineTo(p.L + p.w, y + 0.5); e.c.stroke();
+        e.c.fillStyle = COL.ink2;
+        e.c.fillText(k >= 0 ? String(Math.pow(10, k)) : "0." + new Array(-k).join("0") + "1", p.L - 5, y);
+      }
+      e.c.textAlign = "center"; e.c.textBaseline = "top";
+      for(k = 0; k < P; k += 4){
+        e.c.fillStyle = COL.ink2;
+        e.c.fillText(String(k + 1), p.X(k), p.T + p.h + 5);
+      }
+      p.clip();
+      var bw = p.w / P * 0.62, kk = Math.round(st.kAnim);
+      for(k = 0; k < P; k++){
+        var lv = lam[k];
+        if(!(lv > 0) || k >= nEff) continue;
+        var ly = Math.log(lv) / Math.LN10;
+        if(ly < LO) continue;
+        e.c.fillStyle = k < kk ? COL.red : COL.mute;
+        e.c.globalAlpha = k < kk ? 0.85 : 0.5;
+        e.c.fillRect(p.X(k) - bw / 2, p.Y(ly), bw, p.T + p.h - p.Y(ly));
+      }
+      e.c.globalAlpha = 1;
+      /* Cumulative share, on its own axis at the right. */
+      var cum = 0, tot = stats.tot, cx = [], cy = [];
+      for(k = 0; k < P; k++){
+        cum += lam[k];
+        cx.push(k);
+        cy.push(LO + (HI - LO) * (tot > 0 ? cum / tot : 1));
+      }
+      curve(p, cx, cy, COL.ink, 2);
+      for(k = 0; k < P; k++) dot(p, cx[k], cy[k], 2.2, COL.ink, null);
+      e.c.strokeStyle = COL.red; e.c.lineWidth = 2; e.c.setLineDash([4, 3]);
+      e.c.beginPath();
+      e.c.moveTo(p.X(kk - 0.5), p.T); e.c.lineTo(p.X(kk - 0.5), p.T + p.h);
+      e.c.stroke(); e.c.setLineDash([]);
+      p.done();
+      e.c.font = '600 10.5px "Bricolage Grotesque", sans-serif';
+      e.c.textAlign = "left"; e.c.textBaseline = "middle";
+      e.c.fillStyle = COL.ink;
+      [0, 50, 100].forEach(function(q){
+        e.c.fillText(q + "%", p.L + p.w + 5, p.Y(LO + (HI - LO) * q / 100));
+      });
+      e.c.textAlign = "left"; e.c.textBaseline = "bottom";
+      e.c.fillStyle = COL.ink2; e.c.fillText("eigenvalue, log scale", p.L + 6, p.T + p.h - 5);
+      e.c.textAlign = "right";
+      e.c.fillStyle = COL.ink; e.c.fillText("cumulative share", p.L + p.w - 6, p.T + p.h - 5);
+      lastScree = p;
+    }
+
+    e = ensure($("cModes"));
+    if(e){
+      p = mkPlot(e.c, e.W, e.H, 40, 12, 10, 26, 0, 1, -0.62, 0.62);
+      e.c.clearRect(0, 0, e.W, e.H);
+      axes(p, {ny:4, nx:5, zero:true});
+      p.clip();
+      /* Four shapes that stay apart on this background: the fourth is dashed. */
+      var cols = [COL.red, COL.ink, COL.mute, COL.ink2];
+      var dashes = [null, null, null, [7, 4]];
+      for(k = Math.min(3, nEff - 1); k >= 0; k--){
+        if(k >= nEff) continue;
+        e.c.globalAlpha = k < Math.round(st.kAnim) ? 1 : 0.28;
+        curve(p, tt, vec[k], cols[k], k === 0 ? 3 : 2.2, dashes[k]);
+      }
+      e.c.globalAlpha = 1;
+      p.done();
+      e.c.font = '700 11px "Bricolage Grotesque", sans-serif';
+      e.c.textAlign = "left"; e.c.textBaseline = "middle";
+      for(k = 0; k < Math.min(4, nEff); k++){
+        var lgx = p.L + 9 + k * 44, lgy = p.T + 10;
+        e.c.strokeStyle = cols[k]; e.c.lineWidth = 2.4;
+        if(dashes[k]) e.c.setLineDash(dashes[k]);
+        e.c.beginPath(); e.c.moveTo(lgx, lgy); e.c.lineTo(lgx + 16, lgy); e.c.stroke();
+        e.c.setLineDash([]);
+        e.c.fillStyle = COL.ink2;
+        e.c.fillText("v" + (k + 1), lgx + 20, lgy);
+      }
+    }
+  }
+  var lastScree = null;
+
+  function step(dt){
+    lerpTo(recon, reconT, EASE);
+    if(st.playing){
+      st.kAnim += dt * 0.0022;
+      var before = Math.round(st.kAnim);
+      if(st.kAnim >= KMAX){ st.kAnim = KMAX; st.playing = false; $("rPlay").textContent = "Add components one by one"; }
+      if(Math.round(st.kAnim) !== Math.round(st.k)){
+        st.k = Math.round(st.kAnim);
+        $("rKs").value = st.k;
+        update();
+      }
+    }
+  }
+
+  onInput("rKs", function(){
+    st.playing = false; $("rPlay").textContent = "Add components one by one";
+    st.k = +this.value; st.kAnim = st.k; update();
+  });
+  onInput("rModes", function(){ st.modes = +this.value; $("rMode").textContent = st.modes; gen(); });
+  onInput("rSigs", function(){ st.sig = +this.value; $("rSig").textContent = st.sig.toFixed(2); gen(); });
+  onInput("rNs", function(){ st.n = +this.value; $("rN").textContent = st.n; gen(); });
+  $("rNew").addEventListener("click", function(){ st.seed = (Math.random() * 4294967295) >>> 0; gen(); });
+  $("rPick").addEventListener("click", function(){
+    st.pick = Math.floor(Math.random() * Xd.length);
+    update();
+  });
+  $("rPlay").addEventListener("click", function(){
+    if(st.playing){ st.playing = false; this.textContent = "Add components one by one"; return; }
+    st.kAnim = 0; st.k = 0; $("rKs").value = 0; update();
+    st.playing = true; this.textContent = "Pause";
+  });
+  $("cScree").addEventListener("click", function(ev){
+    if(!lastScree) return;
+    var r = this.getBoundingClientRect();
+    var k = Math.round(lastScree.ix(ev.clientX - r.left)) + 1;
+    k = Math.max(0, Math.min(KMAX, k));
+    st.playing = false; $("rPlay").textContent = "Add components one by one";
+    st.k = k; st.kAnim = k; $("rKs").value = k; update();
+  });
+
+  gen();
+  recon.set(reconT);
+  return {draw:draw, step:step};
+})();
+
+/* ================= 4. units and standardization ================= */
+
+MODULES.scale = (function(){
+  var SH = 9, SM0 = 12, MH = 170, MM0 = 70;
+  var UNITS = [{name:"tonnes", c:0.001}, {name:"kg", c:1},
+               {name:"pounds", c:2.20462}, {name:"grams", c:1000}];
+  var st = {u:1, rho:0.75, seed:5150, cycling:false, t:0};
+  var zx = null, zy = null;
+  var cur = 0, tgt = 0;
+
+  function gen(){
+    var r = mul32(st.seed), n = 150, k = Math.sqrt(1 - st.rho * st.rho), i;
+    zx = new Float64Array(n); zy = new Float64Array(n);
+    for(i = 0; i < n; i++){
+      var a = gaussFrom(r), b = gaussFrom(r);
+      zx[i] = a;
+      zy[i] = st.rho * a + k * b;
+    }
+    report();
+  }
+
+  /* Covariance of height in cm against mass written in a unit c times a kilogram. */
+  function covFor(c){
+    var a = SH * SH, b = st.rho * SH * SM0 * c, d = SM0 * SM0 * c * c;
+    return {a:a, b:b, d:d, mx:0, my:0};
+  }
+  function loadingFor(c){
+    var S = covFor(c), E = eig2(S);
+    return {th:E.th, mass:Math.abs(Math.sin(E.th)), height:Math.abs(Math.cos(E.th)),
+            share:(E.l1 + E.l2) > 0 ? E.l1 / (E.l1 + E.l2) : 1};
+  }
+  /* The same direction redrawn on the standardized grid the panel uses. */
+  function dispAngle(c){
+    var E = eig2(covFor(c));
+    return Math.atan2(Math.sin(E.th) / (SM0 * c), Math.cos(E.th) / SH);
+  }
+
+  function report(){
+    var U = UNITS[st.u], L = loadingFor(U.c);
+    $("sUnit").textContent = U.name;
+    $("sLoadRaw").textContent = fmt(L.mass, 4);
+    $("sLoadRawH").textContent = fmt(L.height, 4);
+    $("sShareRaw").textContent = (100 * L.share).toFixed(2) + "%";
+    $("sLoadStd").textContent = fmt(1 / Math.SQRT2, 4);
+    $("sShareStd").textContent = (100 * (1 + st.rho) / 2).toFixed(2) + "%";
+    $("sCorr").textContent = fmt(st.rho, 3);
+    $("sV1").textContent = fmt(SH * SH, 1);
+    var vm = SM0 * SM0 * U.c * U.c;
+    $("sV2").textContent = vm >= 1e4 || vm < 1e-2 ? vm.toExponential(2) : fmt(vm, vm < 10 ? 4 : 1);
+    $("sWhat").innerHTML = "a mass of 70 kg is written as <b>" + (MM0 * U.c >= 1e4 ? (MM0 * U.c).toExponential(1) : (MM0 * U.c).toFixed(MM0 * U.c < 1 ? 3 : 1)) + "</b> " + U.name;
+    var v;
+    if(L.mass > 0.95) v = "<span class='flag'>The component is almost pure mass.</span> Height contributes a weight of " + fmt(L.height, 4) + " and has been all but discarded.";
+    else if(L.mass < 0.2) v = "<span class='flag'>The component is almost pure height.</span> Mass contributes a weight of " + fmt(L.mass, 4) + " and has been all but discarded.";
+    else v = "<span class='ok'>The two features are close to balanced here.</span> This is an accident of the unit rather than a property of the data.";
+    v += " The correlation answer holds both weights at 0.707 whatever the unit.";
+    $("sVerdict").innerHTML = v;
+    tgt = Math.log(UNITS[st.u].c) / Math.LN10;
+  }
+
+  function draw(){
+    var e = ensure($("cRaw")), i;
+    if(e){
+      var p = mkSquare(e.c, e.W, e.H, 44, 14, 12, 30, 0, 0, 3.3);
+      e.c.clearRect(0, 0, e.W, e.H);
+      axes(p, {xlab:"height, standardized", ylab:"mass, standardized", zero:true, ny:4});
+      p.clip();
+      for(i = 0; i < zx.length; i++) dot(p, zx[i], zy[i], 4, COL.ink2, COL.blush, 1.3);
+      var dA = dispAngle(Math.pow(10, cur));
+      var R = 2.5;
+      e.c.strokeStyle = COL.ink; e.c.lineWidth = 2; e.c.setLineDash([8, 5]);
+      e.c.beginPath();
+      e.c.moveTo(p.X(-R * Math.SQRT1_2), p.Y(-R * Math.SQRT1_2));
+      e.c.lineTo(p.X(R * Math.SQRT1_2), p.Y(R * Math.SQRT1_2));
+      e.c.stroke(); e.c.setLineDash([]);
+      arrow(p, 0, 0, R * Math.cos(dA), R * Math.sin(dA), COL.red, 3.6, 13);
+      dot(p, 0, 0, 5, COL.ink, COL.blush, 2);
+      p.done();
+    }
+
+    var e2 = ensure($("cStd"));
+    if(e2){
+      var q = mkPlot(e2.c, e2.W, e2.H, 46, 14, 14, 30, -4, 4, 0, 1.06);
+      e2.c.clearRect(0, 0, e2.W, e2.H);
+      e2.c.fillStyle = COL.blush;
+      e2.c.fillRect(q.L, q.T, q.w, q.h);
+      e2.c.font = '600 10.5px "Bricolage Grotesque", sans-serif';
+      e2.c.textAlign = "right"; e2.c.textBaseline = "middle";
+      for(i = 0; i <= 5; i++){
+        var yv = i / 5, y = q.Y(yv);
+        e2.c.strokeStyle = COL.stone; e2.c.lineWidth = 1;
+        e2.c.beginPath(); e2.c.moveTo(q.L, y + 0.5); e2.c.lineTo(q.L + q.w, y + 0.5); e2.c.stroke();
+        e2.c.fillStyle = COL.ink2; e2.c.fillText(yv.toFixed(1), q.L - 5, y);
+      }
+      e2.c.textAlign = "center"; e2.c.textBaseline = "top";
+      for(i = -4; i <= 4; i += 2){
+        var x = q.X(i);
+        e2.c.strokeStyle = COL.stone;
+        e2.c.beginPath(); e2.c.moveTo(x + 0.5, q.T); e2.c.lineTo(x + 0.5, q.T + q.h); e2.c.stroke();
+        e2.c.fillStyle = COL.ink2;
+        e2.c.fillText("10" + (i < 0 ? "⁻" : "") + "⁰¹²³⁴".charAt(Math.abs(i)), x, q.T + q.h + 5);
+      }
+      e2.c.strokeStyle = COL.ink; e2.c.lineWidth = 1.4;
+      e2.c.beginPath();
+      e2.c.moveTo(q.L + 0.5, q.T); e2.c.lineTo(q.L + 0.5, q.T + q.h + 0.5); e2.c.lineTo(q.L + q.w, q.T + q.h + 0.5);
+      e2.c.stroke();
+      q.clip();
+      var gx = [], gy = [];
+      for(i = 0; i <= 260; i++){
+        var lg = -4 + 8 * i / 260;
+        gx.push(lg);
+        gy.push(loadingFor(Math.pow(10, lg)).mass);
+      }
+      curve(q, gx, gy, COL.red, 3);
+      curve(q, [-4, 4], [Math.SQRT1_2, Math.SQRT1_2], COL.ink, 2.4, [8, 5]);
+      for(i = 0; i < UNITS.length; i++){
+        var lu = Math.log(UNITS[i].c) / Math.LN10;
+        e2.c.strokeStyle = COL.mute; e2.c.lineWidth = 1; e2.c.setLineDash([2, 3]);
+        e2.c.beginPath(); e2.c.moveTo(q.X(lu), q.T); e2.c.lineTo(q.X(lu), q.T + q.h); e2.c.stroke();
+        e2.c.setLineDash([]);
+        dot(q, lu, loadingFor(UNITS[i].c).mass, 3.2, COL.mute, COL.blush, 1.2);
+      }
+      var nowL = loadingFor(Math.pow(10, cur)).mass;
+      e2.c.strokeStyle = COL.ink; e2.c.lineWidth = 2;
+      e2.c.beginPath(); e2.c.moveTo(q.X(cur), q.T); e2.c.lineTo(q.X(cur), q.T + q.h); e2.c.stroke();
+      dot(q, cur, nowL, 6, COL.red, COL.blush, 2.5);
+      q.done();
+      e2.c.font = '600 11px "Bricolage Grotesque", sans-serif';
+      e2.c.textAlign = "right"; e2.c.textBaseline = "bottom";
+      e2.c.fillStyle = COL.ink2;
+      e2.c.fillText("multiplier applied to the mass", q.L + q.w, q.T + q.h + 27);
+      /* Unit names run up from the foot of the frame, clear of the curve. */
+      for(i = 0; i < UNITS.length; i++){
+        var lu2 = Math.log(UNITS[i].c) / Math.LN10;
+        var onNow = i === st.u;
+        e2.c.save();
+        e2.c.translate(q.X(lu2) - 4, q.T + q.h - 8);
+        e2.c.rotate(-Math.PI / 2);
+        e2.c.textAlign = "left"; e2.c.textBaseline = "middle";
+        e2.c.font = (onNow ? '800 12px ' : '600 11px ') + '"Bricolage Grotesque", sans-serif';
+        e2.c.fillStyle = onNow ? COL.red : COL.ink2;
+        e2.c.fillText(UNITS[i].name, 0, 0);
+        e2.c.restore();
+      }
+
+    }
+  }
+
+  function step(dt){
+    cur += (tgt - cur) * (reduced ? 1 : 0.13);
+    if(st.cycling){
+      st.t += dt;
+      if(st.t > 1300){
+        st.t = 0;
+        st.u = (st.u + 1) % UNITS.length;
+        $("sUnits").value = st.u;
+        report();
+      }
+    }
+  }
+
+  onInput("sUnits", function(){
+    st.cycling = false; $("sCycle").textContent = "Cycle through the units";
+    st.u = +this.value; report();
+  });
+  onInput("sRhos", function(){ st.rho = +this.value; $("sRho").textContent = st.rho.toFixed(2); gen(); });
+  $("sCycle").addEventListener("click", function(){
+    if(st.cycling){ st.cycling = false; this.textContent = "Cycle through the units"; return; }
+    st.cycling = true; st.t = 0; this.textContent = "Stop cycling";
+  });
+
+  gen();
+  cur = tgt;
+  return {draw:draw, step:step};
+})();
+
+/* ================= animation loop ================= */
+
+var last = 0;
+function frame(now){
+  var dt = last ? Math.min(60, now - last) : 16;
+  last = now;
+  var m = MODULES[active];
+  if(m){
+    if(m.step) m.step(dt);
+    if(m.draw) m.draw();
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+})();
+</script>
+
+</body>
+</html>
