@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DBSCAN, step by step</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2212%22 fill=%22#183e4b%22/%3E%3Ccircle cx=%2225%22 cy=%2228%22 r=%2216%22 fill=%22#f0b92b%22 fill-opacity=%22.18%22 stroke=%22#f0b92b%22 stroke-width=%222.6%22/%3E%3Ccircle cx=%2217%22 cy=%2222%22 r=%223.6%22 fill=%22#d74a49%22/%3E%3Ccircle cx=%2233%22 cy=%2220%22 r=%223.6%22 fill=%22#d74a49%22/%3E%3Ccircle cx=%2231%22 cy=%2236%22 r=%223.6%22 fill=%22#d74a49%22/%3E%3Ccircle cx=%2217%22 cy=%2235%22 r=%223.6%22 fill=%22#d74a49%22/%3E%3Ccircle cx=%2225%22 cy=%2228%22 r=%224.6%22 fill=%22#d74a49%22 stroke=%22#fcf1ef%22 stroke-width=%221.6%22/%3E%3Ccircle cx=%2249%22 cy=%2215%22 r=%223.6%22 fill=%22#3d9a52%22/%3E%3Ccircle cx=%2251%22 cy=%2247%22 r=%223.4%22 fill=%22#a3a8aa%22/%3E%3Ccircle cx=%2240%22 cy=%2255%22 r=%223.4%22 fill=%22#a3a8aa%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&display=swap" rel="stylesheet">
+<style>
+:root{--red:#d74a49;
+  --ink:#183e4b;
+  --ink2:#1b4552;
+  --mute:#8ba0a4;
+  --grey:#eaeaea;
+  --blush:#fcf1ef;
+  --sand:#e8d8c9;
+  --stone:#ced3d7;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--blush);color:var(--ink);
+  font-family:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  font-variant-numeric:tabular-nums;font-size:16px;line-height:1.45;
+  -webkit-font-smoothing:antialiased;}
+.wrap{max-width:1300px;margin:0 auto;padding:26px 22px 0}
+header{display:flex;align-items:flex-end;gap:18px;padding-bottom:14px;border-bottom:2px solid var(--ink)}
+header h1{margin:0;font-size:clamp(23px,3.1vw,37px);font-weight:800;font-stretch:92%;letter-spacing:-.02em;line-height:1.05}
+header p{margin:6px 0 0;max-width:72ch;color:var(--ink2);font-size:15px}
+header .tag{margin-left:auto;align-self:flex-start;background:var(--ink);color:var(--blush);
+  font-size:12px;font-weight:600;padding:5px 10px;border-radius:2px;white-space:nowrap;}
+section.tab{display:none;animation:fade .35s ease}
+section.tab.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.board{display:grid;grid-template-columns:1fr 326px;gap:18px;margin-top:18px;align-items:stretch}
+.rail{display:flex;flex-direction:column;gap:13px}
+.panel{background:var(--grey);border:1px solid var(--stone);padding:13px 15px;min-width:0}
+.panel.sand{background:var(--sand)}
+.panel h2{margin:0 0 9px;font-size:13px;font-weight:700;color:var(--ink2)}
+.panel h2 .sub{font-weight:600;color:var(--mute)}
+.plotwrap{position:sticky;top:12px;align-self:start;background:var(--grey);border:1px solid var(--stone);padding:11px 13px 9px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.cvbox{position:relative;width:100%}
+canvas{display:block;width:100%;height:100%}
+.cvbox canvas{position:absolute;inset:0}
+.legend{display:flex;flex-wrap:wrap;gap:7px 15px;font-size:12.5px;color:var(--ink2);border-top:1px solid var(--stone);padding-top:7px}
+.legend svg{vertical-align:-2px;margin-right:6px}
+.sw{width:11px;height:11px;border-radius:50%}
+.hint{position:absolute;left:14px;top:12px;pointer-events:none;max-width:60%;
+  font-size:12px;color:var(--ink2);background:rgba(234,234,234,.9);padding:3px 8px;border-radius:2px;
+  transition:opacity .4s;}
+.hint.gone{opacity:0}
+.stamp{position:absolute;right:14px;top:12px;pointer-events:none;text-align:right;
+  font-size:13px;color:var(--ink2);line-height:1.3;max-width:46%;}
+.stamp b{display:block;font-size:22px;font-weight:800;color:var(--ink);letter-spacing:-.01em}
+.stamp .ph{font-weight:700;color:var(--red)}
+.mapbox{height:clamp(360px, calc(100vh - 170px), 700px)}
+.caption{font-size:15px;line-height:1.45;color:var(--ink);min-height:3em;padding:2px 2px 0}
+.caption b{color:var(--red)}
+.board > *,.lower > *{min-width:0}
+.ctl{margin-bottom:11px}
+.ctl:last-child{margin-bottom:0}
+.ctl .row{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}
+.ctl .row span{color:var(--ink2)}
+.ctl .row b{font-weight:800;color:var(--red);font-size:17px}
+.what{font-size:12.5px;color:var(--ink2);line-height:1.4;margin-top:2px}
+.what b{color:var(--ink);font-weight:700}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:24px;background:transparent;cursor:pointer}
+input[type=range]:disabled{opacity:.45;cursor:default}
+input[type=range]::-webkit-slider-runnable-track{height:6px;background:var(--blush);border:1px solid var(--ink)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;margin-top:-7px;border-radius:50%;
+  background:var(--red);border:3px solid var(--blush);box-shadow:0 0 0 1px var(--ink);}
+input[type=range]::-moz-range-track{height:6px;background:var(--blush);border:1px solid var(--ink)}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--red);border:3px solid var(--blush);box-shadow:0 0 0 1px var(--ink)}
+input[type=range]:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+.chips{display:flex;flex-direction:column;gap:4px}
+.chip{font-family:inherit;font-size:13.5px;font-weight:600;text-align:left;
+  padding:7px 10px;border:1px solid transparent;background:transparent;color:var(--ink);
+  cursor:pointer;border-radius:2px;}
+.chip:hover{background:var(--stone)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--blush)}
+.chip:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+.chip small{display:block;font-weight:600;font-size:11.5px;color:var(--mute);margin-top:1px}
+.chip[aria-pressed="true"] small{color:var(--sand)}
+.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+button.act{font-family:inherit;font-size:14px;font-weight:600;padding:8px 8px;border-radius:2px;cursor:pointer;
+  border:1px solid var(--ink);background:var(--blush);color:var(--ink);}
+button.act:hover{background:var(--stone)}
+button.act.primary{background:var(--ink);color:var(--blush)}
+button.act.primary:hover{background:var(--ink2)}
+button.act.wide{grid-column:1 / -1}
+button.act:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+button.act:disabled{opacity:.5;cursor:default}
+.kv{display:grid;grid-template-columns:1fr auto;gap:5px 10px;font-size:13.5px}
+.kv span:nth-child(odd){color:var(--ink2)}
+.kv span:nth-child(even){font-weight:800;text-align:right}
+.kv span.hi{color:var(--red)}
+.kv .full{grid-column:1 / -1;font-weight:600 !important;text-align:left !important;color:var(--ink2)}
+.lower{display:grid;grid-template-columns:1fr 1fr 326px;gap:18px;margin-top:18px;align-items:stretch}
+.lower.two{grid-template-columns:1fr 326px}
+.note{font-size:13.5px;color:var(--ink2);line-height:1.55;margin:0}
+.note + .note{margin-top:9px}
+.note b{color:var(--ink)}
+.eq{font-size:15px;line-height:2.1;overflow-x:auto}
+.eq > div{white-space:nowrap}
+.eq > div.wrapok{white-space:normal;font-size:13.5px;line-height:1.55;color:var(--ink2);margin-bottom:4px}
+.eq.small{font-size:14px;line-height:1.95}
+sub{font-size:.68em}
+footer{margin-top:26px;border-top:2px solid var(--ink)}
+footer .inner{max-width:1300px;margin:0 auto;padding:15px 22px 26px;
+  display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:14px;color:var(--ink2);}
+footer b{color:var(--ink);font-weight:700}
+@media (max-width:900px){
+  .board{grid-template-columns:1fr}
+  .lower,.lower.two{grid-template-columns:1fr}
+  .plotwrap{position:relative;top:auto}
+  .mapbox{height:62vh;min-height:340px;max-height:560px}
+  header{flex-wrap:wrap}
+  header .tag{margin-left:0}
+}
+@media (max-width:560px){
+  .wrap{padding:18px 16px 0}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <svg width="52" height="52" aria-hidden="true" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="#183e4b"/><circle cx="25" cy="28" r="16" fill="#f0b92b" fill-opacity=".18" stroke="#f0b92b" stroke-width="2.6"/><circle cx="17" cy="22" r="3.6" fill="#d74a49"/><circle cx="33" cy="20" r="3.6" fill="#d74a49"/><circle cx="31" cy="36" r="3.6" fill="#d74a49"/><circle cx="17" cy="35" r="3.6" fill="#d74a49"/><circle cx="25" cy="28" r="4.6" fill="#d74a49" stroke="#fcf1ef" stroke-width="1.6"/><circle cx="49" cy="15" r="3.6" fill="#3d9a52"/><circle cx="51" cy="47" r="3.4" fill="#a3a8aa"/><circle cx="40" cy="55" r="3.4" fill="#a3a8aa"/></svg>
+    <div>
+      <h1>DBSCAN, step by step</h1>
+      <p>DBSCAN builds clusters out of dense regions, one stage at a time. Points start brown and turn red or green once their neighbors within &epsilon; are counted. A cluster takes a fixed color when it is complete, and the points left over become gray noise.</p>
+    </div>
+    <div class="tag">Chapter 11 &middot; DBSCAN</div>
+  </header>
+
+  <!-- ================= 3. DBSCAN ================= -->
+  <section id="paneDb">
+    <div class="board">
+      <div class="plotwrap">
+        <div class="cvbox mapbox">
+          <canvas id="dbMap" aria-label="Data points with their neighbor circles"></canvas>
+          <div class="hint" id="dbHint">Hover a point to draw its &epsilon; circle and count its neighbors.</div>
+          <div class="stamp"><b id="dbStampB">ready</b><span id="dbStampS"></span></div>
+        </div>
+        <div class="caption" id="dbCaption" aria-live="polite"></div>
+        <div class="legend" id="dbLegend"></div>
+      </div>
+      <div class="rail">
+        <div class="panel sand">
+          <h2>Run</h2>
+          <div class="buttons" style="margin-top:0">
+            <button class="act primary" id="dbPlay" type="button">Run</button>
+            <button class="act" id="dbStep" type="button">One step</button>
+            <button class="act" id="dbFinish" type="button">Finish phase</button>
+            <button class="act" id="dbRestart" type="button">Restart</button>
+          </div>
+          <div class="ctl" style="margin-top:11px">
+            <div class="row"><span>radius &epsilon;</span><b id="dbEps">0.80</b></div>
+            <input id="dbEpss" type="range" min="0.1" max="2.5" step="0.05" value="0.8" aria-label="Radius epsilon">
+          </div>
+          <div class="ctl">
+            <div class="row"><span>minPts</span><b id="dbMin">4</b></div>
+            <input id="dbMins" type="range" min="1" max="15" step="1" value="4" aria-label="Minimum neighbor count">
+            <div class="what" id="dbMinWhat"></div>
+          </div>
+          <div class="ctl">
+            <div class="row"><span>speed</span><b id="dbSpeed">4</b></div>
+            <input id="dbSpeeds" type="range" min="1" max="10" step="1" value="4" aria-label="Speed">
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Data</h2>
+          <div class="chips" id="dbChips"></div>
+          <div class="ctl" style="margin-top:10px">
+            <div class="row"><span>points n</span><b id="dbN">100</b></div>
+            <input id="dbNs" type="range" min="40" max="300" step="20" value="100" aria-label="Number of points">
+          </div>
+          <div class="buttons"><button class="act wide" id="dbNew" type="button">New sample</button></div>
+        </div>
+        <div class="panel">
+          <h2>State of the algorithm</h2>
+          <div class="kv" id="dbState"></div>
+        </div>
+      </div>
+    </div>
+    <div class="lower">
+      <div class="panel">
+        <h2>k-distance plot <span class="sub">distance to the minPts-th neighbor, sorted</span></h2>
+        <div class="cvbox" style="height:216px"><canvas id="dbKd" aria-label="k-distance plot"></canvas></div>
+        <div class="buttons"><button class="act wide" id="dbKnee" type="button">Set &epsilon; to 1.3 &times; the knee</button></div>
+        <p class="note" style="margin-top:8px">The knee, the dark dot, is where the sorted distances start to climb. Setting &epsilon; 30% above it leaves room for points on the edges of groups. Treat it as a starting value.</p>
+      </div>
+      <div class="panel">
+        <h2>Neighbor counts <span class="sub">points within &epsilon;, the point itself excluded</span></h2>
+        <div class="cvbox" style="height:216px"><canvas id="dbHist" aria-label="Histogram of neighbor counts"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>What to watch</h2>
+        <p class="note">A point is core exactly when its distance to the minPts-th neighbor is at most &epsilon;. The yellow &epsilon; line on the k-distance plot therefore splits the sorted curve. Non-core points sit on the left in the green band, above the line, and core points sit on the right in the red band.</p>
+        <p class="note">Open the uneven densities. An &epsilon; small enough to keep the two tight groups apart leaves most of the diffuse group as noise. Raise it until the diffuse group survives, and the tight groups merge.</p>
+      </div>
+    </div>
+    <div class="lower two">
+      <div class="panel">
+        <h2>The method in five lines</h2>
+        <div class="eq">
+          <div>1. &nbsp; N<sub>&epsilon;</sub>(i) = { j &ne; i : &Vert;x<sub>i</sub> &minus; x<sub>j</sub>&Vert; &le; &epsilon; }</div>
+          <div class="wrapok">Count the neighbors inside a circle of radius &epsilon;. A point counts when its center lies inside the circle. A dot that only touches the edge doesn't.</div>
+          <div>2. &nbsp; i is core &nbsp;&hArr;&nbsp; |N<sub>&epsilon;</sub>(i)| &ge; minPts</div>
+          <div class="wrapok">Points with at least minPts neighbors are core points, drawn red. The remaining points are non-core points, drawn green. Unvisited points are brown.</div>
+          <div>3. &nbsp; grow a cluster from a random core point through core points within &epsilon;</div>
+          <div class="wrapok">We pick a core point at random and assign it to the cluster. Core points within &epsilon; of it join, then core points within &epsilon; of the growing cluster join in turn. The yellow circles mark the points whose neighborhoods are being searched.</div>
+          <div>4. &nbsp; attach non-core points within &epsilon; of a core point in the cluster</div>
+          <div class="wrapok">These border points join the cluster without extending it. A border point in reach of two clusters joins whichever cluster grows first.</div>
+          <div>5. &nbsp; repeat from an unclaimed core point, then label the leftovers noise</div>
+          <div class="wrapok">A finished cluster takes a fixed color of its own. Non-core points with no core point within &epsilon; become noise, drawn gray.</div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Conventions</h2>
+        <p class="note">This page counts neighbors without the point itself, as the slides do. scikit-learn's <b>min_samples</b> counts the point, so minPts = 4 here matches min_samples = 5 there.</p>
+        <p class="note">DBSCAN needs no K. It needs &epsilon; and minPts, and the k-distance plot is the usual way to choose &epsilon; once minPts is fixed.</p>
+        <p class="note">A border point within &epsilon; of core points from two clusters joins whichever cluster grows first, so the random starting point can decide its label. The core points and the noise come out the same in any order.</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <div class="inner">
+    <span><b>CPE 486/586: Machine Learning for Engineers</b> &nbsp; Chapter 11, Unsupervised Learning</span>
+    <span>The University of Alabama in Huntsville</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+"use strict";
+/* ---------------- palette and markers ---------------- */
+var COL = {
+  red:"#d74a49", ink:"#183e4b", ink2:"#1b4552", mute:"#8ba0a4",
+  grey:"#eaeaea", blush:"#fcf1ef", sand:"#e8d8c9", stone:"#ced3d7"
+};
+function ringAt(c, X, Y, r, col, w, dash){
+  c.save();
+  if(dash) c.setLineDash(dash);
+  c.beginPath(); c.arc(X, Y, r, 0, Math.PI * 2);
+  c.strokeStyle = col; c.lineWidth = w || 2; c.stroke();
+  c.restore();
+}
+/* Small inline SVG swatches for the HTML legends. */
+function swatch(m, size){
+  size = size || 13;
+  var h = size / 2, s = '<svg width="' + size + '" height="' + size + '" viewBox="0 0 13 13" aria-hidden="true">';
+  var st = ' fill="' + m.f + '" stroke="' + m.s + '" stroke-width="' + Math.min(2, m.w) + '"';
+  if(m.shape === "square") s += '<rect x="2.2" y="2.2" width="8.6" height="8.6"' + st + '/>';
+  else if(m.shape === "triangle") s += '<polygon points="6.5,1.3 11.8,10.6 1.2,10.6"' + st + '/>';
+  else if(m.shape === "diamond") s += '<polygon points="6.5,0.8 12.2,6.5 6.5,12.2 0.8,6.5"' + st + '/>';
+  else s += '<circle cx="6.5" cy="6.5" r="' + (m.r || 4.6) + '"' + st + '/>';
+  return s + '</svg>';
+}
+function ringSwatch(col, dash){
+  return '<svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5" fill="none" stroke="' + col + '" stroke-width="1.8"' + (dash ? ' stroke-dasharray="' + dash + '"' : '') + '/></svg>';
+}
+function legendItem(sw, text){ return '<span>' + sw + text + '</span>'; }
+
+/* ---------------- random numbers ---------------- */
+function mul32(a){
+  return function(){
+    a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function gaussFrom(r){
+  var u = 1 - r(), v = r();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+function shuffled(n, r){
+  var a = [], i;
+  for(i = 0; i < n; i++) a.push(i);
+  for(i = n - 1; i > 0; i--){ var j = Math.floor(r() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; }
+  return a;
+}
+
+/* ---------------- data sets, all in the plane ---------------- */
+function packPts(P, lab, K){
+  var n = P.length, X = new Float64Array(n * 2), L = new Int32Array(n);
+  for(var i = 0; i < n; i++){ X[i * 2] = P[i][0]; X[i * 2 + 1] = P[i][1]; L[i] = lab[i]; }
+  return {X:X, lab:L, n:n, K:K};
+}
+function splitCounts(n, props){
+  var out = [], s = 0, k;
+  for(k = 0; k < props.length - 1; k++){ var c = Math.round(n * props[k]); out.push(c); s += c; }
+  out.push(Math.max(0, n - s));
+  return out;
+}
+function gaussGroups(n, r, centers, sds, props){
+  var cnt = splitCounts(n, props), P = [], L = [], c, i;
+  for(c = 0; c < centers.length; c++){
+    for(i = 0; i < cnt[c]; i++){
+      P.push([centers[c][0] + sds[c] * gaussFrom(r), centers[c][1] + sds[c] * gaussFrom(r)]);
+      L.push(c);
+    }
+  }
+  return {P:P, L:L};
+}
+
+var DATASETS = {
+  blobs: {
+    name:"Three round groups", note:"equal spread, well separated",
+    build:function(n, seed){
+      var g = gaussGroups(n, mul32(seed), [[-4,-2],[4,-1.2],[0,4.2]], [1, 1, 1], [1/3, 1/3, 1/3]);
+      return packPts(g.P, g.L, 3);
+    }
+  },
+  moons: {
+    name:"Two moons", note:"curved and interleaved",
+    build:function(n, seed){
+      var r = mul32(seed), cnt = splitCounts(n, [0.5, 0.5]), P = [], L = [], i, S = 3.2, nz = 0.07 * S;
+      for(i = 0; i < cnt[0]; i++){
+        var t = Math.PI * (i + r()) / cnt[0];
+        P.push([S * (Math.cos(t) - 0.5) + nz * gaussFrom(r), S * (Math.sin(t) - 0.25) + nz * gaussFrom(r)]); L.push(0);
+      }
+      for(i = 0; i < cnt[1]; i++){
+        var t2 = Math.PI * (i + r()) / cnt[1];
+        P.push([S * (1 - Math.cos(t2) - 0.5) + nz * gaussFrom(r), S * (0.5 - Math.sin(t2) - 0.25) + nz * gaussFrom(r)]); L.push(1);
+      }
+      return packPts(P, L, 2);
+    }
+  },
+  outliers: {
+    name:"Two groups with outliers", note:"one point in twelve scattered at random",
+    build:function(n, seed){
+      var r = mul32(seed), nOut = Math.max(3, Math.round(n / 12));
+      var g = gaussGroups(n - nOut, r, [[-3, 0.6],[3, -0.6]], [0.85, 0.85], [0.5, 0.5]);
+      for(var i = 0; i < nOut; i++){ g.P.push([-7.5 + 15 * r(), -5.5 + 11 * r()]); g.L.push(-1); }
+      return packPts(g.P, g.L, 2);
+    }
+  },
+  density: {
+    name:"Uneven densities", note:"two tight groups and one diffuse",
+    build:function(n, seed){
+      var g = gaussGroups(n, mul32(seed), [[-3.6, 0.7],[-1.3, -0.8],[3.4, 0.3]], [0.35, 0.35, 1.5], [0.3, 0.3, 0.4]);
+      return packPts(g.P, g.L, 3);
+    }
+  },
+  rings: {
+    name:"Two rings", note:"one inside the other",
+    build:function(n, seed){
+      var r = mul32(seed), cnt = splitCounts(n, [0.4, 0.6]), P = [], L = [], c, i, R = [1.3, 3.8];
+      for(c = 0; c < 2; c++){
+        for(i = 0; i < cnt[c]; i++){
+          var t = 2 * Math.PI * (i + r()) / cnt[c], rr = R[c] + 0.18 * gaussFrom(r);
+          P.push([rr * Math.cos(t), rr * Math.sin(t)]); L.push(c);
+        }
+      }
+      return packPts(P, L, 2);
+    }
+  },
+  noise: {
+    name:"No structure", note:"uniform scatter, no groups",
+    build:function(n, seed){
+      var r = mul32(seed), P = [], L = [];
+      for(var i = 0; i < n; i++){ P.push([-4 + 8 * r(), -4 + 8 * r()]); L.push(0); }
+      return packPts(P, L, 1);
+    }
+  }
+};
+
+function boundsOf(d, pad){
+  var minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity, i;
+  for(i = 0; i < d.n; i++){
+    var x = d.X[i * 2], y = d.X[i * 2 + 1];
+    if(x < minx) minx = x; if(x > maxx) maxx = x;
+    if(y < miny) miny = y; if(y > maxy) maxy = y;
+  }
+  var half = Math.max(maxx - minx, maxy - miny) / 2;
+  return {cx:(minx + maxx) / 2, cy:(miny + maxy) / 2, half:half * (1 + (pad === undefined ? 0.08 : pad)) + 0.35,
+          minx:minx, maxx:maxx, miny:miny, maxy:maxy};
+}
+/* ---------------- DBSCAN ---------------- */
+function neighbourLists(d, eps){
+  var n = d.n, X = d.X, nb = [], i, j, e2 = eps * eps;
+  for(i = 0; i < n; i++) nb.push([]);
+  for(i = 0; i < n; i++){
+    for(j = i + 1; j < n; j++){
+      var dx = X[i * 2] - X[j * 2], dy = X[i * 2 + 1] - X[j * 2 + 1];
+      if(dx * dx + dy * dy <= e2){ nb[i].push(j); nb[j].push(i); }
+    }
+  }
+  return nb;
+}
+/* Distance to the k-th nearest neighbor, the point itself excluded. */
+function kDistances(d, k){
+  var n = d.n, out = new Float64Array(n), row = new Float64Array(n - 1), i, j;
+  for(i = 0; i < n; i++){
+    var m = 0;
+    for(j = 0; j < n; j++){
+      if(j === i) continue;
+      var dx = d.X[i * 2] - d.X[j * 2], dy = d.X[i * 2 + 1] - d.X[j * 2 + 1];
+      row[m++] = Math.sqrt(dx * dx + dy * dy);
+    }
+    var srt = Array.prototype.slice.call(row).sort(function(a, b){ return a - b; });
+    out[i] = srt[Math.min(k, n - 1) - 1];
+  }
+  return out;
+}
+/* The knee of the sorted k-distance curve: the point furthest below the chord
+   from the smallest value to the largest. The top 2% are set aside first, so a
+   handful of far outliers can't flatten the rest of the curve. */
+function kneeOf(kd){
+  var asc = Array.prototype.slice.call(kd).sort(function(a, b){ return a - b; });
+  var m = Math.max(3, Math.floor(asc.length * 0.98));
+  asc = asc.slice(0, m);
+  var y0 = asc[0], y1 = asc[m - 1], span = Math.max(1e-9, y1 - y0), best = -Infinity, bi = 0;
+  for(var i = 0; i < m; i++){
+    var below = i / (m - 1) - (asc[i] - y0) / span;
+    if(below > best){ best = below; bi = i; }
+  }
+  return {value:asc[bi], rank:bi, kept:m};
+}
+var KNEE_MARGIN = 1.3;
+function suggestEps(d, minPts){
+  var e = kneeOf(kDistances(d, Math.max(1, minPts))).value * KNEE_MARGIN;
+  return Math.max(0.1, Math.min(2.5, Math.round(e * 20) / 20));
+}
+
+/* ---------------- canvas helpers ---------------- */
+function ensure(cv){
+  var r = cv.getBoundingClientRect();
+  if(r.width < 4 || r.height < 4) return null;
+  var dpr = window.devicePixelRatio || 1;
+  if(cv._w !== r.width || cv._h !== r.height || cv._d !== dpr){
+    cv.width = Math.round(r.width * dpr);
+    cv.height = Math.round(r.height * dpr);
+    cv._w = r.width; cv._h = r.height; cv._d = dpr;
+  }
+  var c = cv.getContext("2d");
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return {c:c, W:r.width, H:r.height, dpr:dpr};
+}
+function mkPlot(c, W, H, L, R, T, B, xa, xb, ya, yb){
+  var p = {c:c, L:L, T:T, w:W - L - R, h:H - T - B, xa:xa, xb:xb, ya:ya, yb:yb, W:W, H:H};
+  p.X = function(x){ return p.L + (x - p.xa) / (p.xb - p.xa) * p.w; };
+  p.Y = function(y){ return p.T + (p.yb - y) / (p.yb - p.ya) * p.h; };
+  p.ix = function(px){ return p.xa + (px - p.L) / p.w * (p.xb - p.xa); };
+  p.iy = function(py){ return p.yb - (py - p.T) / p.h * (p.yb - p.ya); };
+  p.s = p.w / (xb - xa);
+  p.clip = function(){ c.save(); c.beginPath(); c.rect(p.L, p.T, p.w, p.h); c.clip(); };
+  p.done = function(){ c.restore(); };
+  return p;
+}
+/* Equal units on both axes, so a round group is drawn round. */
+function mkView(c, W, H, L, R, T, B, b){
+  var w = W - L - R, h = H - T - B, hx = b.half, hy = b.half;
+  if(w >= h) hx = b.half * w / h; else hy = b.half * h / w;
+  return mkPlot(c, W, H, L, R, T, B, b.cx - hx, b.cx + hx, b.cy - hy, b.cy + hy);
+}
+function niceStep(range, want){
+  if(!(range > 0)) return 1;
+  var raw = range / want, e = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10)), n = raw / e;
+  return (n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10) * e;
+}
+function tickText(v, step){
+  var d = step < 0.01 ? 3 : step < 0.1 ? 2 : step < 1 ? 1 : 0;
+  var s = Math.abs(v) < step / 1000 ? (0).toFixed(d) : Math.abs(v).toFixed(d);
+  return (v < -step / 1000 ? "−" : "") + s;
+}
+var FONT = '"Bricolage Grotesque", "Trebuchet MS", sans-serif';
+function font(c, w, size){ c.font = w + " " + size + "px " + FONT; }
+function frame(p, o){
+  var c = p.c, i;
+  o = o || {};
+  c.fillStyle = o.bg || COL.blush;
+  c.fillRect(p.L, p.T, p.w, p.h);
+  font(c, 600, 11);
+  c.lineWidth = 1;
+  if(!o.noGrid){
+    var sy = o.sy || niceStep(p.yb - p.ya, o.ny || 5);
+    c.textAlign = "right"; c.textBaseline = "middle";
+    for(i = Math.ceil(p.ya / sy - 1e-9); i * sy <= p.yb + 1e-9; i++){
+      var y = p.Y(i * sy);
+      c.strokeStyle = COL.stone;
+      c.beginPath(); c.moveTo(p.L, y + 0.5); c.lineTo(p.L + p.w, y + 0.5); c.stroke();
+      if(!o.noYLab){ c.fillStyle = COL.ink2; c.fillText(o.yfmt ? o.yfmt(i * sy) : tickText(i * sy, sy), p.L - 6, y); }
+    }
+    if(!o.noXGrid){
+      var sx = o.sx || niceStep(p.xb - p.xa, o.nx || 6);
+      c.textAlign = "center"; c.textBaseline = "top";
+      for(i = Math.ceil(p.xa / sx - 1e-9); i * sx <= p.xb + 1e-9; i++){
+        var x = p.X(i * sx);
+        c.strokeStyle = COL.stone;
+        c.beginPath(); c.moveTo(x + 0.5, p.T); c.lineTo(x + 0.5, p.T + p.h); c.stroke();
+        if(!o.noXLab){ c.fillStyle = COL.ink2; c.fillText(o.xfmt ? o.xfmt(i * sx) : tickText(i * sx, sx), x, p.T + p.h + 5); }
+      }
+    }
+  }
+  if(o.zero){
+    c.strokeStyle = COL.ink; c.lineWidth = 1.2;
+    if(p.ya < 0 && p.yb > 0){ c.beginPath(); c.moveTo(p.L, p.Y(0) + 0.5); c.lineTo(p.L + p.w, p.Y(0) + 0.5); c.stroke(); }
+    if(p.xa < 0 && p.xb > 0){ c.beginPath(); c.moveTo(p.X(0) + 0.5, p.T); c.lineTo(p.X(0) + 0.5, p.T + p.h); c.stroke(); }
+  }
+  c.strokeStyle = COL.ink; c.lineWidth = 1.4;
+  c.beginPath();
+  c.moveTo(p.L + 0.5, p.T); c.lineTo(p.L + 0.5, p.T + p.h + 0.5); c.lineTo(p.L + p.w, p.T + p.h + 0.5);
+  c.stroke();
+  c.fillStyle = COL.ink2;
+  font(c, 600, 11);
+  if(o.xlab){
+    c.textAlign = "right"; c.textBaseline = "bottom";
+    c.fillText(o.xlab, p.L + p.w, p.H - 2);
+  }
+  if(o.ylab){
+    c.textAlign = "left"; c.textBaseline = "top";
+    c.fillText(o.ylab, p.L + 6, p.T + 4);
+  }
+}
+function curve(p, xs, ys, color, width, dash){
+  var c = p.c, started = false;
+  c.save();
+  c.strokeStyle = color; c.lineWidth = width; c.lineJoin = "round";
+  if(dash) c.setLineDash(dash);
+  c.beginPath();
+  for(var i = 0; i < xs.length; i++){
+    if(!isFinite(ys[i])){ started = false; continue; }
+    if(!started){ c.moveTo(p.X(xs[i]), p.Y(ys[i])); started = true; }
+    else c.lineTo(p.X(xs[i]), p.Y(ys[i]));
+  }
+  c.stroke();
+  c.restore();
+}
+function dot(p, x, y, r, fill, stroke, lw){
+  var c = p.c;
+  c.beginPath();
+  c.arc(p.X(x), p.Y(y), r, 0, Math.PI * 2);
+  if(fill){ c.fillStyle = fill; c.fill(); }
+  if(stroke){ c.strokeStyle = stroke; c.lineWidth = lw || 1.5; c.stroke(); }
+}
+function text(c, s, x, y, align, base, col, w, size){
+  font(c, w || 600, size || 11);
+  c.textAlign = align || "left"; c.textBaseline = base || "alphabetic";
+  c.fillStyle = col || COL.ink2;
+  c.fillText(s, x, y);
+}
+/* Text on a pale backing, so labels stay legible over points and lines. */
+function tag(c, s, x, y, align, col, w, size){
+  font(c, w || 700, size || 11.5);
+  var tw = c.measureText(s).width, h = (size || 11.5) + 5;
+  var x0 = align === "right" ? x - tw - 4 : align === "center" ? x - tw / 2 - 2 : x - 2;
+  c.fillStyle = "rgba(252,241,239,.88)";
+  c.fillRect(x0, y - h + 3, tw + 6, h);
+  c.textAlign = align || "left"; c.textBaseline = "alphabetic";
+  c.fillStyle = col || COL.ink;
+  c.fillText(s, x, y);
+}
+function emptyNote(c, W, H, s){
+  text(c, s, W / 2, H / 2, "center", "middle", COL.mute, 600, 12.5);
+}
+
+function fmt(v, d){
+  if(v === null || v === undefined || !isFinite(v)) return "–";
+  d = d === undefined ? 3 : d;
+  var s = Math.abs(v).toFixed(d);
+  return (v < 0 && +s !== 0 ? "−" : "") + s;
+}
+function ease(t){ return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+
+var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------------- page plumbing ---------------- */
+var MODULES = {};
+function $(id){ return document.getElementById(id); }
+function onInput(id, fn){ $(id).addEventListener("input", fn); }
+function setRange(id, v){ $(id).value = v; }
+function buildChips(host, keys, initial, fn){
+  host.innerHTML = "";
+  var api = {set:function(k){
+    var all = host.querySelectorAll(".chip");
+    for(var i = 0; i < all.length; i++) all[i].setAttribute("aria-pressed", all[i].getAttribute("data-k") === k ? "true" : "false");
+  }};
+  keys.forEach(function(k){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.setAttribute("data-k", k);
+    b.innerHTML = DATASETS[k].name + "<small>" + DATASETS[k].note + "</small>";
+    b.setAttribute("aria-pressed", k === initial ? "true" : "false");
+    b.addEventListener("click", function(){ api.set(k); fn(k); });
+    host.appendChild(b);
+  });
+  return api;
+}
+/* Finds the point under the pointer, within 14 pixels. */
+function watchHover(cv, getPlot, getData, onHover, hintId){
+  cv.addEventListener("pointermove", function(ev){
+    var p = getPlot(), d = getData();
+    if(!p || !d) return;
+    var r = cv.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top;
+    var best = -1, bd = 14 * 14;
+    for(var i = 0; i < d.n; i++){
+      var dx = p.X(d.X[i * 2]) - px, dy = p.Y(d.X[i * 2 + 1]) - py, dd = dx * dx + dy * dy;
+      if(dd < bd){ bd = dd; best = i; }
+    }
+    onHover(best);
+    if(best >= 0 && hintId) $(hintId).className = "hint gone";
+  });
+  cv.addEventListener("pointerleave", function(){ onHover(-1); });
+}
+function kvHTML(rows){
+  var h = "";
+  rows.forEach(function(r){
+    if(r.full) h += '<span class="full">' + r.full + '</span>';
+    else h += "<span>" + r[0] + "</span><span" + (r[2] ? ' class="hi"' : "") + ">" + r[1] + "</span>";
+  });
+  return h;
+}
+function playButton(id, playing, idle){ $(id).textContent = playing ? "Pause" : (idle || "Run"); }
+function pointRadius(n){ return n <= 14 ? 6.5 : n <= 50 ? 5.2 : n <= 120 ? 4.4 : n <= 220 ? 3.9 : 3.4; }
+
+
+/* ================= 3. DBSCAN ================= */
+
+/* The tab runs as a timed story. Each event has a duration and draws itself at
+   its progress t from 0 to 1, and its effect on the points lands when it ends.
+   Colors follow the lecture: brown unvisited, yellow circle, red core, green
+   non-core, a fixed color per finished cluster, gray noise. */
+MODULES.db = (function(){
+  var DS = ["outliers", "moons", "density", "rings", "blobs", "noise"];
+  var BROWN = "#8c5a35", GREEN = "#3d9a52", GRAY = "#a3a8aa", YEL = "#f0b92b";
+  var CL = ["#2f6fb0", "#7d4fa3", "#e08a1e", "#1b8a8a", "#c2477e", "#183e4b"];
+  var ORD = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
+  function ccol(c){ return CL[c % CL.length]; }
+  function ord(c){ return c < ORD.length ? ORD[c] : "next"; }
+  function Ord(c){ var o = ord(c); return o.charAt(0).toUpperCase() + o.slice(1); }
+
+  var st = {ds:"outliers", n:100, eps:0.8, minPts:4, seed:1, speed:4, playing:false, stopAfter:-1, hover:-1};
+  var d, b, sto, S, kdSorted, knee, e = 0, tt = 0, lastMap = null, chips, seen = false;
+
+  /* ---- the story ---- */
+  function story(){
+    var n = d.n, nb = neighbourLists(d, st.eps), core = new Uint8Array(n), lab = new Int32Array(n).fill(-2);
+    var r = mul32(st.seed * 131 + 7), ev = [], i, j, q;
+    var appear = new Float64Array(n), ordPlot = shuffled(n, mul32(st.seed * 17 + 3));
+    ordPlot.forEach(function(p, k){ appear[p] = k / n; });
+    ev.push({type:"plot", ph:"plot", appear:appear});
+    var countOrder = shuffled(n, r);
+    for(i = 0; i < n; i++) core[i] = nb[i].length >= st.minPts ? 1 : 0;
+    countOrder.forEach(function(p, k){
+      var cx = d.X[p * 2], cy = d.X[p * 2 + 1];
+      var sorted = nb[p].slice().sort(function(a, c){
+        return Math.atan2(d.X[a * 2 + 1] - cy, d.X[a * 2] - cx) - Math.atan2(d.X[c * 2 + 1] - cy, d.X[c * 2] - cx);
+      });
+      ev.push({type:"count", ph:"count", i:p, q:k, nb:sorted, k:nb[p].length, core:!!core[p]});
+    });
+    ev.push({type:"summary", ph:"summary"});
+    var coreOrder = shuffled(n, r).filter(function(x){ return core[x]; }), c = 0;
+    for(q = 0; q < coreOrder.length; q++){
+      var s0 = coreOrder[q];
+      if(lab[s0] !== -2) continue;
+      var ph = "grow" + c, members = [s0];
+      ev.push({type:"pick", ph:ph, i:s0, c:c});
+      lab[s0] = c;
+      var frontier = [s0], w = 0;
+      while(true){
+        var added = [], links = [];
+        frontier.forEach(function(k){
+          nb[k].forEach(function(t){
+            if(core[t] && lab[t] === -2){ lab[t] = c; added.push(t); links.push([k, t]); }
+          });
+        });
+        ev.push({type:"wave", ph:ph, c:c, w:w, from:frontier.slice(), added:added, links:links});
+        w++;
+        members = members.concat(added);
+        if(!added.length) break;
+        frontier = added;
+      }
+      var border = [];
+      members.forEach(function(m){
+        nb[m].forEach(function(t){ if(!core[t] && lab[t] === -2){ lab[t] = c; border.push({j:t, via:m}); } });
+      });
+      ev.push({type:"border", ph:ph, c:c, list:border});
+      ev.push({type:"complete", ph:ph, c:c, members:members.concat(border.map(function(o){ return o.j; }))});
+      c++;
+    }
+    var noise = [];
+    for(i = 0; i < n; i++) if(lab[i] === -2){ lab[i] = -1; noise.push(i); }
+    ev.push({type:"noise", ph:"noise", list:noise});
+    return {events:ev, nb:nb, core:core, lab:lab, K:c};
+  }
+  function baseDur(ev){
+    switch(ev.type){
+      case "plot": return 2200;
+      case "count": return ev.q < 3 ? 3000 : ev.q < 10 ? 1200 : 200;
+      case "summary": return 2400;
+      case "pick": return ev.c === 0 ? 2000 : 1600;
+      case "wave": return ev.c === 0 && ev.w < 3 ? 1900 : (ev.added.length ? 1100 : 1500);
+      case "border": return 1500 + Math.min(1400, 60 * ev.list.length);
+      case "complete": return 1600;
+      case "noise": return 1900;
+    }
+    return 1000;
+  }
+  function dur(ev){ return reduced ? Math.min(250, baseDur(ev)) : baseDur(ev) * 4 / st.speed; }
+
+  /* ---- state ---- */
+  function build(){
+    d = DATASETS[st.ds].build(st.n, 70 + st.seed * 17);
+    b = boundsOf(d, 0.06);
+    $("dbN").textContent = d.n;
+    compute(false);
+  }
+  function compute(keepFinished){
+    var wasDone = keepFinished && sto && e >= sto.events.length;
+    sto = story();
+    kdSorted = Array.prototype.slice.call(kDistances(d, st.minPts)).sort(function(a, c){ return c - a; });
+    knee = kneeOf(kdSorted).value;
+    restart();
+    if(wasDone){ while(e < sto.events.length) apply(sto.events[e++]); report(); }
+  }
+  function restart(){
+    var n = d.n;
+    e = 0; tt = 0; stop();
+    S = {plotted:false, cls:new Int8Array(n), mem:new Int32Array(n).fill(-1), border:new Uint8Array(n),
+         noise:new Uint8Array(n), complete:[], counted:0, nc:0};
+    legend();
+    report();
+  }
+  function apply(ev){
+    if(ev.type === "plot") S.plotted = true;
+    else if(ev.type === "count"){ S.cls[ev.i] = ev.core ? 1 : 2; S.counted++; }
+    else if(ev.type === "pick"){ S.mem[ev.i] = ev.c; S.nc = ev.c + 1; }
+    else if(ev.type === "wave") ev.added.forEach(function(j){ S.mem[j] = ev.c; });
+    else if(ev.type === "border") ev.list.forEach(function(o){ S.mem[o.j] = ev.c; S.border[o.j] = 1; });
+    else if(ev.type === "complete") S.complete[ev.c] = true;
+    else if(ev.type === "noise") ev.list.forEach(function(j){ S.noise[j] = 1; });
+  }
+  function finishPhase(){
+    if(e >= sto.events.length) return;
+    var ph = sto.events[e].ph;
+    while(e < sto.events.length && sto.events[e].ph === ph) apply(sto.events[e++]);
+    tt = 0;
+  }
+
+  /* ---- drawing helpers ---- */
+  function mix(h1, h2, t){
+    var a = parseInt(h1.slice(1), 16), c = parseInt(h2.slice(1), 16);
+    var r = Math.round((a >> 16 & 255) + ((c >> 16 & 255) - (a >> 16 & 255)) * t);
+    var g = Math.round((a >> 8 & 255) + ((c >> 8 & 255) - (a >> 8 & 255)) * t);
+    var bl = Math.round((a & 255) + ((c & 255) - (a & 255)) * t);
+    return "rgb(" + r + "," + g + "," + bl + ")";
+  }
+  function clamp01(v){ return v < 0 ? 0 : v > 1 ? 1 : v; }
+  function classColor(i){ return S.cls[i] === 1 ? COL.red : S.cls[i] === 2 ? GREEN : BROWN; }
+  function baseColor(i){
+    if(S.noise[i]) return GRAY;
+    var m = S.mem[i];
+    if(m >= 0 && S.complete[m]) return ccol(m);
+    return classColor(i);
+  }
+  function disc(c, X, Y, r, fill, ring, rw){
+    c.beginPath(); c.arc(X, Y, r, 0, Math.PI * 2);
+    c.fillStyle = fill; c.fill();
+    c.strokeStyle = ring || "rgba(252,241,239,.95)"; c.lineWidth = rw || 1.4; c.stroke();
+  }
+  /* A circle drawn as a sweep, starting at twelve o'clock. */
+  function sweep(c, X, Y, R, t, width, alpha){
+    if(t <= 0) return;
+    c.save();
+    c.beginPath(); c.arc(X, Y, R, 0, Math.PI * 2);
+    c.fillStyle = "rgba(240,185,43," + (0.16 * t * (alpha || 1)) + ")"; c.fill();
+    c.beginPath(); c.arc(X, Y, R, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * t);
+    c.strokeStyle = YEL; c.globalAlpha = alpha || 1; c.lineWidth = width; c.stroke();
+    c.restore();
+  }
+  function partLine(c, x0, y0, x1, y1, t){
+    if(t <= 0) return;
+    c.beginPath(); c.moveTo(x0, y0); c.lineTo(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t); c.stroke();
+  }
+  function centroidOf(list){
+    var x = 0, y = 0;
+    list.forEach(function(i){ x += d.X[i * 2]; y += d.X[i * 2 + 1]; });
+    return [x / list.length, y / list.length];
+  }
+
+  /* ---- the map ---- */
+  function drawMap(){
+    var E = ensure($("dbMap")), i;
+    if(!E) return;
+    var c = E.c, p = mkView(c, E.W, E.H, 40, 14, 12, 28, b), rad = Math.max(4.6, pointRadius(d.n) * 1.45);
+    var n = d.n, R = st.eps * p.s, len = sto.events.length;
+    lastMap = p;
+    c.clearRect(0, 0, E.W, E.H);
+    frame(p, {ny:6, nx:7});
+    p.clip();
+    var cur = e < len && (tt > 0 || st.playing) ? sto.events[e] : null, t = cur ? clamp01(tt / dur(cur)) : 0;
+    function PX(q){ return p.X(d.X[q * 2]); }
+    function PY(q){ return p.Y(d.X[q * 2 + 1]); }
+
+    /* circles and links behind the points */
+    if(cur && cur.type === "count") sweep(c, PX(cur.i), PY(cur.i), R, clamp01((t - 0.15) / 0.35), 2.8);
+    if(cur && cur.type === "pick") sweep(c, PX(cur.i), PY(cur.i), R, 0, 2.4);
+    if(cur && cur.type === "wave"){
+      var st0 = clamp01(t / 0.45);
+      cur.from.forEach(function(k){ sweep(c, PX(k), PY(k), R, st0, cur.from.length > 12 ? 1.6 : 2.4, cur.from.length > 12 ? 0.75 : 1); });
+      c.strokeStyle = COL.ink; c.lineWidth = 1.8;
+      cur.links.forEach(function(L, k){
+        var t0 = 0.45 + 0.35 * k / Math.max(1, cur.links.length);
+        partLine(c, PX(L[0]), PY(L[0]), PX(L[1]), PY(L[1]), clamp01((t - t0) / 0.12));
+      });
+    }
+    if(cur && cur.type === "border"){
+      c.save(); c.strokeStyle = COL.ink; c.lineWidth = 1.6; c.setLineDash([4, 3]);
+      cur.list.forEach(function(o, k){
+        var t0 = 0.1 + 0.6 * k / Math.max(1, cur.list.length);
+        partLine(c, PX(o.via), PY(o.via), PX(o.j), PY(o.j), clamp01((t - t0) / 0.15));
+      });
+      c.restore();
+    }
+    if(st.hover >= 0 && S.plotted && !(cur && (cur.type === "count" || cur.type === "wave"))){
+      c.save(); c.setLineDash([6, 4]);
+      c.beginPath(); c.arc(PX(st.hover), PY(st.hover), R, 0, Math.PI * 2);
+      c.fillStyle = "rgba(240,185,43,.10)"; c.fill();
+      c.strokeStyle = YEL; c.lineWidth = 2; c.stroke(); c.restore();
+    }
+
+    /* the points */
+    var hotNb = {}, nbOn = 0;
+    if(cur && cur.type === "count"){
+      cur.nb.forEach(function(j, k){
+        var tj = 0.5 + 0.33 * (k + 1) / (cur.nb.length + 1);
+        if(t >= tj){ hotNb[j] = 1; nbOn++; }
+      });
+    }
+    var joinedNow = {};
+    if(cur && cur.type === "wave") cur.added.forEach(function(j, k){ if(t >= 0.45 + 0.35 * k / Math.max(1, cur.added.length) + 0.1) joinedNow[j] = 1; });
+    if(cur && cur.type === "border") cur.list.forEach(function(o, k){ if(t >= 0.1 + 0.6 * k / Math.max(1, cur.list.length) + 0.14) joinedNow[o.j] = 1; });
+    if(cur && cur.type === "pick" && t > 0.35) joinedNow[cur.i] = 1;
+    var blendSet = {};
+    if(cur && cur.type === "complete") cur.members.forEach(function(j){ blendSet[j] = 1; });
+    if(cur && cur.type === "noise") cur.list.forEach(function(j){ blendSet[j] = 1; });
+
+    for(i = 0; i < n; i++){
+      var X = PX(i), Y = PY(i), r = rad, col = baseColor(i);
+      if(!S.plotted){
+        if(!(cur && cur.type === "plot")) continue;
+        var a = clamp01((t - cur.appear[i] * 0.8) / 0.2);
+        if(a <= 0) continue;
+        r = rad * (a < 0.7 ? a / 0.7 * 1.25 : 1.25 - 0.25 * (a - 0.7) / 0.3);
+      }
+      if(S.border[i] || (cur && cur.type === "border" && joinedNow[i])) r = rad * 0.82;
+      if(cur && cur.type === "count" && cur.i === i){
+        r = rad * 1.35;
+        if(t >= 0.85) col = mix(BROWN, cur.core ? COL.red : GREEN, clamp01((t - 0.85) / 0.12));
+        else col = BROWN;
+      }
+      if(hotNb[i]) col = COL.red;
+      if(blendSet[i]){
+        var from = cur.type === "noise" ? GREEN : classColor(i), to = cur.type === "noise" ? GRAY : ccol(cur.c);
+        col = mix(from, to, ease(clamp01(t / 0.8)));
+      }
+      var growing = (S.mem[i] >= 0 && !S.complete[S.mem[i]] && !(cur && cur.type === "complete" && blendSet[i])) || joinedNow[i];
+      disc(c, X, Y, r, col, growing ? COL.ink : null, growing ? 2.4 : 1.4);
+      if(hotNb[i] && !(cur.i === i)) ringAt(c, X, Y, r + 2.6, COL.red, 1.4);
+    }
+
+    /* rings and labels on top */
+    if(cur && cur.type === "count"){
+      var cxp = PX(cur.i), cyp = PY(cur.i);
+      if(t < 0.15) ringAt(c, cxp, cyp, rad * 1.35 + 3 + 6 * Math.sin(t / 0.15 * Math.PI), YEL, 3);
+      else ringAt(c, cxp, cyp, rad * 1.35 + 3, COL.ink, 2.2);
+      if(t >= 0.5){
+        var lbl = nbOn + (nbOn === 1 ? " neighbor" : " neighbors");
+        if(t >= 0.85) lbl = cur.k + (cur.k === 1 ? " neighbor" : " neighbors") + (cur.core ? ", core" : ", not core");
+        tag(c, lbl, cxp + R + 6, cyp - 4, "left", t >= 0.85 ? (cur.core ? COL.red : GREEN) : COL.ink, 800, 12.5);
+      }
+    }
+    if(cur && cur.type === "pick"){
+      var px0 = PX(cur.i), py0 = PY(cur.i);
+      for(var k = 0; k < 2; k++){
+        var ph = clamp01((t - k * 0.25) / 0.6);
+        if(ph > 0 && ph < 1){ c.save(); c.globalAlpha = 1 - ph; ringAt(c, px0, py0, rad + 4 + 22 * ph, COL.ink, 2.6); c.restore(); }
+      }
+      if(t > 0.35) tag(c, Ord(cur.c) + " cluster starts here", px0 + rad + 10, py0 - 10, "left", COL.ink, 800, 12.5);
+    }
+    for(var cc = 0; cc < S.nc; cc++){
+      var show = S.complete[cc] || (cur && cur.type === "complete" && cur.c === cc && t > 0.5);
+      if(!show) continue;
+      var mem = [];
+      for(i = 0; i < n; i++) if(S.mem[i] === cc || (cur && cur.type === "complete" && cur.c === cc && blendSet[i])) mem.push(i);
+      if(!mem.length) continue;
+      var g = centroidOf(mem), top = Infinity;
+      mem.forEach(function(q){ top = Math.min(top, PY(q)); });
+      tag(c, "cluster " + (cc + 1), p.X(g[0]), Math.max(p.T + 18, top - rad - 8), "center", ccol(cc), 800, 13.5);
+    }
+    if(st.hover >= 0 && S.plotted){
+      var h = st.hover, kk = sto.nb[h].length;
+      ringAt(c, PX(h), PY(h), rad + 3.5, COL.ink, 2.2);
+      var kind = S.cls[h] === 1 ? ", core" : S.cls[h] === 2 ? ", not core" : "";
+      tag(c, kk + (kk === 1 ? " neighbor" : " neighbors") + kind, PX(h) + R + 4, PY(h) + 16, "left", COL.ink, 700, 11.5);
+    }
+    p.done();
+    if(!S.plotted && !(cur && cur.type === "plot")) emptyNote(c, E.W, E.H, "Press Run to plot the data.");
+  }
+  function drawKd(){
+    var E = ensure($("dbKd"));
+    if(!E) return;
+    var c = E.c, n = kdSorted.length, i;
+    c.clearRect(0, 0, E.W, E.H);
+    var q97 = kdSorted[Math.floor(n * 0.03)], ymax = Math.max(st.eps * 1.35, q97 * 1.35, knee * KNEE_MARGIN * 1.2);
+    var p = mkPlot(c, E.W, E.H, 44, 12, 12, 30, 0, n, 0, ymax);
+    frame(p, {ny:4, nx:5, xlab:"points, sorted by that distance", ylab:"distance to neighbor " + st.minPts});
+    var nCore = 0;
+    for(i = 0; i < n; i++) if(kdSorted[i] <= st.eps) nCore++;
+    var xcross = n - nCore;
+    p.clip();
+    c.fillStyle = "rgba(215,74,73,.08)";
+    c.fillRect(p.X(xcross), p.T, p.X(n) - p.X(xcross), p.h);
+    c.fillStyle = "rgba(61,154,82,.08)";
+    c.fillRect(p.L, p.T, p.X(xcross) - p.L, p.h);
+    var xs = [], ys = [];
+    for(i = 0; i < n; i++){ xs.push(i + 0.5); ys.push(Math.min(kdSorted[i], ymax * 1.02)); }
+    curve(p, xs, ys, COL.ink2, 2.2);
+    c.save(); c.strokeStyle = COL.ink; c.lineWidth = 1.3; c.setLineDash([3, 3]);
+    c.beginPath(); c.moveTo(p.L, p.Y(knee * KNEE_MARGIN)); c.lineTo(p.L + p.w, p.Y(knee * KNEE_MARGIN)); c.stroke(); c.restore();
+    c.strokeStyle = YEL; c.lineWidth = 2.4;
+    c.beginPath(); c.moveTo(p.L, p.Y(st.eps)); c.lineTo(p.L + p.w, p.Y(st.eps)); c.stroke();
+    var kneeX = 0;
+    for(i = 0; i < n; i++) if(kdSorted[i] >= knee) kneeX = i;
+    dot(p, kneeX + 0.5, knee, 4.4, COL.ink, COL.blush, 1.4);
+    p.done();
+    tag(c, "ε = " + fmt(st.eps, 2), p.L + 6, p.Y(st.eps) - 5, "left", COL.ink, 800, 11.5);
+    tag(c, "knee × " + KNEE_MARGIN + " = " + fmt(knee * KNEE_MARGIN, 2), p.L + p.w - 4, p.Y(knee * KNEE_MARGIN) - 5, "right", COL.ink, 700, 11);
+    tag(c, "core " + nCore, p.L + p.w - 4, p.T + 34, "right", COL.red, 800, 11.5);
+    tag(c, "not core " + (n - nCore), p.L + 6, p.T + 34, "left", GREEN, 800, 11);
+  }
+  function drawHist(){
+    var E = ensure($("dbHist"));
+    if(!E) return;
+    var c = E.c, i, cap = 24, cnt = new Array(cap + 1).fill(0), mx = 0;
+    for(i = 0; i < d.n; i++){ var k = Math.min(cap, sto.nb[i].length); cnt[k]++; }
+    for(i = 0; i <= cap; i++) mx = Math.max(mx, cnt[i]);
+    var hi = 0;
+    for(i = 0; i <= cap; i++) if(cnt[i] > 0) hi = i;
+    hi = Math.max(hi, st.minPts + 2);
+    c.clearRect(0, 0, E.W, E.H);
+    var p = mkPlot(c, E.W, E.H, 40, 12, 12, 30, -0.7, hi + 0.7, 0, mx * 1.15 || 1);
+    frame(p, {ny:4, noXGrid:true, xlab:"neighbors within ε", ylab:"points"});
+    font(c, 600, 10.5); c.textAlign = "center"; c.textBaseline = "top"; c.fillStyle = COL.ink2;
+    var stp = hi > 16 ? 4 : hi > 8 ? 2 : 1;
+    for(i = 0; i <= hi; i += stp) c.fillText(i === cap ? cap + "+" : String(i), p.X(i), p.T + p.h + 4);
+    var bw = Math.max(2, p.s * 0.78);
+    for(i = 0; i <= hi; i++){
+      if(!cnt[i]) continue;
+      c.fillStyle = i >= st.minPts ? COL.red : GREEN;
+      c.fillRect(p.X(i) - bw / 2, p.Y(cnt[i]), bw, p.Y(0) - p.Y(cnt[i]));
+    }
+    c.save(); c.strokeStyle = COL.ink; c.lineWidth = 1.6; c.setLineDash([6, 4]);
+    c.beginPath(); c.moveTo(p.X(st.minPts - 0.5), p.T); c.lineTo(p.X(st.minPts - 0.5), p.T + p.h); c.stroke(); c.restore();
+    tag(c, "core from minPts = " + st.minPts, p.X(st.minPts - 0.5) + 5, p.T + 16, "left", COL.ink, 700, 11);
+  }
+  function draw(){ drawMap(); drawKd(); drawHist(); }
+
+  /* ---- words ---- */
+  function caption(){
+    var len = sto.events.length, active = e < len && (tt > 0 || st.playing), ev = active ? sto.events[e] : (e > 0 ? sto.events[e - 1] : null);
+    var t = active ? clamp01(tt / dur(ev)) : 1, mp = st.minPts, eps = st.eps.toFixed(2);
+    if(!ev) return "Press <b>Run</b> to plot the data, or <b>One step</b> to go one stage at a time.";
+    if(e >= len && !active){
+      var nz = 0;
+      for(var i = 0; i < d.n; i++) if(S.noise[i]) nz++;
+      return "Done. DBSCAN found <b>" + sto.K + (sto.K === 1 ? " cluster" : " clusters") + "</b> and labeled " + nz + (nz === 1 ? " point" : " points") + " noise.";
+    }
+    switch(ev.type){
+      case "plot": return "The data appear. The points are brown, since none has been visited yet.";
+      case "count":
+        if(t < 0.5) return "We pick point " + (ev.q + 1) + " of " + d.n + " and draw a circle of radius &epsilon; = " + eps + " around it.";
+        if(t < 0.85) return "Points inside the circle turn red as we count them.";
+        return "Point " + (ev.q + 1) + " has <b>" + ev.k + "</b> " + (ev.k === 1 ? "neighbor" : "neighbors") + " within &epsilon;. " +
+          (ev.core ? "That is at least " + mp + ", so it is a <b>core point</b> and turns red." : "That is fewer than " + mp + ", so it is a <b>non-core point</b> and turns green.");
+      case "summary": return "Points with at least " + mp + " neighbors are core points (red). The remaining points are non-core points (green).";
+      case "pick": return ev.c === 0 ? "We pick a core point at random and assign it to the <b>first cluster</b>." :
+        "Now we look at core points that are not part of a cluster yet. We pick one at random and repeat the process to build the <b>" + ord(ev.c) + " cluster</b>.";
+      case "wave":
+        if(!ev.added.length) return "No further core point lies within &epsilon; of the cluster, so it stops growing through core points.";
+        return ev.w === 0 ? "Core points within &epsilon; of that point join the " + ord(ev.c) + " cluster." :
+          "Core points within &epsilon; of the growing cluster join it in turn. " + ev.added.length + " more joined this round.";
+      case "border": return ev.list.length ?
+        "We add the non-core points that lie within &epsilon; of a core point in the cluster. These <b>border points</b> join the cluster without extending it." :
+        "No non-core point lies within &epsilon; of this cluster, so it has no border points.";
+      case "complete": return "This completes the " + ord(ev.c) + " cluster. It takes a fixed color" + (ev.c ? " of its own." : ".");
+      case "noise": return "Non-core points with no core point within &epsilon; are labeled <b>noise</b>, shown in gray.";
+    }
+    return "";
+  }
+  function legend(){
+    var h = "";
+    h += legendItem(swatch({f:BROWN, s:COL.blush, w:1.2}), "not visited yet");
+    h += legendItem(ringSwatch(YEL), "circle of radius &epsilon;");
+    h += legendItem(swatch({f:COL.red, s:COL.blush, w:1.2}), "core point");
+    h += legendItem(swatch({f:GREEN, s:COL.blush, w:1.2}), "non-core point");
+    h += legendItem(swatch({f:COL.red, s:COL.ink, w:2}), "dark ring, joining the cluster being built");
+    for(var j = 0; j < Math.min(Math.max(sto.K, 1), 6); j++) h += legendItem(swatch({f:ccol(j), s:COL.blush, w:1.2}), "cluster " + (j + 1));
+    h += legendItem(swatch({f:GRAY, s:COL.blush, w:1.2}), "noise");
+    $("dbLegend").innerHTML = h;
+  }
+  function report(){
+    var n = d.n, len = sto.events.length, active = e < len && (tt > 0 || st.playing), ev = active ? sto.events[e] : (e > 0 ? sto.events[e - 1] : null), B, T;
+    if(!ev){ B = "ready"; T = n + " points"; }
+    else if(e >= len && !active){ B = "done"; T = '<span class="ph">' + sto.K + (sto.K === 1 ? " cluster" : " clusters") + "</span>"; }
+    else if(ev.type === "plot"){ B = "step 1"; T = '<span class="ph">plotting</span> the data'; }
+    else if(ev.type === "count"){ B = "step 2"; T = '<span class="ph">counting</span> point ' + (ev.q + 1) + " of " + n; }
+    else if(ev.type === "summary"){ B = "step 2"; T = '<span class="ph">core and non-core</span>'; }
+    else if(ev.type === "noise"){ B = "step 4"; T = '<span class="ph">noise</span>'; }
+    else { B = "step 3"; T = '<span class="ph">building cluster ' + (ev.c + 1) + "</span>"; }
+    $("dbStampB").textContent = B;
+    $("dbStampS").innerHTML = T;
+    $("dbCaption").innerHTML = caption();
+    var nCore = 0, nNon = 0, nBorder = 0, nNoise = 0, nDone = 0, i;
+    for(i = 0; i < n; i++){
+      if(S.cls[i] === 1) nCore++; else if(S.cls[i] === 2) nNon++;
+      if(S.border[i]) nBorder++; if(S.noise[i]) nNoise++;
+    }
+    S.complete.forEach(function(v){ if(v) nDone++; });
+    $("dbState").innerHTML = kvHTML([
+      ["points counted", S.counted + " of " + n],
+      ["core points, red", nCore, true],
+      ["non-core points, green", nNon],
+      ["border points", nBorder],
+      ["clusters finished", nDone],
+      ["noise points, gray", nNoise],
+      ["scikit-learn call", "eps=" + st.eps.toFixed(2) + ", min_samples=" + (st.minPts + 1)]
+    ]);
+    $("dbMinWhat").innerHTML = "A core point needs at least <b>" + st.minPts + "</b> other points within &epsilon;.";
+    playButton("dbPlay", st.playing);
+  }
+
+  /* ---- loop and controls ---- */
+  var lastKey = "";
+  function step(dt){
+    if(st.playing){
+      tt += dt;
+      while(st.playing && e < sto.events.length && tt >= dur(sto.events[e])){
+        tt -= dur(sto.events[e]);
+        apply(sto.events[e]); e++;
+        if(st.stopAfter >= 0 && e > st.stopAfter){ st.playing = false; st.stopAfter = -1; tt = 0; }
+      }
+      if(e >= sto.events.length){ st.playing = false; st.stopAfter = -1; tt = 0; }
+    }
+    /* Text only changes when the event or its stage changes. */
+    var ev = sto.events[e], stage = ev ? Math.floor(clamp01(tt / dur(ev)) * 8) : 0;
+    var key = e + "|" + stage + "|" + st.playing;
+    if(key !== lastKey){ lastKey = key; report(); }
+  }
+  function stop(){ st.playing = false; st.stopAfter = -1; playButton("dbPlay", false); }
+  function play(stopAfter){ st.playing = true; st.stopAfter = stopAfter; playButton("dbPlay", true); }
+  function setEps(v){ st.eps = Math.round(v * 20) / 20; setRange("dbEpss", st.eps); $("dbEps").textContent = st.eps.toFixed(2); }
+  function retune(){
+    var wasRunning = st.playing;
+    compute(true);
+    if(!S.plotted && (wasRunning || seen)) play(0);
+  }
+
+  chips = buildChips($("dbChips"), DS, st.ds, function(k){
+    stop(); st.ds = k;
+    d = DATASETS[k].build(st.n, 70 + st.seed * 17);
+    setEps(suggestEps(d, st.minPts));
+    build(); play(0);
+  });
+  $("dbPlay").addEventListener("click", function(){
+    if(st.playing){ stop(); report(); return; }
+    if(e >= sto.events.length) restart();
+    play(-1); report();
+  });
+  $("dbStep").addEventListener("click", function(){
+    if(e >= sto.events.length) return;
+    play(e); report();
+  });
+  $("dbFinish").addEventListener("click", function(){ stop(); finishPhase(); report(); });
+  $("dbRestart").addEventListener("click", function(){ restart(); play(0); });
+  $("dbNew").addEventListener("click", function(){ stop(); st.seed++; build(); play(0); });
+  $("dbKnee").addEventListener("click", function(){ setEps(knee * KNEE_MARGIN); retune(); });
+  onInput("dbEpss", function(){ setEps(+this.value); retune(); });
+  onInput("dbMins", function(){ st.minPts = +this.value; $("dbMin").textContent = st.minPts; retune(); });
+  onInput("dbSpeeds", function(){ st.speed = +this.value; $("dbSpeed").textContent = st.speed; });
+  onInput("dbNs", function(){ stop(); st.n = +this.value; $("dbN").textContent = st.n; build(); play(0); });
+  watchHover($("dbMap"), function(){ return lastMap; }, function(){ return d; }, function(i){ st.hover = i; }, "dbHint");
+
+  d = DATASETS[st.ds].build(st.n, 70 + st.seed * 17);
+  setEps(suggestEps(d, st.minPts));
+  build();
+  /* The first visit plots the data, then waits for Run. */
+  function shown(){ if(!seen){ seen = true; if(e === 0) play(0); } }
+  return {draw:draw, step:step, shown:shown};
+})();
+
+/* ================= loop ================= */
+
+var M = MODULES.db;
+if(M.shown) M.shown();
+var last = 0;
+function tick(now){
+  var dt = last ? Math.min(60, now - last) : 16;
+  last = now;
+  if(M.step) M.step(dt);
+  M.draw();
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+})();
+</script>
+
+</body>
+</html>

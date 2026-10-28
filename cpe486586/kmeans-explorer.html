@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>K-means, step by step</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2212%22 fill=%22#183e4b%22/%3E%3Cpath d=%22M8 56L56 8%22 stroke=%22#8ba0a4%22 stroke-width=%221.8%22 stroke-dasharray=%223 3%22/%3E%3Ccircle cx=%2212%22 cy=%2217%22 r=%223.6%22 fill=%22#d74a49%22/%3E%3Ccircle cx=%2224%22 cy=%2211%22 r=%223.6%22 fill=%22#d74a49%22/%3E%3Ccircle cx=%2213%22 cy=%2229%22 r=%223.6%22 fill=%22#d74a49%22/%3E%3Ccircle cx=%2228%22 cy=%2224%22 r=%223.6%22 fill=%22#d74a49%22/%3E%3Cpath d=%22M20 13.5L25.5 19L20 24.5L14.5 19Z%22 fill=%22#d74a49%22 stroke=%22#fcf1ef%22 stroke-width=%222%22/%3E%3Ccircle cx=%2237%22 cy=%2244%22 r=%223.6%22 fill=%22#e8d8c9%22/%3E%3Ccircle cx=%2252%22 cy=%2238%22 r=%223.6%22 fill=%22#e8d8c9%22/%3E%3Ccircle cx=%2240%22 cy=%2255%22 r=%223.6%22 fill=%22#e8d8c9%22/%3E%3Ccircle cx=%2253%22 cy=%2251%22 r=%223.6%22 fill=%22#e8d8c9%22/%3E%3Cpath d=%22M45 40.5L50.5 46L45 51.5L39.5 46Z%22 fill=%22#e8d8c9%22 stroke=%22#183e4b%22 stroke-width=%222%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&display=swap" rel="stylesheet">
+<style>
+:root{--red:#d74a49;
+  --ink:#183e4b;
+  --ink2:#1b4552;
+  --mute:#8ba0a4;
+  --grey:#eaeaea;
+  --blush:#fcf1ef;
+  --sand:#e8d8c9;
+  --stone:#ced3d7;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--blush);color:var(--ink);
+  font-family:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  font-variant-numeric:tabular-nums;font-size:16px;line-height:1.45;
+  -webkit-font-smoothing:antialiased;}
+.wrap{max-width:1300px;margin:0 auto;padding:26px 22px 0}
+header{display:flex;align-items:flex-end;gap:18px;padding-bottom:14px;border-bottom:2px solid var(--ink)}
+header h1{margin:0;font-size:clamp(23px,3.1vw,37px);font-weight:800;font-stretch:92%;letter-spacing:-.02em;line-height:1.05}
+header p{margin:6px 0 0;max-width:72ch;color:var(--ink2);font-size:15px}
+header .tag{margin-left:auto;align-self:flex-start;background:var(--ink);color:var(--blush);
+  font-size:12px;font-weight:600;padding:5px 10px;border-radius:2px;white-space:nowrap;}
+.board{display:grid;grid-template-columns:1fr 326px;gap:18px;margin-top:18px;align-items:stretch}
+.rail{display:flex;flex-direction:column;gap:13px}
+.panel{background:var(--grey);border:1px solid var(--stone);padding:13px 15px;min-width:0}
+.panel.sand{background:var(--sand)}
+.panel h2{margin:0 0 9px;font-size:13px;font-weight:700;color:var(--ink2)}
+.panel h2 .sub{font-weight:600;color:var(--mute)}
+.plotwrap{position:sticky;top:12px;align-self:start;background:var(--grey);border:1px solid var(--stone);padding:11px 13px 9px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.cvbox{position:relative;width:100%}
+canvas{display:block;width:100%;height:100%}
+.cvbox canvas{position:absolute;inset:0}
+.legend{display:flex;flex-wrap:wrap;gap:7px 15px;font-size:12.5px;color:var(--ink2);border-top:1px solid var(--stone);padding-top:7px}
+.legend svg{vertical-align:-2px;margin-right:6px}
+.sw{width:11px;height:11px;border-radius:50%}
+.hint{position:absolute;left:14px;top:12px;pointer-events:none;max-width:60%;
+  font-size:12px;color:var(--ink2);background:rgba(234,234,234,.9);padding:3px 8px;border-radius:2px;
+  transition:opacity .4s;}
+.hint.gone{opacity:0}
+.stamp{position:absolute;right:14px;top:12px;pointer-events:none;text-align:right;
+  font-size:13px;color:var(--ink2);line-height:1.3;max-width:46%;}
+.stamp b{display:block;font-size:22px;font-weight:800;color:var(--ink);letter-spacing:-.01em}
+.stamp .ph{font-weight:700;color:var(--red)}
+.mapbox{height:clamp(360px, calc(100vh - 170px), 700px)}
+.board > *,.lower > *{min-width:0}
+.ctl{margin-bottom:11px}
+.ctl:last-child{margin-bottom:0}
+.ctl .row{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}
+.ctl .row span{color:var(--ink2)}
+.ctl .row b{font-weight:800;color:var(--red);font-size:17px}
+.what{font-size:12.5px;color:var(--ink2);line-height:1.4;margin-top:2px}
+.what b{color:var(--ink);font-weight:700}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:24px;background:transparent;cursor:pointer}
+input[type=range]:disabled{opacity:.45;cursor:default}
+input[type=range]::-webkit-slider-runnable-track{height:6px;background:var(--blush);border:1px solid var(--ink)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;margin-top:-7px;border-radius:50%;
+  background:var(--red);border:3px solid var(--blush);box-shadow:0 0 0 1px var(--ink);}
+input[type=range]::-moz-range-track{height:6px;background:var(--blush);border:1px solid var(--ink)}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--red);border:3px solid var(--blush);box-shadow:0 0 0 1px var(--ink)}
+input[type=range]:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+.seg{display:flex;border:1px solid var(--ink);border-radius:2px;overflow:hidden;margin-top:4px}
+.seg button{flex:1;border:0;border-radius:0;background:var(--blush);color:var(--ink);
+  font-family:inherit;font-size:13.5px;font-weight:600;padding:7px 3px;cursor:pointer;white-space:nowrap;}
+.seg.s4 button{font-size:12.5px;padding:7px 2px}
+.seg button + button{border-left:1px solid var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--blush)}
+.seg button:disabled{opacity:.38;cursor:default}
+.seg button:focus-visible{outline:3px solid var(--red);outline-offset:-3px}
+.seglabel{font-size:14px;color:var(--ink2)}
+.chips{display:flex;flex-direction:column;gap:4px}
+.chip{font-family:inherit;font-size:13.5px;font-weight:600;text-align:left;
+  padding:7px 10px;border:1px solid transparent;background:transparent;color:var(--ink);
+  cursor:pointer;border-radius:2px;}
+.chip:hover{background:var(--stone)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--blush)}
+.chip:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+.chip small{display:block;font-weight:600;font-size:11.5px;color:var(--mute);margin-top:1px}
+.chip[aria-pressed="true"] small{color:var(--sand)}
+.toggles{display:flex;flex-direction:column;gap:5px}
+.toggle{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink2);cursor:pointer}
+.toggle input{width:16px;height:16px;accent-color:var(--red);margin:0}
+.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+button.act{font-family:inherit;font-size:14px;font-weight:600;padding:8px 8px;border-radius:2px;cursor:pointer;
+  border:1px solid var(--ink);background:var(--blush);color:var(--ink);}
+button.act:hover{background:var(--stone)}
+button.act.primary{background:var(--ink);color:var(--blush)}
+button.act.primary:hover{background:var(--ink2)}
+button.act:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+button.act:disabled{opacity:.5;cursor:default}
+.kv{display:grid;grid-template-columns:1fr auto;gap:5px 10px;font-size:13.5px}
+.kv span:nth-child(odd){color:var(--ink2)}
+.kv span:nth-child(even){font-weight:800;text-align:right}
+.kv span.hi{color:var(--red)}
+.kv .full{grid-column:1 / -1;font-weight:600 !important;text-align:left !important;color:var(--ink2)}
+.lower{display:grid;grid-template-columns:1fr 1fr 326px;gap:18px;margin-top:18px;align-items:stretch}
+.lower.two{grid-template-columns:1fr 326px}
+.note{font-size:13.5px;color:var(--ink2);line-height:1.55;margin:0}
+.note + .note{margin-top:9px}
+.note b{color:var(--ink)}
+.eq{font-size:15px;line-height:2.1;overflow-x:auto}
+.eq > div{white-space:nowrap}
+.eq > div.wrapok{white-space:normal;font-size:13.5px;line-height:1.55;color:var(--ink2);margin-bottom:4px}
+.eq.small{font-size:14px;line-height:1.95}
+.frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;margin:0 3px;line-height:1.15}
+.frac .num{border-bottom:1.5px solid var(--ink);padding:0 4px}
+.frac .den{padding:0 4px}
+sup,sub{font-size:.68em}
+.arith{font-size:14px;line-height:1.85;color:var(--ink);overflow-x:auto}
+.arith div{white-space:nowrap}
+.arith .dim{color:var(--mute)}
+.pair2{display:grid;grid-template-columns:1fr;gap:6px}
+footer{margin-top:26px;border-top:2px solid var(--ink)}
+footer .inner{max-width:1300px;margin:0 auto;padding:15px 22px 26px;
+  display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:14px;color:var(--ink2);}
+footer b{color:var(--ink);font-weight:700}
+@media (max-width:900px){
+  .board{grid-template-columns:1fr}
+  .lower,.lower.two{grid-template-columns:1fr}
+  .plotwrap{position:relative;top:auto}
+  .mapbox{height:62vh;min-height:340px;max-height:560px}
+  header{flex-wrap:wrap}
+  header .tag{margin-left:0}
+}
+@media (max-width:560px){
+  .wrap{padding:18px 16px 0}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <svg width="52" height="52" aria-hidden="true" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="#183e4b"/><path d="M8 56L56 8" stroke="#8ba0a4" stroke-width="1.8" stroke-dasharray="3 3"/><circle cx="12" cy="17" r="3.6" fill="#d74a49"/><circle cx="24" cy="11" r="3.6" fill="#d74a49"/><circle cx="13" cy="29" r="3.6" fill="#d74a49"/><circle cx="28" cy="24" r="3.6" fill="#d74a49"/><path d="M20 13.5L25.5 19L20 24.5L14.5 19Z" fill="#d74a49" stroke="#fcf1ef" stroke-width="2"/><circle cx="37" cy="44" r="3.6" fill="#e8d8c9"/><circle cx="52" cy="38" r="3.6" fill="#e8d8c9"/><circle cx="40" cy="55" r="3.6" fill="#e8d8c9"/><circle cx="53" cy="51" r="3.6" fill="#e8d8c9"/><path d="M45 40.5L50.5 46L45 51.5L39.5 46Z" fill="#e8d8c9" stroke="#183e4b" stroke-width="2"/></svg>
+    <div>
+      <h1>K-means, step by step</h1>
+      <p>K-means run one step at a time on data you can change. The assignment step sends a point to its nearest centroid. The update step moves a centroid to the mean of the points it won. The objective J falls until no point switches cluster, and the run stops there.</p>
+    </div>
+    <div class="tag">Chapter 11 &middot; K-means</div>
+  </header>
+
+  <!-- ================= 1. K-means ================= -->
+  <section id="paneKm">
+    <div class="board">
+      <div class="plotwrap">
+        <div class="cvbox mapbox">
+          <canvas id="kmMap" aria-label="Data points, centroids and the region each centroid claims"></canvas>
+          <div class="hint" id="kmHint">Hover a point to see its squared distance to the centroids.</div>
+          <div class="stamp"><b id="kmStampB">0</b><span id="kmStampS">ready</span></div>
+        </div>
+        <div class="legend" id="kmLegend"></div>
+      </div>
+      <div class="rail">
+        <div class="panel sand">
+          <h2>Run</h2>
+          <div class="buttons" style="margin-top:0">
+            <button class="act primary" id="kmPlay" type="button">Run</button>
+            <button class="act" id="kmStep" type="button">One step</button>
+            <button class="act" id="kmRestart" type="button">Restart</button>
+            <button class="act" id="kmSeed" type="button">New start</button>
+          </div>
+          <div class="ctl" style="margin-top:11px">
+            <div class="row"><span>clusters K</span><b id="kmK">2</b></div>
+            <input id="kmKs" type="range" min="1" max="8" step="1" value="2" aria-label="Number of clusters">
+          </div>
+          <div class="ctl">
+            <div class="row"><span>speed</span><b id="kmSpeed">4</b></div>
+            <input id="kmSpeeds" type="range" min="1" max="10" step="1" value="4" aria-label="Speed">
+          </div>
+          <div class="ctl">
+            <span class="seglabel">starting centroids</span>
+            <div class="seg s4" role="group" aria-label="Initialization" id="kmInit">
+              <button type="button" data-v="slide" aria-pressed="true">Slide</button>
+              <button type="button" data-v="points" aria-pressed="false">Points</button>
+              <button type="button" data-v="pp" aria-pressed="false">k-means++</button>
+              <button type="button" data-v="box" aria-pressed="false">Anywhere</button>
+            </div>
+            <div class="what" id="kmInitWhat"></div>
+          </div>
+          <div class="toggles" style="margin-top:9px">
+            <label class="toggle"><input type="checkbox" id="kmVor" checked> shade the centroids' regions</label>
+            <label class="toggle"><input type="checkbox" id="kmTrail" checked> draw the path of the centroids</label>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Data</h2>
+          <div class="chips" id="kmChips"></div>
+          <div class="ctl" style="margin-top:10px">
+            <div class="row"><span>points n</span><b id="kmN">11</b></div>
+            <input id="kmNs" type="range" min="30" max="300" step="10" value="150" aria-label="Number of points">
+          </div>
+        </div>
+        <div class="panel">
+          <h2>State of the algorithm</h2>
+          <div class="kv" id="kmState"></div>
+        </div>
+        <div class="panel">
+          <h2>Hovered point</h2>
+          <div class="kv" id="kmPoint"></div>
+        </div>
+      </div>
+    </div>
+    <div class="lower">
+      <div class="panel">
+        <h2>Objective J against step</h2>
+        <div class="cvbox" style="height:216px"><canvas id="kmCost" aria-label="Objective against step"></canvas></div>
+        <div class="legend" style="border-top:0;padding-top:6px" id="kmCostLegend"></div>
+      </div>
+      <div class="panel">
+        <h2>Choosing K <span class="sub">best of four k-means++ starts per K</span></h2>
+        <div class="pair2">
+          <div class="cvbox" style="height:112px"><canvas id="kmElbow" aria-label="Objective against K"></canvas></div>
+          <div class="cvbox" style="height:112px"><canvas id="kmSil" aria-label="Silhouette against K"></canvas></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Ten random starts <span class="sub">same data, same K</span></h2>
+        <div class="cvbox" style="height:118px"><canvas id="kmStarts" aria-label="Final objective of ten starts"></canvas></div>
+        <p class="note" id="kmStartsTxt" style="margin-top:6px"></p>
+      </div>
+    </div>
+    <div class="lower two">
+      <div class="panel">
+        <h2>The method in four lines</h2>
+        <div class="eq">
+          <div>1. &nbsp; c<sub>i</sub> = arg min<sub>j</sub> &Vert;x<sub>i</sub> &minus; &mu;<sub>j</sub>&Vert;<sup>2</sup></div>
+          <div class="wrapok">Assignment. A point joins its nearest centroid. Dropping the square root leaves the arg min unchanged, so the code compares squared distances.</div>
+          <div>2. &nbsp; &mu;<sub>j</sub> = <span class="frac"><span class="num">1</span><span class="den">n<sub>j</sub></span></span> &sum;<sub>i : c<sub>i</sub> = j</sub> x<sub>i</sub></div>
+          <div class="wrapok">Update. A centroid moves to the mean of the points assigned to it. A centroid that wins no points stays where it is, and the state panel reports it as empty.</div>
+          <div>3. &nbsp; J = &sum;<sub>i</sub> &Vert;x<sub>i</sub> &minus; &mu;<sub>c<sub>i</sub></sub>&Vert;<sup>2</sup></div>
+          <div class="wrapok">The objective, the within-cluster sum of squares. The assignment step lowers it for fixed centroids and the update step lowers it for fixed assignments. Neither can raise it.</div>
+          <div>4. &nbsp; stop when no c<sub>i</sub> changes</div>
+          <div class="wrapok">J takes finitely many values, so the loop ends. It ends at a local minimum, and the starting centroids decide which one.</div>
+        </div>
+        <h2 style="margin-top:14px">The arithmetic of the last update</h2>
+        <div class="arith" id="kmArith"></div>
+      </div>
+      <div class="panel">
+        <h2>What to watch</h2>
+        <p class="note">The default run drops three centroids anywhere in the box. &mu;<sub>2</sub> starts beside the right-hand group and ends on the top group, while &mu;<sub>3</sub> climbs in to take its place. The red rings mark points that switched at the last assignment. The run needs ten updates to settle.</p>
+        <p class="note">The slide's eleven points with the slide's two centroids settle after one update, at (1.80, 1.40) and (5.83, 5.67). Those starting centroids already sit in different groups, so the first assignment is final. Use that example to check the arithmetic panel.</p>
+        <p class="note">Choose Points as the start and press New start a few times. Most starts end at the same J. Now and then two centroids share one group, and the strip of ten starts counts how often.</p>
+        <p class="note">Then try the stretched groups and the two moons. K-means puts its boundaries halfway between centroids, so its regions are convex. Restarting won't help it follow a long or curved group.</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <div class="inner">
+    <span><b>CPE 486/586: Machine Learning for Engineers</b> &nbsp; Chapter 11, Unsupervised Learning</span>
+    <span>The University of Alabama in Huntsville</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+"use strict";
+/* ---------------- palette and markers ---------------- */
+var COL = {
+  red:"#d74a49", ink:"#183e4b", ink2:"#1b4552", mute:"#8ba0a4",
+  grey:"#eaeaea", blush:"#fcf1ef", sand:"#e8d8c9", stone:"#ced3d7"
+};
+/* Six fills from the palette, as on the t-SNE page. Past six clusters the
+   shape changes, so eighteen clusters stay distinct without new colors. */
+var FILLS = [
+  {f:COL.red,   s:COL.blush, w:1.3},
+  {f:COL.ink,   s:COL.blush, w:1.3},
+  {f:COL.mute,  s:COL.blush, w:1.3},
+  {f:COL.sand,  s:COL.ink2,  w:1.5},
+  {f:COL.blush, s:COL.red,   w:2.2},
+  {f:COL.blush, s:COL.ink,   w:2.2}
+];
+var SHAPES = ["circle", "square", "triangle"];
+function markOf(c){
+  var f = FILLS[((c % 6) + 6) % 6];
+  return {f:f.f, s:f.s, w:f.w, shape:SHAPES[Math.floor(c / 6) % 3]};
+}
+function shapePath(c, X, Y, r, shape){
+  c.beginPath();
+  if(shape === "square"){ var a = r * 0.9; c.rect(X - a, Y - a, 2 * a, 2 * a); }
+  else if(shape === "triangle"){
+    var t = r * 1.25;
+    c.moveTo(X, Y - t); c.lineTo(X + t * 0.866, Y + t * 0.5); c.lineTo(X - t * 0.866, Y + t * 0.5); c.closePath();
+  }
+  else c.arc(X, Y, r, 0, Math.PI * 2);
+}
+function markAt(c, X, Y, r, m){
+  shapePath(c, X, Y, r, m.shape);
+  c.fillStyle = m.f; c.fill();
+  c.strokeStyle = m.s; c.lineWidth = m.w; c.stroke();
+}
+function plainAt(c, X, Y, r){
+  c.beginPath(); c.arc(X, Y, r, 0, Math.PI * 2);
+  c.fillStyle = COL.stone; c.fill();
+  c.strokeStyle = COL.mute; c.lineWidth = 1; c.stroke();
+}
+function ringAt(c, X, Y, r, col, w, dash){
+  c.save();
+  if(dash) c.setLineDash(dash);
+  c.beginPath(); c.arc(X, Y, r, 0, Math.PI * 2);
+  c.strokeStyle = col; c.lineWidth = w || 2; c.stroke();
+  c.restore();
+}
+function diamondAt(c, X, Y, r, fill, stroke, w){
+  c.beginPath();
+  c.moveTo(X, Y - r); c.lineTo(X + r, Y); c.lineTo(X, Y + r); c.lineTo(X - r, Y); c.closePath();
+  c.fillStyle = fill; c.fill();
+  c.strokeStyle = stroke; c.lineWidth = w; c.stroke();
+}
+function hexA(hex, a){
+  var v = parseInt(hex.slice(1), 16);
+  return "rgba(" + (v >> 16 & 255) + "," + (v >> 8 & 255) + "," + (v & 255) + "," + a + ")";
+}
+/* Small inline SVG swatches for the HTML legends. */
+function swatch(m, size){
+  size = size || 13;
+  var h = size / 2, s = '<svg width="' + size + '" height="' + size + '" viewBox="0 0 13 13" aria-hidden="true">';
+  var st = ' fill="' + m.f + '" stroke="' + m.s + '" stroke-width="' + Math.min(2, m.w) + '"';
+  if(m.shape === "square") s += '<rect x="2.2" y="2.2" width="8.6" height="8.6"' + st + '/>';
+  else if(m.shape === "triangle") s += '<polygon points="6.5,1.3 11.8,10.6 1.2,10.6"' + st + '/>';
+  else if(m.shape === "diamond") s += '<polygon points="6.5,0.8 12.2,6.5 6.5,12.2 0.8,6.5"' + st + '/>';
+  else s += '<circle cx="6.5" cy="6.5" r="' + (m.r || 4.6) + '"' + st + '/>';
+  return s + '</svg>';
+}
+function ringSwatch(col, dash){
+  return '<svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5" fill="none" stroke="' + col + '" stroke-width="1.8"' + (dash ? ' stroke-dasharray="' + dash + '"' : '') + '/></svg>';
+}
+function legendItem(sw, text){ return '<span>' + sw + text + '</span>'; }
+
+/* ---------------- random numbers ---------------- */
+function mul32(a){
+  return function(){
+    a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function gaussFrom(r){
+  var u = 1 - r(), v = r();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+function shuffled(n, r){
+  var a = [], i;
+  for(i = 0; i < n; i++) a.push(i);
+  for(i = n - 1; i > 0; i--){ var j = Math.floor(r() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; }
+  return a;
+}
+
+/* ---------------- data sets, all in the plane ---------------- */
+function packPts(P, lab, K){
+  var n = P.length, X = new Float64Array(n * 2), L = new Int32Array(n);
+  for(var i = 0; i < n; i++){ X[i * 2] = P[i][0]; X[i * 2 + 1] = P[i][1]; L[i] = lab[i]; }
+  return {X:X, lab:L, n:n, K:K};
+}
+function splitCounts(n, props){
+  var out = [], s = 0, k;
+  for(k = 0; k < props.length - 1; k++){ var c = Math.round(n * props[k]); out.push(c); s += c; }
+  out.push(Math.max(0, n - s));
+  return out;
+}
+function gaussGroups(n, r, centers, sds, props){
+  var cnt = splitCounts(n, props), P = [], L = [], c, i;
+  for(c = 0; c < centers.length; c++){
+    for(i = 0; i < cnt[c]; i++){
+      P.push([centers[c][0] + sds[c] * gaussFrom(r), centers[c][1] + sds[c] * gaussFrom(r)]);
+      L.push(c);
+    }
+  }
+  return {P:P, L:L};
+}
+
+var DATASETS = {
+  slide: {
+    name:"The slide's eleven points", note:"the K-means example from the lecture", fixed:true,
+    build:function(){
+      var P = [[1,1],[2,1],[1,2],[2,2],[3,1],[5,5],[5,6],[6,5],[6,6],[7,5],[6,7]];
+      return packPts(P, [0,0,0,0,0,1,1,1,1,1,1], 2);
+    }
+  },
+  blobs: {
+    name:"Three round groups", note:"equal spread, well separated",
+    build:function(n, seed){
+      var g = gaussGroups(n, mul32(seed), [[-4,-2],[4,-1.2],[0,4.2]], [1, 1, 1], [1/3, 1/3, 1/3]);
+      return packPts(g.P, g.L, 3);
+    }
+  },
+  aniso: {
+    name:"Three stretched groups", note:"long, thin and parallel",
+    build:function(n, seed){
+      var r = mul32(seed), th = -35 * Math.PI / 180;
+      var u = [Math.cos(th), Math.sin(th)], v = [-Math.sin(th), Math.cos(th)];
+      var cnt = splitCounts(n, [1/3, 1/3, 1/3]), P = [], L = [], c, i;
+      for(c = 0; c < 3; c++){
+        var off = (c - 1) * 2.4;
+        for(i = 0; i < cnt[c]; i++){
+          var a = 2.6 * gaussFrom(r), b2 = 0.38 * gaussFrom(r);
+          P.push([off * v[0] + a * u[0] + b2 * v[0], off * v[1] + a * u[1] + b2 * v[1]]);
+          L.push(c);
+        }
+      }
+      return packPts(P, L, 3);
+    }
+  },
+  moons: {
+    name:"Two moons", note:"curved and interleaved",
+    build:function(n, seed){
+      var r = mul32(seed), cnt = splitCounts(n, [0.5, 0.5]), P = [], L = [], i, S = 3.2, nz = 0.07 * S;
+      for(i = 0; i < cnt[0]; i++){
+        var t = Math.PI * (i + r()) / cnt[0];
+        P.push([S * (Math.cos(t) - 0.5) + nz * gaussFrom(r), S * (Math.sin(t) - 0.25) + nz * gaussFrom(r)]); L.push(0);
+      }
+      for(i = 0; i < cnt[1]; i++){
+        var t2 = Math.PI * (i + r()) / cnt[1];
+        P.push([S * (1 - Math.cos(t2) - 0.5) + nz * gaussFrom(r), S * (0.5 - Math.sin(t2) - 0.25) + nz * gaussFrom(r)]); L.push(1);
+      }
+      return packPts(P, L, 2);
+    }
+  },
+  outliers: {
+    name:"Two groups with outliers", note:"one point in twelve scattered at random",
+    build:function(n, seed){
+      var r = mul32(seed), nOut = Math.max(3, Math.round(n / 12));
+      var g = gaussGroups(n - nOut, r, [[-3, 0.6],[3, -0.6]], [0.85, 0.85], [0.5, 0.5]);
+      for(var i = 0; i < nOut; i++){ g.P.push([-7.5 + 15 * r(), -5.5 + 11 * r()]); g.L.push(-1); }
+      return packPts(g.P, g.L, 2);
+    }
+  },
+  noise: {
+    name:"No structure", note:"uniform scatter, no groups",
+    build:function(n, seed){
+      var r = mul32(seed), P = [], L = [];
+      for(var i = 0; i < n; i++){ P.push([-4 + 8 * r(), -4 + 8 * r()]); L.push(0); }
+      return packPts(P, L, 1);
+    }
+  }
+};
+
+function boundsOf(d, pad){
+  var minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity, i;
+  for(i = 0; i < d.n; i++){
+    var x = d.X[i * 2], y = d.X[i * 2 + 1];
+    if(x < minx) minx = x; if(x > maxx) maxx = x;
+    if(y < miny) miny = y; if(y > maxy) maxy = y;
+  }
+  var half = Math.max(maxx - minx, maxy - miny) / 2;
+  return {cx:(minx + maxx) / 2, cy:(miny + maxy) / 2, half:half * (1 + (pad === undefined ? 0.08 : pad)) + 0.35,
+          minx:minx, maxx:maxx, miny:miny, maxy:maxy};
+}
+/* ---------------- K-means ---------------- */
+function initCentroids(d, K, r, method, b){
+  var X = d.X, n = d.n, C = [], i, j;
+  if(method === "slide" && n === 11 && K === 2) return [[1, 1], [5, 5]];
+  if(method === "box"){
+    for(j = 0; j < K; j++) C.push([b.minx + (b.maxx - b.minx) * r(), b.miny + (b.maxy - b.miny) * r()]);
+    return C;
+  }
+  if(method === "pp"){
+    var f = Math.floor(r() * n), D2 = new Float64Array(n);
+    C.push([X[f * 2], X[f * 2 + 1]]);
+    while(C.length < K){
+      var tot = 0;
+      for(i = 0; i < n; i++){
+        var m = Infinity;
+        for(j = 0; j < C.length; j++){
+          var dx = X[i * 2] - C[j][0], dy = X[i * 2 + 1] - C[j][1], v = dx * dx + dy * dy;
+          if(v < m) m = v;
+        }
+        D2[i] = m; tot += m;
+      }
+      var pick = n - 1;
+      if(tot > 0){
+        var u = r() * tot;
+        for(i = 0; i < n; i++){ u -= D2[i]; if(u <= 0){ pick = i; break; } }
+      } else pick = Math.floor(r() * n);
+      C.push([X[pick * 2], X[pick * 2 + 1]]);
+    }
+    return C;
+  }
+  var idx = shuffled(n, r);
+  for(j = 0; j < K; j++){ var q = idx[j % n]; C.push([X[q * 2], X[q * 2 + 1]]); }
+  return C;
+}
+function nearestCentroid(d, C, i){
+  var bj = 0, bd = Infinity;
+  for(var j = 0; j < C.length; j++){
+    var dx = d.X[i * 2] - C[j][0], dy = d.X[i * 2 + 1] - C[j][1], v = dx * dx + dy * dy;
+    if(v < bd){ bd = v; bj = j; }
+  }
+  return bj;
+}
+function assignNearest(d, C, lab){
+  var ch = 0;
+  for(var i = 0; i < d.n; i++){
+    var bj = nearestCentroid(d, C, i);
+    if(lab[i] !== bj){ ch++; lab[i] = bj; }
+  }
+  return ch;
+}
+function updateMeans(d, C, lab){
+  var K = C.length, sx = new Float64Array(K), sy = new Float64Array(K), cnt = new Int32Array(K), i, j;
+  for(i = 0; i < d.n; i++){ j = lab[i]; if(j < 0) continue; sx[j] += d.X[i * 2]; sy[j] += d.X[i * 2 + 1]; cnt[j]++; }
+  for(j = 0; j < K; j++) if(cnt[j] > 0) C[j] = [sx[j] / cnt[j], sy[j] / cnt[j]];
+  return cnt;
+}
+function wcss(d, C, lab){
+  var s = 0;
+  for(var i = 0; i < d.n; i++){
+    var j = lab[i]; if(j < 0) continue;
+    var dx = d.X[i * 2] - C[j][0], dy = d.X[i * 2 + 1] - C[j][1];
+    s += dx * dx + dy * dy;
+  }
+  return s;
+}
+function kmeansFit(d, K, seed, method, maxIt){
+  var r = mul32(seed), b = boundsOf(d, 0), C = initCentroids(d, K, r, method, b);
+  var lab = new Int32Array(d.n).fill(-1), it;
+  for(it = 0; it < (maxIt || 300); it++){
+    var ch = assignNearest(d, C, lab);
+    if(ch === 0 && it > 0) break;
+    updateMeans(d, C, lab);
+  }
+  return {lab:lab, C:C, J:wcss(d, C, lab), iters:it};
+}
+function kmeansBest(d, K, seed, nInit){
+  var best = null;
+  for(var s = 0; s < nInit; s++){
+    var f = kmeansFit(d, K, seed * 101 + s * 17 + 1, "pp");
+    if(!best || f.J < best.J) best = f;
+  }
+  return best;
+}
+
+/* ---------------- scores ---------------- */
+/* Intrinsic scores skip points labeled -1 (DBSCAN noise). */
+function keptIdx(lab){
+  var idx = [];
+  for(var i = 0; i < lab.length; i++) if(lab[i] >= 0) idx.push(i);
+  return idx;
+}
+function groupsOf(lab, idx){
+  var g = {}, keys = [];
+  idx.forEach(function(i){ if(!(lab[i] in g)){ g[lab[i]] = []; keys.push(lab[i]); } g[lab[i]].push(i); });
+  return {g:g, keys:keys};
+}
+function silhouetteScore(d, lab){
+  var idx = keptIdx(lab), G = groupsOf(lab, idx), K = G.keys.length, m = idx.length;
+  if(K < 2 || K >= m) return NaN;
+  var X = d.X, tot = 0;
+  for(var q = 0; q < m; q++){
+    var i = idx[q], own = G.g[lab[i]];
+    if(own.length < 2) continue;
+    var a = 0, b = Infinity;
+    for(var t = 0; t < K; t++){
+      var mem = G.g[G.keys[t]], s = 0;
+      for(var u = 0; u < mem.length; u++){
+        var j = mem[u]; if(j === i) continue;
+        var dx = X[i * 2] - X[j * 2], dy = X[i * 2 + 1] - X[j * 2 + 1];
+        s += Math.sqrt(dx * dx + dy * dy);
+      }
+      if(G.keys[t] === lab[i]) a = s / (mem.length - 1);
+      else if(s / mem.length < b) b = s / mem.length;
+    }
+    tot += (b - a) / Math.max(a, b);
+  }
+  return tot / m;
+}
+/* ---------------- canvas helpers ---------------- */
+function ensure(cv){
+  var r = cv.getBoundingClientRect();
+  if(r.width < 4 || r.height < 4) return null;
+  var dpr = window.devicePixelRatio || 1;
+  if(cv._w !== r.width || cv._h !== r.height || cv._d !== dpr){
+    cv.width = Math.round(r.width * dpr);
+    cv.height = Math.round(r.height * dpr);
+    cv._w = r.width; cv._h = r.height; cv._d = dpr;
+  }
+  var c = cv.getContext("2d");
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return {c:c, W:r.width, H:r.height, dpr:dpr};
+}
+function mkPlot(c, W, H, L, R, T, B, xa, xb, ya, yb){
+  var p = {c:c, L:L, T:T, w:W - L - R, h:H - T - B, xa:xa, xb:xb, ya:ya, yb:yb, W:W, H:H};
+  p.X = function(x){ return p.L + (x - p.xa) / (p.xb - p.xa) * p.w; };
+  p.Y = function(y){ return p.T + (p.yb - y) / (p.yb - p.ya) * p.h; };
+  p.ix = function(px){ return p.xa + (px - p.L) / p.w * (p.xb - p.xa); };
+  p.iy = function(py){ return p.yb - (py - p.T) / p.h * (p.yb - p.ya); };
+  p.s = p.w / (xb - xa);
+  p.clip = function(){ c.save(); c.beginPath(); c.rect(p.L, p.T, p.w, p.h); c.clip(); };
+  p.done = function(){ c.restore(); };
+  return p;
+}
+/* Equal units on both axes, so a round group is drawn round. */
+function mkView(c, W, H, L, R, T, B, b){
+  var w = W - L - R, h = H - T - B, hx = b.half, hy = b.half;
+  if(w >= h) hx = b.half * w / h; else hy = b.half * h / w;
+  return mkPlot(c, W, H, L, R, T, B, b.cx - hx, b.cx + hx, b.cy - hy, b.cy + hy);
+}
+function niceStep(range, want){
+  if(!(range > 0)) return 1;
+  var raw = range / want, e = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10)), n = raw / e;
+  return (n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10) * e;
+}
+function tickText(v, step){
+  var d = step < 0.01 ? 3 : step < 0.1 ? 2 : step < 1 ? 1 : 0;
+  var s = Math.abs(v) < step / 1000 ? (0).toFixed(d) : Math.abs(v).toFixed(d);
+  return (v < -step / 1000 ? "−" : "") + s;
+}
+var FONT = '"Bricolage Grotesque", "Trebuchet MS", sans-serif';
+function font(c, w, size){ c.font = w + " " + size + "px " + FONT; }
+function frame(p, o){
+  var c = p.c, i;
+  o = o || {};
+  c.fillStyle = o.bg || COL.blush;
+  c.fillRect(p.L, p.T, p.w, p.h);
+  font(c, 600, 11);
+  c.lineWidth = 1;
+  if(!o.noGrid){
+    var sy = o.sy || niceStep(p.yb - p.ya, o.ny || 5);
+    c.textAlign = "right"; c.textBaseline = "middle";
+    for(i = Math.ceil(p.ya / sy - 1e-9); i * sy <= p.yb + 1e-9; i++){
+      var y = p.Y(i * sy);
+      c.strokeStyle = COL.stone;
+      c.beginPath(); c.moveTo(p.L, y + 0.5); c.lineTo(p.L + p.w, y + 0.5); c.stroke();
+      if(!o.noYLab){ c.fillStyle = COL.ink2; c.fillText(o.yfmt ? o.yfmt(i * sy) : tickText(i * sy, sy), p.L - 6, y); }
+    }
+    if(!o.noXGrid){
+      var sx = o.sx || niceStep(p.xb - p.xa, o.nx || 6);
+      c.textAlign = "center"; c.textBaseline = "top";
+      for(i = Math.ceil(p.xa / sx - 1e-9); i * sx <= p.xb + 1e-9; i++){
+        var x = p.X(i * sx);
+        c.strokeStyle = COL.stone;
+        c.beginPath(); c.moveTo(x + 0.5, p.T); c.lineTo(x + 0.5, p.T + p.h); c.stroke();
+        if(!o.noXLab){ c.fillStyle = COL.ink2; c.fillText(o.xfmt ? o.xfmt(i * sx) : tickText(i * sx, sx), x, p.T + p.h + 5); }
+      }
+    }
+  }
+  if(o.zero){
+    c.strokeStyle = COL.ink; c.lineWidth = 1.2;
+    if(p.ya < 0 && p.yb > 0){ c.beginPath(); c.moveTo(p.L, p.Y(0) + 0.5); c.lineTo(p.L + p.w, p.Y(0) + 0.5); c.stroke(); }
+    if(p.xa < 0 && p.xb > 0){ c.beginPath(); c.moveTo(p.X(0) + 0.5, p.T); c.lineTo(p.X(0) + 0.5, p.T + p.h); c.stroke(); }
+  }
+  c.strokeStyle = COL.ink; c.lineWidth = 1.4;
+  c.beginPath();
+  c.moveTo(p.L + 0.5, p.T); c.lineTo(p.L + 0.5, p.T + p.h + 0.5); c.lineTo(p.L + p.w, p.T + p.h + 0.5);
+  c.stroke();
+  c.fillStyle = COL.ink2;
+  font(c, 600, 11);
+  if(o.xlab){
+    c.textAlign = "right"; c.textBaseline = "bottom";
+    c.fillText(o.xlab, p.L + p.w, p.H - 2);
+  }
+  if(o.ylab){
+    c.textAlign = "left"; c.textBaseline = "top";
+    c.fillText(o.ylab, p.L + 6, p.T + 4);
+  }
+}
+function curve(p, xs, ys, color, width, dash){
+  var c = p.c, started = false;
+  c.save();
+  c.strokeStyle = color; c.lineWidth = width; c.lineJoin = "round";
+  if(dash) c.setLineDash(dash);
+  c.beginPath();
+  for(var i = 0; i < xs.length; i++){
+    if(!isFinite(ys[i])){ started = false; continue; }
+    if(!started){ c.moveTo(p.X(xs[i]), p.Y(ys[i])); started = true; }
+    else c.lineTo(p.X(xs[i]), p.Y(ys[i]));
+  }
+  c.stroke();
+  c.restore();
+}
+function dot(p, x, y, r, fill, stroke, lw){
+  var c = p.c;
+  c.beginPath();
+  c.arc(p.X(x), p.Y(y), r, 0, Math.PI * 2);
+  if(fill){ c.fillStyle = fill; c.fill(); }
+  if(stroke){ c.strokeStyle = stroke; c.lineWidth = lw || 1.5; c.stroke(); }
+}
+function text(c, s, x, y, align, base, col, w, size){
+  font(c, w || 600, size || 11);
+  c.textAlign = align || "left"; c.textBaseline = base || "alphabetic";
+  c.fillStyle = col || COL.ink2;
+  c.fillText(s, x, y);
+}
+/* Text on a pale backing, so labels stay legible over points and lines. */
+function tag(c, s, x, y, align, col, w, size){
+  font(c, w || 700, size || 11.5);
+  var tw = c.measureText(s).width, h = (size || 11.5) + 5;
+  var x0 = align === "right" ? x - tw - 4 : align === "center" ? x - tw / 2 - 2 : x - 2;
+  c.fillStyle = "rgba(252,241,239,.88)";
+  c.fillRect(x0, y - h + 3, tw + 6, h);
+  c.textAlign = align || "left"; c.textBaseline = "alphabetic";
+  c.fillStyle = col || COL.ink;
+  c.fillText(s, x, y);
+}
+function emptyNote(c, W, H, s){
+  text(c, s, W / 2, H / 2, "center", "middle", COL.mute, 600, 12.5);
+}
+
+function fmt(v, d){
+  if(v === null || v === undefined || !isFinite(v)) return "–";
+  d = d === undefined ? 3 : d;
+  var s = Math.abs(v).toFixed(d);
+  return (v < 0 && +s !== 0 ? "−" : "") + s;
+}
+function fmtBig(v){
+  if(!isFinite(v)) return "–";
+  var a = Math.abs(v);
+  return a >= 1000 ? fmt(v, 0) : a >= 100 ? fmt(v, 1) : a >= 10 ? fmt(v, 2) : fmt(v, 3);
+}
+function ease(t){ return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+
+var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------------- page plumbing ---------------- */
+var MODULES = {};
+function $(id){ return document.getElementById(id); }
+function onInput(id, fn){ $(id).addEventListener("input", fn); }
+function setRange(id, v){ $(id).value = v; }
+/* A segmented control. Returns setters so code can change the choice too. */
+function Seg(rootId, fn){
+  var root = $(rootId), bs = root.querySelectorAll("button"), self = this;
+  this.set = function(v){
+    for(var j = 0; j < bs.length; j++) bs[j].setAttribute("aria-pressed", bs[j].getAttribute("data-v") === v ? "true" : "false");
+  };
+  this.disable = function(v, off){
+    for(var j = 0; j < bs.length; j++) if(bs[j].getAttribute("data-v") === v) bs[j].disabled = !!off;
+  };
+  this.disableAll = function(off){ for(var j = 0; j < bs.length; j++) bs[j].disabled = !!off; };
+  for(var i = 0; i < bs.length; i++){
+    (function(b){
+      b.addEventListener("click", function(){
+        if(b.disabled) return;
+        self.set(b.getAttribute("data-v"));
+        fn(b.getAttribute("data-v"));
+      });
+    })(bs[i]);
+  }
+}
+function buildChips(host, keys, initial, fn){
+  host.innerHTML = "";
+  var api = {set:function(k){
+    var all = host.querySelectorAll(".chip");
+    for(var i = 0; i < all.length; i++) all[i].setAttribute("aria-pressed", all[i].getAttribute("data-k") === k ? "true" : "false");
+  }};
+  keys.forEach(function(k){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.setAttribute("data-k", k);
+    b.innerHTML = DATASETS[k].name + "<small>" + DATASETS[k].note + "</small>";
+    b.setAttribute("aria-pressed", k === initial ? "true" : "false");
+    b.addEventListener("click", function(){ api.set(k); fn(k); });
+    host.appendChild(b);
+  });
+  return api;
+}
+/* Finds the point under the pointer, within 14 pixels. */
+function watchHover(cv, getPlot, getData, onHover, hintId){
+  cv.addEventListener("pointermove", function(ev){
+    var p = getPlot(), d = getData();
+    if(!p || !d) return;
+    var r = cv.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top;
+    var best = -1, bd = 14 * 14;
+    for(var i = 0; i < d.n; i++){
+      var dx = p.X(d.X[i * 2]) - px, dy = p.Y(d.X[i * 2 + 1]) - py, dd = dx * dx + dy * dy;
+      if(dd < bd){ bd = dd; best = i; }
+    }
+    onHover(best);
+    if(best >= 0 && hintId) $(hintId).className = "hint gone";
+  });
+  cv.addEventListener("pointerleave", function(){ onHover(-1); });
+}
+function kvHTML(rows){
+  var h = "";
+  rows.forEach(function(r){
+    if(r.full) h += '<span class="full">' + r.full + '</span>';
+    else h += "<span>" + r[0] + "</span><span" + (r[2] ? ' class="hi"' : "") + ">" + r[1] + "</span>";
+  });
+  return h;
+}
+function playButton(id, playing, idle){ $(id).textContent = playing ? "Pause" : (idle || "Run"); }
+function pointRadius(n){ return n <= 14 ? 6.5 : n <= 50 ? 5.2 : n <= 120 ? 4.4 : n <= 220 ? 3.9 : 3.4; }
+
+
+/* ================= 1. K-means ================= */
+
+MODULES.km = (function(){
+  var DS = ["blobs", "slide", "aniso", "moons", "outliers", "noise"];
+  var INIT_WHAT = {
+    slide:"(1, 1) and (5, 5), the two points the slide starts from. Available on the slide's data with K = 2.",
+    points:"K distinct data points drawn at random, often called Forgy initialization.",
+    pp:"The first centroid is a random point. Later ones are drawn with probability proportional to the squared distance from the nearest centroid chosen so far.",
+    box:"K positions drawn uniformly over the box that holds the data. Empty clusters become likely."
+  };
+  /* The default start, anywhere in the box with seed 5, needs ten updates on the
+     three round groups, so the full loop is on show. */
+  var st = {ds:"blobs", n:150, K:3, init:"box", seed:5, speed:4, playing:false, hover:-1, vor:true, trails:true};
+  var d, b, C, Cold, lab, phase, iter, hist, trails, changed, empties, lastUpd;
+  var acc = 0, tw = 1, twDur = 300, aux = null, starts = null, lastPlot = null, vor = {key:"", cv:null};
+  var initSeg, chips;
+
+  function slideOK(){ return st.ds === "slide" && st.K === 2; }
+  function syncControls(){
+    initSeg.disable("slide", !slideOK());
+    if(st.init === "slide" && !slideOK()){ st.init = "points"; }
+    initSeg.set(st.init);
+    $("kmInitWhat").textContent = INIT_WHAT[st.init];
+    var fixed = !!DATASETS[st.ds].fixed;
+    $("kmNs").disabled = fixed;
+    $("kmN").textContent = d ? d.n : st.n;
+    setRange("kmKs", st.K); $("kmK").textContent = st.K;
+    $("kmSeed").disabled = st.init === "slide";
+  }
+  function build(){
+    d = DATASETS[st.ds].build(st.n, 7);
+    b = boundsOf(d, 0.1);
+    computeAux();
+    syncControls();
+    computeStarts();
+    reset();
+  }
+  function computeAux(){
+    var J = [], sil = [], k;
+    for(k = 1; k <= 8; k++){
+      if(k > d.n){ J.push(NaN); sil.push(NaN); continue; }
+      var f = kmeansBest(d, k, 5, 4);
+      J.push(f.J);
+      sil.push(k >= 2 && k < d.n ? silhouetteScore(d, f.lab) : NaN);
+    }
+    aux = {J:J, sil:sil};
+  }
+  function computeStarts(){
+    var m = st.init === "slide" ? "points" : st.init, out = [];
+    for(var s = 0; s < 10; s++) out.push(kmeansFit(d, st.K, 9001 + s * 37, m).J);
+    starts = out;
+  }
+  function reset(){
+    var r = mul32(st.seed * 7919 + 13);
+    C = initCentroids(d, st.K, r, st.init, b);
+    Cold = C.map(function(c){ return c.slice(); });
+    lab = new Int32Array(d.n).fill(-1);
+    phase = "start"; iter = 0; hist = []; changed = []; empties = 0; lastUpd = null;
+    trails = C.map(function(c){ return [c.slice()]; });
+    tw = 1; acc = 0;
+    legend();
+    report();
+  }
+  function assign(){
+    var ch = [];
+    for(var i = 0; i < d.n; i++){
+      var j = nearestCentroid(d, C, i);
+      if(lab[i] !== j) ch.push(i);
+      lab[i] = j;
+    }
+    var first = phase === "start";
+    changed = first ? [] : ch;
+    hist.push({J:wcss(d, C, lab), kind:"a"});
+    phase = (!first && ch.length === 0) ? "done" : "assigned";
+  }
+  function update(){
+    Cold = C.map(function(c){ return c.slice(); });
+    var K = C.length, info = [], j, i;
+    for(j = 0; j < K; j++) info.push({xs:[], ys:[], old:C[j].slice()});
+    for(i = 0; i < d.n; i++){ info[lab[i]].xs.push(d.X[i * 2]); info[lab[i]].ys.push(d.X[i * 2 + 1]); }
+    var cnt = updateMeans(d, C, lab);
+    empties = 0;
+    for(j = 0; j < K; j++){
+      if(cnt[j] === 0) empties++;
+      info[j].now = C[j].slice();
+      trails[j].push(C[j].slice());
+    }
+    lastUpd = info;
+    iter++;
+    hist.push({J:wcss(d, C, lab), kind:"u"});
+    phase = "updated";
+    changed = [];
+    tw = reduced ? 1 : 0;
+  }
+  function half(){
+    if(phase === "done") return;
+    if(phase === "start" || phase === "updated") assign(); else update();
+    report();
+  }
+  function cpos(j){
+    if(tw >= 1) return C[j];
+    var e = ease(tw);
+    return [Cold[j][0] + (C[j][0] - Cold[j][0]) * e, Cold[j][1] + (C[j][1] - Cold[j][1]) * e];
+  }
+  function tintOf(j){
+    var m = markOf(j), base = m.f === COL.blush ? m.s : m.f;
+    var a = base === COL.sand ? 0.45 : base === COL.mute ? 0.17 : 0.085;
+    return hexA(base, a);
+  }
+
+  /* ---- drawing ---- */
+  function drawVoronoi(p, Cd){
+    var dpr = window.devicePixelRatio || 1;
+    var key = Cd.map(function(c){ return c[0].toFixed(4) + "," + c[1].toFixed(4); }).join(";") +
+              "|" + Math.round(p.w) + "x" + Math.round(p.h) + "|" + p.xa.toFixed(4) + "|" + dpr;
+    if(vor.key !== key){
+      vor.key = key;
+      var g = 4, cols = Math.ceil(p.w / g), rows = Math.ceil(p.h / g), r, q, j;
+      if(!vor.cv) vor.cv = document.createElement("canvas");
+      vor.cv.width = Math.max(1, Math.ceil(p.w * dpr)); vor.cv.height = Math.max(1, Math.ceil(p.h * dpr));
+      var c = vor.cv.getContext("2d");
+      c.setTransform(dpr, 0, 0, dpr, 0, 0);
+      c.clearRect(0, 0, p.w, p.h);
+      var L = new Int16Array(cols * rows);
+      for(r = 0; r < rows; r++) for(q = 0; q < cols; q++){
+        var x = p.ix(p.L + (q + 0.5) * g), y = p.iy(p.T + (r + 0.5) * g), bj = 0, bd = Infinity;
+        for(j = 0; j < Cd.length; j++){ var dx = x - Cd[j][0], dy = y - Cd[j][1], v = dx * dx + dy * dy; if(v < bd){ bd = v; bj = j; } }
+        L[r * cols + q] = bj;
+      }
+      for(j = 0; j < Cd.length; j++){
+        c.fillStyle = tintOf(j);
+        for(r = 0; r < rows; r++) for(q = 0; q < cols; q++) if(L[r * cols + q] === j) c.fillRect(q * g, r * g, g, g);
+      }
+      c.fillStyle = hexA(COL.ink2, 0.55);
+      for(r = 0; r < rows; r++) for(q = 0; q < cols; q++){
+        var v0 = L[r * cols + q];
+        if(q + 1 < cols && L[r * cols + q + 1] !== v0) c.fillRect((q + 1) * g - 0.9, r * g + g / 2 - 0.9, 1.8, 1.8);
+        if(r + 1 < rows && L[(r + 1) * cols + q] !== v0) c.fillRect(q * g + g / 2 - 0.9, (r + 1) * g - 0.9, 1.8, 1.8);
+      }
+    }
+    p.c.drawImage(vor.cv, p.L, p.T, p.w, p.h);
+  }
+  function drawMap(){
+    var e = ensure($("kmMap")), i, j;
+    if(!e) return;
+    var c = e.c, p = mkView(c, e.W, e.H, 40, 14, 12, 28, b);
+    lastPlot = p;
+    c.clearRect(0, 0, e.W, e.H);
+    frame(p, {ny:6, nx:7});
+    p.clip();
+    var Cd = [];
+    for(j = 0; j < C.length; j++) Cd.push(cpos(j));
+    if(st.vor) drawVoronoi(p, Cd);
+    if(st.trails){
+      for(j = 0; j < C.length; j++){
+        var tr = trails[j];
+        if(tr.length < 2) continue;
+        c.save();
+        c.strokeStyle = COL.ink2; c.lineWidth = 1.4; c.setLineDash([4, 3]);
+        c.beginPath();
+        c.moveTo(p.X(tr[0][0]), p.Y(tr[0][1]));
+        for(var t = 1; t < tr.length - 1; t++) c.lineTo(p.X(tr[t][0]), p.Y(tr[t][1]));
+        c.lineTo(p.X(Cd[j][0]), p.Y(Cd[j][1]));
+        c.stroke();
+        c.restore();
+        for(t = 0; t < tr.length - 1; t++) dot(p, tr[t][0], tr[t][1], 2.4, COL.ink2, null);
+      }
+    }
+    var rad = pointRadius(d.n);
+    if(st.hover >= 0){
+      var hx = d.X[st.hover * 2], hy = d.X[st.hover * 2 + 1], near = nearestCentroid(d, C, st.hover);
+      for(j = 0; j < C.length; j++){
+        if(j === near) continue;
+        c.save(); c.setLineDash([5, 4]); c.strokeStyle = COL.mute; c.lineWidth = 1.3;
+        c.beginPath(); c.moveTo(p.X(hx), p.Y(hy)); c.lineTo(p.X(Cd[j][0]), p.Y(Cd[j][1])); c.stroke(); c.restore();
+      }
+      c.strokeStyle = COL.red; c.lineWidth = 2.2;
+      c.beginPath(); c.moveTo(p.X(hx), p.Y(hy)); c.lineTo(p.X(Cd[near][0]), p.Y(Cd[near][1])); c.stroke();
+    }
+    for(i = 0; i < d.n; i++){
+      var X = p.X(d.X[i * 2]), Y = p.Y(d.X[i * 2 + 1]);
+      if(lab[i] < 0) plainAt(c, X, Y, rad); else markAt(c, X, Y, rad, markOf(lab[i]));
+    }
+    if(phase === "assigned"){
+      for(i = 0; i < changed.length; i++){
+        var q = changed[i];
+        ringAt(c, p.X(d.X[q * 2]), p.Y(d.X[q * 2 + 1]), rad + 3.6, COL.red, 1.9);
+      }
+    }
+    for(j = 0; j < C.length; j++){
+      var CX = p.X(Cd[j][0]), CY = p.Y(Cd[j][1]), m = markOf(j);
+      diamondAt(c, CX, CY, 11, "rgba(252,241,239,.85)", "rgba(252,241,239,.85)", 4);
+      diamondAt(c, CX, CY, 9, m.f, COL.ink, 2.4);
+      tag(c, "μ" + (j + 1), CX + 11, CY - 9, "left", COL.ink, 800, 12);
+    }
+    if(st.hover >= 0){
+      var hi = st.hover, nr = nearestCentroid(d, C, hi);
+      ringAt(c, p.X(d.X[hi * 2]), p.Y(d.X[hi * 2 + 1]), rad + 4, COL.red, 2.4);
+      var dx = d.X[hi * 2] - C[nr][0], dy = d.X[hi * 2 + 1] - C[nr][1];
+      tag(c, "d² = " + fmt(dx * dx + dy * dy, 2), (p.X(d.X[hi * 2]) + p.X(Cd[nr][0])) / 2 + 6,
+          (p.Y(d.X[hi * 2 + 1]) + p.Y(Cd[nr][1])) / 2 - 4, "left", COL.red, 800, 11.5);
+    }
+    p.done();
+  }
+  function drawCost(){
+    var e = ensure($("kmCost"));
+    if(!e) return;
+    var c = e.c, i;
+    c.clearRect(0, 0, e.W, e.H);
+    var mx = 0;
+    for(i = 0; i < hist.length; i++) if(isFinite(hist[i].J)) mx = Math.max(mx, hist[i].J);
+    var xmax = Math.max(10, hist.length + 1);
+    var p = mkPlot(c, e.W, e.H, 48, 12, 12, 30, 0, xmax, 0, mx > 0 ? mx * 1.1 : 1);
+    frame(p, {ny:4, nx:5, xlab:"step", ylab:"J"});
+    if(!hist.length){ emptyNote(c, e.W, e.H, "Press One step to assign the points."); return; }
+    p.clip();
+    curve(p, hist.map(function(h, k){ return k + 1; }), hist.map(function(h){ return h.J; }), COL.red, 2.4);
+    for(i = 0; i < hist.length; i++){
+      if(hist[i].kind === "a") dot(p, i + 1, hist[i].J, 4.2, COL.red, COL.blush, 1.4);
+      else dot(p, i + 1, hist[i].J, 4.2, COL.blush, COL.red, 2);
+    }
+    p.done();
+    if(phase === "done") tag(c, "converged", p.X(hist.length) - 4, p.Y(hist[hist.length - 1].J) - 10, "right", COL.ink, 700, 11.5);
+  }
+  function drawSmall(id, xs, ys, cur, lab, yfmt, y0){
+    var e = ensure($(id));
+    if(!e) return;
+    var c = e.c, mx = -Infinity, mn = Infinity, i;
+    c.clearRect(0, 0, e.W, e.H);
+    for(i = 0; i < ys.length; i++) if(isFinite(ys[i])){ mx = Math.max(mx, ys[i]); mn = Math.min(mn, ys[i]); }
+    if(!isFinite(mx)){ mx = 1; mn = 0; }
+    var lo = y0 !== undefined ? Math.min(y0, mn) : 0, hi = mx + (mx - lo) * 0.12 || 1;
+    var p = mkPlot(c, e.W, e.H, 48, 12, 8, 20, 0.5, 8.5, lo, hi);
+    frame(p, {ny:3, sx:1, yfmt:yfmt, ylab:lab});
+    p.clip();
+    curve(p, xs, ys, COL.ink2, 1.8);
+    for(i = 0; i < xs.length; i++){
+      if(!isFinite(ys[i])) continue;
+      if(xs[i] === cur) dot(p, xs[i], ys[i], 5.4, COL.red, COL.blush, 1.6);
+      else dot(p, xs[i], ys[i], 3.4, COL.ink2, COL.blush, 1.2);
+    }
+    p.done();
+  }
+  function drawStarts(){
+    var e = ensure($("kmStarts"));
+    if(!e || !starts) return;
+    var c = e.c, i;
+    c.clearRect(0, 0, e.W, e.H);
+    var mn = Math.min.apply(null, starts), mx = Math.max.apply(null, starts);
+    var span = mx - mn, pad = span > 0 ? span * 0.12 : Math.max(1, Math.abs(mn) * 0.05);
+    var lv = {}, top = 1;
+    for(i = 0; i < starts.length; i++){ var kk = starts[i].toPrecision(5); lv[kk] = (lv[kk] || 0) + 1; top = Math.max(top, lv[kk]); }
+    var p = mkPlot(c, e.W, e.H, 14, 14, 8, 30, mn - pad, mx + pad, 0, Math.max(6, 0.8 + top * 0.95 + 1.6));
+    frame(p, {noGrid:true, xlab:"final J"});
+    font(c, 600, 11); c.textAlign = "center"; c.textBaseline = "top"; c.fillStyle = COL.ink2;
+    var sx = niceStep(p.xb - p.xa, 4);
+    for(i = Math.ceil(p.xa / sx); i * sx <= p.xb; i++) c.fillText(tickText(i * sx, sx), p.X(i * sx), p.T + p.h + 4);
+    var stack = {};
+    for(i = 0; i < starts.length; i++){
+      var k = starts[i].toPrecision(5), lvl = stack[k] || 0;
+      stack[k] = lvl + 1;
+      var best = Math.abs(starts[i] - mn) < 1e-9 * Math.max(1, Math.abs(mn));
+      dot(p, starts[i], 0.8 + lvl * 0.95, 5, best ? COL.ink : COL.mute, COL.blush, 1.4);
+    }
+    if(phase === "done" && hist.length){
+      var fj = hist[hist.length - 1].J;
+      ringAt(c, p.X(fj), p.Y(0.8), 9, COL.red, 2.4);
+      tag(c, "this run", p.X(fj), p.Y(0.8) - 12, "center", COL.red, 700, 11);
+    }
+  }
+  function draw(){
+    drawMap();
+    drawCost();
+    if(aux){
+      drawSmall("kmElbow", [1,2,3,4,5,6,7,8], aux.J, st.K, "J");
+      drawSmall("kmSil", [1,2,3,4,5,6,7,8], aux.sil, st.K, "silhouette", function(v){ return fmt(v, 1); }, 0);
+    }
+    drawStarts();
+  }
+
+  /* ---- text ---- */
+  function legend(){
+    var h = "", j;
+    for(j = 0; j < st.K; j++) h += legendItem(swatch(markOf(j)), "cluster " + (j + 1));
+    h += legendItem(swatch({f:COL.sand, s:COL.ink, w:2, shape:"diamond"}), "centroid &mu;");
+    h += legendItem(swatch({f:COL.stone, s:COL.mute, w:1}), "not yet assigned");
+    h += legendItem(ringSwatch(COL.red), "switched cluster at the last assignment");
+    $("kmLegend").innerHTML = h;
+    $("kmCostLegend").innerHTML =
+      legendItem(swatch({f:COL.red, s:COL.blush, w:1.4}), "after an assignment step") +
+      legendItem(swatch({f:COL.blush, s:COL.red, w:2}), "after an update step");
+  }
+  function report(){
+    var J = hist.length ? hist[hist.length - 1].J : NaN;
+    $("kmStampB").textContent = iter;
+    $("kmStampS").innerHTML = phase === "start" ? "ready, nothing assigned" :
+      phase === "assigned" ? '<span class="ph">assignment step</span>' :
+      phase === "updated" ? "update step" : '<span class="ph">converged</span>';
+    var next = phase === "start" || phase === "updated" ? "assignment" : phase === "assigned" ? "update" : "none, stopped";
+    var best = starts ? Math.min.apply(null, starts) : NaN;
+    $("kmState").innerHTML = kvHTML([
+      ["updates so far", iter],
+      ["next step", next],
+      ["objective J", fmtBig(J), true],
+      ["switched last time", phase === "start" ? "–" : (hist.length === 1 ? "n/a, first pass" : changed.length)],
+      ["empty clusters", empties],
+      ["lowest J in ten starts", fmtBig(best)]
+    ]);
+    pointReport();
+    $("kmArith").innerHTML = arith();
+    var nBest = 0;
+    if(starts) starts.forEach(function(v){ if(Math.abs(v - best) < 1e-6 * Math.max(1, best)) nBest++; });
+    $("kmStartsTxt").innerHTML = !starts ? "" : nBest === 10 ?
+      "The ten starts reach the same J here, so this K has one clear answer on these data." :
+      "<b>" + nBest + " of 10</b> starts reach the lowest J of " + fmtBig(best) + ". The others stop in a worse local minimum.";
+  }
+  function pointReport(){
+    if(st.hover < 0){ $("kmPoint").innerHTML = kvHTML([{full:"Hover a point on the plot to compare its squared distances."}]); return; }
+    var i = st.hover, near = nearestCentroid(d, C, i), rows = [];
+    rows.push(["point " + (i + 1), "(" + fmt(d.X[i * 2], 2) + ", " + fmt(d.X[i * 2 + 1], 2) + ")"]);
+    for(var j = 0; j < C.length; j++){
+      var dx = d.X[i * 2] - C[j][0], dy = d.X[i * 2 + 1] - C[j][1];
+      rows.push(["&Vert;x &minus; &mu;<sub>" + (j + 1) + "</sub>&Vert;<sup>2</sup>", fmt(dx * dx + dy * dy, 2) + (j === near ? " &larr; nearest" : ""), j === near]);
+    }
+    $("kmPoint").innerHTML = kvHTML(rows);
+  }
+  function isInt(v){ return Math.abs(v - Math.round(v)) < 1e-9; }
+  function sumLine(vals){
+    var s = 0, i;
+    for(i = 0; i < vals.length; i++) s += vals[i];
+    var n = vals.length, mean = s / n;
+    if(n <= 8 && vals.every(isInt)){
+      return "(" + vals.map(function(v){ return String(Math.round(v)); }).join(" + ") + ") / " + n + " = " +
+             Math.round(s) + "/" + n + " = " + fmt(mean, 2);
+    }
+    return "mean of " + n + " values = " + fmt(mean, 2);
+  }
+  function arith(){
+    if(!lastUpd) return '<div class="dim">Press One step twice. The first press assigns the points and the second moves the centroids.</div>';
+    var h = "";
+    lastUpd.forEach(function(u, j){
+      if(!u.xs.length){
+        h += "<div>&mu;<sub>" + (j + 1) + "</sub> won no points and stays at (" + fmt(u.now[0], 2) + ", " + fmt(u.now[1], 2) + ")</div>";
+        return;
+      }
+      if(u.xs.length <= 8 && u.xs.every(isInt) && u.ys.every(isInt)){
+        h += "<div>&mu;<sub>" + (j + 1) + "</sub> &nbsp; x = " + sumLine(u.xs) + "</div>";
+        h += "<div>&mu;<sub>" + (j + 1) + "</sub> &nbsp; y = " + sumLine(u.ys) + "</div>";
+      } else {
+        var mv = Math.hypot(u.now[0] - u.old[0], u.now[1] - u.old[1]);
+        h += "<div>&mu;<sub>" + (j + 1) + "</sub> = mean of " + u.xs.length + " points = (" + fmt(u.now[0], 2) + ", " + fmt(u.now[1], 2) +
+             ") <span class=\"dim\">&nbsp; moved " + fmt(mv, 2) + "</span></div>";
+      }
+    });
+    return h;
+  }
+
+  /* ---- loop and controls ---- */
+  function step(dt){
+    if(tw < 1) tw = Math.min(1, tw + dt / twDur);
+    if(!st.playing) return;
+    acc += dt;
+    var interval = 1500 / st.speed;
+    twDur = Math.min(320, interval * 0.7);
+    if(acc >= interval){
+      acc = 0;
+      half();
+      if(phase === "done"){ st.playing = false; playButton("kmPlay", false); }
+    }
+  }
+  function stop(){ st.playing = false; playButton("kmPlay", false); }
+
+  initSeg = new Seg("kmInit", function(v){ st.init = v; stop(); syncControls(); computeStarts(); reset(); });
+  var KDEF = {slide:2, blobs:3, aniso:3, moons:2, outliers:2, noise:3};
+  chips = buildChips($("kmChips"), DS, st.ds, function(k){
+    stop();
+    st.K = KDEF[k];
+    if(k === "slide") st.init = "slide";
+    else if(st.init === "slide") st.init = "pp";
+    st.ds = k;
+    build();
+  });
+  $("kmPlay").addEventListener("click", function(){
+    if(st.playing){ stop(); return; }
+    if(phase === "done") reset();
+    st.playing = true; acc = 1e9; playButton("kmPlay", true);
+  });
+  $("kmStep").addEventListener("click", function(){ stop(); half(); });
+  $("kmRestart").addEventListener("click", function(){ stop(); reset(); });
+  $("kmSeed").addEventListener("click", function(){ stop(); st.seed += 1; reset(); });
+  onInput("kmKs", function(){ stop(); st.K = +this.value; $("kmK").textContent = st.K; syncControls(); computeStarts(); reset(); });
+  onInput("kmSpeeds", function(){ st.speed = +this.value; $("kmSpeed").textContent = st.speed; });
+  onInput("kmNs", function(){ stop(); st.n = +this.value; $("kmN").textContent = st.n; build(); });
+  $("kmVor").addEventListener("change", function(){ st.vor = this.checked; });
+  $("kmTrail").addEventListener("change", function(){ st.trails = this.checked; });
+  watchHover($("kmMap"), function(){ return lastPlot; }, function(){ return d; },
+             function(i){ if(i !== st.hover){ st.hover = i; pointReport(); } }, "kmHint");
+
+  build();
+  return {draw:draw, step:step};
+})();
+
+/* ================= loop ================= */
+
+var M = MODULES.km;
+if(M.shown) M.shown();
+var last = 0;
+function tick(now){
+  var dt = last ? Math.min(60, now - last) : 16;
+  last = now;
+  if(M.step) M.step(dt);
+  M.draw();
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+})();
+</script>
+
+</body>
+</html>
