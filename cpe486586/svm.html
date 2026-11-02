@@ -1,0 +1,1310 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Support Vector Machine Explorer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23183e4b'/%3E%3Cline x1='4' y1='44' x2='44' y2='4' stroke='%238ba0a4' stroke-width='2' stroke-dasharray='3 3'/%3E%3Cline x1='20' y1='60' x2='60' y2='20' stroke='%238ba0a4' stroke-width='2' stroke-dasharray='3 3'/%3E%3Cline x1='10' y1='54' x2='54' y2='10' stroke='%23fcf1ef' stroke-width='3'/%3E%3Ccircle cx='12' cy='20' r='4' fill='%23d74a49'/%3E%3Ccircle cx='21' cy='11' r='4' fill='%23d74a49'/%3E%3Ccircle cx='24' cy='24' r='4' fill='%23d74a49'/%3E%3Ccircle cx='24' cy='24' r='7.5' fill='none' stroke='%23e8d8c9' stroke-width='2'/%3E%3Crect x='36' y='36' width='8' height='8' fill='%23ced3d7'/%3E%3Crect x='36' y='36' width='8' height='8' fill='none'/%3E%3Ccircle cx='40' cy='40' r='7.5' fill='none' stroke='%23e8d8c9' stroke-width='2'/%3E%3Crect x='44' y='48' width='8' height='8' fill='%23ced3d7'/%3E%3Crect x='50' y='38' width='8' height='8' fill='%23ced3d7'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&display=swap" rel="stylesheet">
+<style>
+/* Layout: plot on the left, controls in a rail on the right, explanation panels below.
+   One light palette by request, so no dark-theme blocks. */
+:root{
+  --red:#d74a49; --ink:#183e4b; --ink2:#1b4552; --mute:#8ba0a4;
+  --grey:#eaeaea; --blush:#fcf1ef; --sand:#e8d8c9; --stone:#ced3d7;
+  --font:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--blush);color:var(--ink);font-family:var(--font);
+  font-variant-numeric:tabular-nums;font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1300px;margin:0 auto;padding-block:26px 0;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px))}
+header{display:flex;align-items:flex-end;gap:18px;padding-bottom:14px;border-bottom:2px solid var(--ink)}
+header svg{flex:none}
+header h1{margin:0;font-size:clamp(23px,3.1vw,37px);font-weight:800;font-stretch:92%;letter-spacing:-.02em;line-height:1.05;text-wrap:balance}
+header p{margin:6px 0 0;max-width:74ch;color:var(--ink2);font-size:15px}
+header .tag{margin-left:auto;align-self:flex-start;background:var(--ink);color:var(--blush);
+  font-size:12px;font-weight:600;padding:5px 10px;border-radius:2px;white-space:nowrap}
+.tabs{display:flex;gap:6px;margin-top:16px;flex-wrap:wrap}
+.tabs button{font-family:inherit;font-size:14px;font-weight:700;padding:8px 14px;border:1px solid var(--ink);
+  background:transparent;color:var(--ink);border-radius:2px;cursor:pointer}
+.tabs button:hover{background:var(--stone)}
+.tabs button[aria-selected="true"]{background:var(--ink);color:var(--blush)}
+.tabs button:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+section.tab{display:none;animation:fade .35s ease}
+section.tab.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.board{display:grid;grid-template-columns:1fr 326px;gap:18px;margin-top:16px;align-items:stretch}
+.rail{display:flex;flex-direction:column;gap:13px}
+.panel{background:var(--grey);border:1px solid var(--stone);padding:13px 15px;min-width:0}
+.panel.sand{background:var(--sand)}
+.panel h2{margin:0 0 9px;font-size:13px;font-weight:700;color:var(--ink2);letter-spacing:.01em}
+.panel h2 .sub{font-weight:600;color:var(--mute)}
+.plotwrap{position:sticky;top:max(12px, env(safe-area-inset-top, 0px));align-self:start;background:var(--grey);border:1px solid var(--stone);
+  padding:11px 13px 9px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.cvbox{position:relative;width:100%}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+.cvbox canvas{position:absolute;inset:0}
+.mapbox{height:clamp(360px, calc(100vh - 200px), 680px)}
+.legend{display:flex;flex-wrap:wrap;gap:7px 15px;font-size:12.5px;color:var(--ink2);border-top:1px solid var(--stone);padding-top:7px}
+.legend svg{vertical-align:-2px;margin-right:6px}
+.hint{position:absolute;left:52px;bottom:40px;pointer-events:none;max-width:56%;font-size:12px;color:var(--ink2);
+  background:rgba(234,234,234,.92);padding:3px 8px;border-radius:2px;transition:opacity .4s}
+.hint.gone{opacity:0}
+.stamp{position:absolute;right:14px;top:12px;pointer-events:none;text-align:right;font-size:13px;color:var(--ink2);line-height:1.3;max-width:46%}
+.stamp b{display:block;font-size:22px;font-weight:800;color:var(--ink);letter-spacing:-.01em}
+.stamp .ph{font-weight:700;color:var(--red)}
+.caption{font-size:15px;line-height:1.45;color:var(--ink);min-height:3em;padding:2px 2px 0}
+.caption b{color:var(--red)}
+.board > *,.lower > *{min-width:0}
+.ctl{margin-bottom:11px}
+.ctl:last-child{margin-bottom:0}
+.ctl .row{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}
+.ctl .row span{color:var(--ink2)}
+.ctl .row b{font-weight:800;color:var(--red);font-size:17px}
+.what{font-size:12.5px;color:var(--ink2);line-height:1.4;margin-top:2px}
+.what b{color:var(--ink);font-weight:700}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:24px;background:transparent;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:6px;background:var(--blush);border:1px solid var(--ink)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;margin-top:-7px;border-radius:50%;
+  background:var(--red);border:3px solid var(--blush);box-shadow:0 0 0 1px var(--ink)}
+input[type=range]::-moz-range-track{height:6px;background:var(--blush);border:1px solid var(--ink)}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--red);border:3px solid var(--blush);box-shadow:0 0 0 1px var(--ink)}
+input[type=range]:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+.chips{display:flex;flex-direction:column;gap:4px}
+.chips.row{flex-direction:row;flex-wrap:wrap}
+.chip{font-family:inherit;font-size:13.5px;font-weight:600;text-align:left;padding:7px 10px;border:1px solid transparent;
+  background:transparent;color:var(--ink);cursor:pointer;border-radius:2px}
+.chips.row .chip{border-color:var(--ink);text-align:center;flex:1 1 auto}
+.chip:hover{background:var(--stone)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--blush)}
+.chip:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+.chip small{display:block;font-weight:600;font-size:11.5px;color:var(--mute);margin-top:1px}
+.chip[aria-pressed="true"] small{color:var(--sand)}
+.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+button.act{font-family:inherit;font-size:14px;font-weight:600;padding:8px;border-radius:2px;cursor:pointer;
+  border:1px solid var(--ink);background:var(--blush);color:var(--ink)}
+button.act:hover{background:var(--stone)}
+button.act.primary{background:var(--ink);color:var(--blush)}
+button.act.primary:hover{background:var(--ink2)}
+button.act.wide{grid-column:1 / -1}
+button.act:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+.kv{display:grid;grid-template-columns:1fr auto;gap:5px 10px;font-size:13.5px}
+.kv span:nth-child(odd){color:var(--ink2)}
+.kv span:nth-child(even){font-weight:800;text-align:right}
+.kv span.hi{color:var(--red)}
+.kv .full{grid-column:1 / -1;font-weight:600 !important;text-align:left !important;color:var(--ink2)}
+.lower{display:grid;grid-template-columns:1fr 1fr 326px;gap:18px;margin-top:18px;align-items:stretch}
+.lower.two{grid-template-columns:1fr 326px}
+.note{font-size:13.5px;color:var(--ink2);line-height:1.55;margin:0}
+.note + .note{margin-top:9px}
+.note b{color:var(--ink)}
+.eq{font-size:15px;line-height:2.1;overflow-x:auto}
+.eq > div{white-space:nowrap}
+.eq > div.wrapok{white-space:normal;font-size:13.5px;line-height:1.55;color:var(--ink2);margin-bottom:4px}
+.kkt{width:100%;border-collapse:collapse;font-size:13px;margin-top:4px}
+.kkt th{text-align:left;font-weight:700;color:var(--ink2);border-bottom:1.5px solid var(--ink);padding:4px 6px 4px 0}
+.kkt td{border-bottom:1px solid var(--stone);padding:5px 6px 5px 0;vertical-align:top}
+.tblwrap{overflow-x:auto}
+sub,sup{font-size:.68em}
+i.m{font-style:italic;font-family:Georgia,"Times New Roman",serif;font-size:1.04em}
+footer{margin-top:26px;border-top:2px solid var(--ink)}
+footer .inner{max-width:1300px;margin:0 auto;padding-block:15px 26px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));
+  display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:14px;color:var(--ink2)}
+footer b{color:var(--ink);font-weight:700}
+@media (max-width:900px){
+  .board{grid-template-columns:1fr}
+  .lower,.lower.two{grid-template-columns:1fr}
+  .plotwrap{position:relative;top:auto}
+  .mapbox{height:62vh;min-height:340px;max-height:560px}
+  header{flex-wrap:wrap}
+  header .tag{margin-left:0}
+}
+@media (prefers-reduced-motion: reduce){ section.tab{animation:none} }
+</style>
+
+<div class="wrap">
+  <header>
+    <svg width="52" height="52" aria-hidden="true" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="#183e4b"/><line x1="4" y1="44" x2="44" y2="4" stroke="#8ba0a4" stroke-width="2" stroke-dasharray="3 3"/><line x1="20" y1="60" x2="60" y2="20" stroke="#8ba0a4" stroke-width="2" stroke-dasharray="3 3"/><line x1="10" y1="54" x2="54" y2="10" stroke="#fcf1ef" stroke-width="3"/><circle cx="12" cy="20" r="4" fill="#d74a49"/><circle cx="21" cy="11" r="4" fill="#d74a49"/><circle cx="24" cy="24" r="4" fill="#d74a49"/><circle cx="24" cy="24" r="7.5" fill="none" stroke="#e8d8c9" stroke-width="2"/><rect x="36" y="36" width="8" height="8" fill="#ced3d7"/><circle cx="40" cy="40" r="7.5" fill="none" stroke="#e8d8c9" stroke-width="2"/><rect x="44" y="48" width="8" height="8" fill="#ced3d7"/><rect x="50" y="38" width="8" height="8" fill="#ced3d7"/></svg>
+    <div>
+      <h1>Support Vector Machine, step by step</h1>
+      <p>The SVM looks for the hyperplane <i class="m">g</i>(<b>x</b>) = <b>w</b><sup>&top;</sup><b>x</b> + <i class="m">b</i> = 0 with the widest margin <i class="m">d</i> = 2/&Vert;<b>w</b>&Vert; between the classes. Watch it train one pair of Lagrange multipliers at a time, then lift data into a feature space where a plane separates it.</p>
+    </div>
+    <div class="tag">Chapter 12 &middot; Support Vector Machine</div>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="Views">
+    <button type="button" role="tab" id="tabTrain" aria-selected="true" aria-controls="paneTrain">Maximum margin, trained live</button>
+    <button type="button" role="tab" id="tabLift" aria-selected="false" aria-controls="paneLift">Kernel trick in 3-D</button>
+  </div>
+
+  <!-- ================= 1. Training ================= -->
+  <section class="tab on" id="paneTrain" role="tabpanel" aria-labelledby="tabTrain">
+    <div class="board">
+      <div class="plotwrap">
+        <div class="cvbox mapbox">
+          <canvas id="svMap" aria-label="Training points, decision boundary and margins"></canvas>
+          <div class="hint" id="svHint">Click empty space to add a point. Drag a point to move it. Right-click a point to delete it.</div>
+          <div class="stamp"><b id="svStampB">ready</b><span id="svStampS"></span></div>
+        </div>
+        <div class="caption" id="svCaption" aria-live="polite"></div>
+        <div class="legend" id="svLegend"></div>
+      </div>
+      <div class="rail">
+        <div class="panel sand">
+          <h2>Train with SMO</h2>
+          <div class="buttons" style="margin-top:0">
+            <button class="act primary" id="svPlay" type="button">Run</button>
+            <button class="act" id="svStep" type="button">One step</button>
+            <button class="act" id="svFinish" type="button">Finish</button>
+            <button class="act" id="svRestart" type="button">Restart from &alpha; = 0</button>
+          </div>
+          <div class="ctl" style="margin-top:11px">
+            <div class="row"><span>penalty <i class="m">C</i></span><b id="svC">10</b></div>
+            <input id="svCs" type="range" min="-2" max="3" step="0.05" value="1" aria-label="Penalty C, log scale">
+            <div class="what" id="svCWhat"></div>
+          </div>
+          <div class="ctl">
+            <div class="row"><span>speed</span><b id="svSpeed">4</b></div>
+            <input id="svSpeeds" type="range" min="1" max="10" step="1" value="4" aria-label="Animation speed">
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Kernel &kappa;(<b>x</b>, <b>z</b>)</h2>
+          <div class="chips row" id="svKern"></div>
+          <div class="what" id="svKernEq" style="margin:8px 0 6px"></div>
+          <div class="ctl" id="svGamWrap">
+            <div class="row"><span>&gamma;</span><b id="svGam">0.50</b></div>
+            <input id="svGams" type="range" min="-1.3" max="1.3" step="0.05" value="-0.3" aria-label="Kernel gamma, log scale">
+          </div>
+          <div class="ctl" id="svDegWrap">
+            <div class="row"><span>degree <i class="m">p</i></span><b id="svDeg">2</b></div>
+            <input id="svDegs" type="range" min="2" max="5" step="1" value="2" aria-label="Polynomial degree">
+          </div>
+          <div class="ctl" id="svCoefWrap">
+            <div class="row"><span>constant <i class="m">c</i></span><b id="svCoef">1.0</b></div>
+            <input id="svCoefs" type="range" min="0" max="3" step="0.1" value="1" aria-label="Polynomial constant c">
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Data</h2>
+          <div class="chips" id="svData"></div>
+          <div class="ctl" style="margin-top:10px">
+            <div class="row"><span>points <i class="m">n</i></span><b id="svN">40</b></div>
+            <input id="svNs" type="range" min="10" max="160" step="10" value="40" aria-label="Number of points">
+          </div>
+          <div class="row" style="font-size:13px;color:var(--ink2);margin:4px 0 6px">A click adds a point of class</div>
+          <div class="chips row" id="svAddCls"></div>
+          <div class="buttons"><button class="act" id="svNew" type="button">New sample</button><button class="act" id="svClear" type="button">Clear points</button></div>
+        </div>
+        <div class="panel">
+          <h2>State of the solver</h2>
+          <div class="kv" id="svState"></div>
+        </div>
+      </div>
+    </div>
+    <div class="lower">
+      <div class="panel">
+        <h2>Primal and dual objective <span class="sub">per SMO step</span></h2>
+        <div class="cvbox" style="height:216px"><canvas id="svObj" aria-label="Primal and dual objective by step"></canvas></div>
+        <p class="note" style="margin-top:8px">The dual <b>D(&alpha;)</b> only rises. The primal <b>P</b> of the current <b>w</b> and <i class="m">b</i> sits above it. The gap closes at the optimum, which is strong duality at work.</p>
+      </div>
+      <div class="panel">
+        <h2>Multipliers &alpha;<sub>i</sub> <span class="sub">box constraint 0 &le; &alpha;<sub>i</sub> &le; C</span></h2>
+        <div class="cvbox" style="height:216px"><canvas id="svAlpha" aria-label="Lagrange multiplier of each point"></canvas></div>
+        <p class="note" style="margin-top:8px">One bar per training point, class +1 on the left. Bars above zero are the support vectors. Bars pinned at the dashed line have &alpha;<sub>i</sub> = C.</p>
+      </div>
+      <div class="panel">
+        <h2>What to watch</h2>
+        <p class="note">Open <b>One outlier</b> with the linear kernel. At C = 1000 the margin shrinks to keep the outlier on its own side. Slide C down to 1 and the margin widens, and the outlier becomes a slack point with &xi;<sub>i</sub> &gt; 1.</p>
+        <p class="note">Press <b>Restart</b> and step. An SMO step changes exactly two multipliers, because &Sigma;&alpha;<sub>i</sub>y<sub>i</sub> = 0 pins a lone multiplier in place.</p>
+        <p class="note">On <b>Two rings</b>, no value of C rescues the linear kernel. Switch to RBF, or to polynomial with <i class="m">p</i> = 2.</p>
+      </div>
+    </div>
+    <div class="lower two">
+      <div class="panel">
+        <h2>The method in five lines</h2>
+        <div class="eq">
+          <div>1. &nbsp; min<sub><b>w</b>, b, &xi;</sub> &nbsp;&frac12;&Vert;<b>w</b>&Vert;<sup>2</sup> + C &Sigma;<sub>i</sub> &xi;<sub>i</sub> &nbsp; s.t. &nbsp; y<sub>i</sub>(<b>w</b><sup>&top;</sup><b>x</b><sub>i</sub> + b) &ge; 1 &minus; &xi;<sub>i</sub>, &nbsp; &xi;<sub>i</sub> &ge; 0</div>
+          <div class="wrapok">The primal. Maximizing the margin d = 2/&Vert;<b>w</b>&Vert; is the same as minimizing &frac12;&Vert;<b>w</b>&Vert;<sup>2</sup>. The slack &xi;<sub>i</sub> lets a point sit inside the margin, at price C.</div>
+          <div>2. &nbsp; max<sub>&alpha;</sub> &nbsp;&Sigma;<sub>i</sub> &alpha;<sub>i</sub> &minus; &frac12; &Sigma;<sub>i</sub>&Sigma;<sub>j</sub> &alpha;<sub>i</sub>&alpha;<sub>j</sub> y<sub>i</sub>y<sub>j</sub> &kappa;(<b>x</b><sub>i</sub>, <b>x</b><sub>j</sub>) &nbsp; s.t. &nbsp; &Sigma;<sub>i</sub> &alpha;<sub>i</sub>y<sub>i</sub> = 0, &nbsp; 0 &le; &alpha;<sub>i</sub> &le; C</div>
+          <div class="wrapok">The dual, from setting &part;L/&part;<b>w</b>, &part;L/&part;b and &part;L/&part;&xi;<sub>i</sub> to zero. The data enter only through &kappa;.</div>
+          <div>3. &nbsp; pick the pair (i, j) that violates the KKT conditions most, and solve for &alpha;<sub>i</sub>, &alpha;<sub>j</sub> exactly</div>
+          <div class="wrapok">That is one SMO step. The pair moves along the line y<sub>i</sub>&alpha;<sub>i</sub> + y<sub>j</sub>&alpha;<sub>j</sub> = const, clipped to the box [0, C]<sup>2</sup>.</div>
+          <div>4. &nbsp; <b>w</b> = &Sigma;<sub>i</sub> &alpha;<sub>i</sub>y<sub>i</sub>&Phi;(<b>x</b><sub>i</sub>), &nbsp; b = y<sub>s</sub> &minus; &Sigma;<sub>i</sub> &alpha;<sub>i</sub>y<sub>i</sub>&kappa;(<b>x</b><sub>i</sub>, <b>x</b><sub>s</sub>) for 0 &lt; &alpha;<sub>s</sub> &lt; C</div>
+          <div class="wrapok">This page averages b over the support vectors on the margin. With none on the margin, it takes the middle of the interval the KKT conditions allow.</div>
+          <div>5. &nbsp; &ycirc; = sign( &Sigma;<sub>i&isin;S</sub> &alpha;<sub>i</sub>y<sub>i</sub>&kappa;(<b>x</b><sub>i</sub>, <b>x</b>) + b )</div>
+          <div class="wrapok">Only the support vectors S, the points with &alpha;<sub>i</sub> &gt; 0, enter the prediction.</div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Reading a point from its &alpha;<sub>i</sub></h2>
+        <div class="tblwrap">
+        <table class="kkt">
+          <thead><tr><th>&alpha;<sub>i</sub></th><th>y<sub>i</sub>g(<b>x</b><sub>i</sub>)</th><th>where it sits</th></tr></thead>
+          <tbody>
+            <tr><td>0</td><td>&ge; 1</td><td>correct side, outside the margin</td></tr>
+            <tr><td>(0, C)</td><td>= 1</td><td>on the margin, &xi;<sub>i</sub> = 0</td></tr>
+            <tr><td>C</td><td>= 1 &minus; &xi;<sub>i</sub></td><td>inside the margin, or misclassified when &xi;<sub>i</sub> &gt; 1</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p class="note" style="margin-top:10px">Hover a point on the plot to read its &alpha;<sub>i</sub>, y<sub>i</sub>g(<b>x</b><sub>i</sub>) and &xi;<sub>i</sub>.</p>
+        <p class="note">In scikit-learn, <b>dual_coef_</b> holds &alpha;<sub>i</sub>y<sub>i</sub> for the support vectors, and <b>intercept_</b> is b. The polynomial kernel's <i class="m">c</i> is <b>coef0</b>, and <i class="m">p</i> is <b>degree</b>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 2. Kernel lift ================= -->
+  <section class="tab" id="paneLift" role="tabpanel" aria-labelledby="tabLift">
+    <div class="board">
+      <div class="plotwrap">
+        <div class="cvbox mapbox">
+          <canvas id="ktMap" aria-label="Data lifted into the feature space"></canvas>
+          <div class="hint" id="ktHint">Drag to rotate. Click two points to compare &Phi;(<b>x</b>)<sup>&top;</sup>&Phi;(<b>z</b>) with (<b>x</b><sup>&top;</sup><b>z</b>)<sup>2</sup>.</div>
+          <div class="stamp"><b id="ktStampB">lifted</b><span id="ktStampS"></span></div>
+        </div>
+        <div class="caption" id="ktCaption" aria-live="polite"></div>
+        <div class="legend" id="ktLegend"></div>
+      </div>
+      <div class="rail">
+        <div class="panel sand">
+          <h2>Animate the map &Phi;</h2>
+          <div class="buttons" style="margin-top:0">
+            <button class="act primary" id="ktLiftBtn" type="button">Lift</button>
+            <button class="act" id="ktFlatBtn" type="button">Flatten</button>
+            <button class="act wide" id="ktSpin" type="button" aria-pressed="true">Stop rotating</button>
+          </div>
+          <div class="ctl" style="margin-top:11px">
+            <div class="row"><span>lift t</span><b id="ktT">1.00</b></div>
+            <input id="ktTs" type="range" min="0" max="1" step="0.01" value="1" aria-label="Lift amount">
+            <div class="what">Each point moves from (x<sub>1</sub>, x<sub>2</sub>, 0) to &Phi;(<b>x</b>) = (x<sub>1</sub><sup>2</sup>, &radic;2 x<sub>1</sub>x<sub>2</sub>, x<sub>2</sub><sup>2</sup>).</div>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Data</h2>
+          <div class="chips" id="ktData"></div>
+          <div class="buttons"><button class="act wide" id="ktNew" type="button">New sample</button></div>
+        </div>
+        <div class="panel">
+          <h2>Kernel check <span class="sub">click two points</span></h2>
+          <div class="kv" id="ktCheck"></div>
+        </div>
+      </div>
+    </div>
+    <div class="lower">
+      <div class="panel">
+        <h2>Back in the input space <span class="sub">the plane, seen as a curve in (x<sub>1</sub>, x<sub>2</sub>)</span></h2>
+        <div class="cvbox" style="height:330px"><canvas id="ktFlat" aria-label="Decision curve in the original plane"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Why it works</h2>
+        <p class="note">For <b>x</b>, <b>z</b> in &#8477;<sup>2</sup>, &Phi;(<b>x</b>)<sup>&top;</sup>&Phi;(<b>z</b>) = x<sub>1</sub><sup>2</sup>z<sub>1</sub><sup>2</sup> + 2x<sub>1</sub>x<sub>2</sub>z<sub>1</sub>z<sub>2</sub> + x<sub>2</sub><sup>2</sup>z<sub>2</sub><sup>2</sup> = (<b>x</b><sup>&top;</sup><b>z</b>)<sup>2</sup> = &kappa;(<b>x</b>, <b>z</b>).</p>
+        <p class="note">The plane is found by a linear SVM on the lifted points. Training the same SVM in the plane with the polynomial kernel &kappa;(<b>x</b>, <b>z</b>) = (<b>x</b><sup>&top;</sup><b>z</b>)<sup>2</sup> gives the same boundary without ever computing &Phi;.</p>
+        <p class="note">Two rings separate along x<sub>1</sub><sup>2</sup> + x<sub>2</sub><sup>2</sup>, so the plane stands upright. XOR separates on the sign of x<sub>1</sub>x<sub>2</sub>, so the plane lies flat at &radic;2 x<sub>1</sub>x<sub>2</sub> = 0.</p>
+      </div>
+      <div class="panel">
+        <h2>In scikit-learn</h2>
+        <p class="note">The plane on this tab matches <b>SVC(kernel='poly', degree=2, gamma=1, coef0=0, C=100)</b> trained on the original two columns. That kernel is (&gamma;<b>x</b><sup>&top;</sup><b>z</b> + c)<sup>p</sup> with &gamma; = 1, c = 0 and p = 2.</p>
+        <p class="note">With c &gt; 0 the feature map gains the linear terms &radic;(2c) x<sub>1</sub>, &radic;(2c) x<sub>2</sub> and a constant, so &Phi; becomes 6-dimensional. The kernel still costs one 2-D dot product.</p>
+        <p class="note">The RBF kernel's feature space is infinite-dimensional, which is why the training tab never forms &Phi; at all.</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<footer>
+  <div class="inner">
+    <span><b>CPE 486/586: Machine Learning for Engineering Applications</b> &nbsp; Chapter 12, Support Vector Machine</span>
+    <span>The University of Alabama in Huntsville</span>
+  </div>
+</footer>
+<script>
+(function(){
+"use strict";
+/* ---------------- palette, motion, DOM ---------------- */
+var COL = {red:"#d74a49", ink:"#183e4b", ink2:"#1b4552", mute:"#8ba0a4",
+  grey:"#eaeaea", blush:"#fcf1ef", sand:"#e8d8c9", stone:"#ced3d7"};
+var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function $(id){ return document.getElementById(id); }
+function onInput(id, fn){ $(id).addEventListener("input", fn); }
+function clamp01(v){ return v < 0 ? 0 : v > 1 ? 1 : v; }
+function ease(t){ return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+function hexRGB(h){ var a = parseInt(h.slice(1), 16); return [a >> 16 & 255, a >> 8 & 255, a & 255]; }
+function fmt(v, d){
+  if(v === null || v === undefined || !isFinite(v)) return "–";
+  d = d === undefined ? 3 : d;
+  var s = Math.abs(v).toFixed(d);
+  return (v < 0 && +s !== 0 ? "−" : "") + s;
+}
+function fmtC(C){ return C >= 100 ? C.toFixed(0) : C >= 10 ? C.toFixed(1) : C >= 1 ? C.toFixed(2) : C.toFixed(3); }
+
+/* ---------------- random numbers ---------------- */
+function mul32(a){
+  return function(){
+    a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function gaussFrom(r){ var u = 1 - r(), v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+
+/* ---------------- data sets: P = [[x1, x2]], Y = [+1 | -1] ---------------- */
+function blobs(n, r, cPos, cNeg, sd){
+  var P = [], Y = [], h = Math.round(n / 2), i;
+  for(i = 0; i < n; i++){
+    var pos = i < h, c = pos ? cPos : cNeg;
+    P.push([c[0] + sd * gaussFrom(r), c[1] + sd * gaussFrom(r)]); Y.push(pos ? 1 : -1);
+  }
+  return {P:P, Y:Y};
+}
+function rings(n, r, r1, r2, nz){
+  var P = [], Y = [], h = Math.round(n * 0.4), i;
+  for(i = 0; i < n; i++){
+    var inner = i < h, t = 2 * Math.PI * r(), rr = (inner ? r1 : r2) + nz * gaussFrom(r);
+    P.push([rr * Math.cos(t), rr * Math.sin(t)]); Y.push(inner ? 1 : -1);
+  }
+  return {P:P, Y:Y};
+}
+function xor(n, r, a, sd){
+  var P = [], Y = [], i, Q = [[a, a], [-a, -a], [-a, a], [a, -a]];
+  for(i = 0; i < n; i++){
+    var q = Q[i % 4];
+    P.push([q[0] + sd * gaussFrom(r), q[1] + sd * gaussFrom(r)]); Y.push(i % 4 < 2 ? 1 : -1);
+  }
+  return {P:P, Y:Y};
+}
+var DATA = {
+  sep: {name:"Separable groups", note:"a hard margin exists",
+    build:function(n, s){ return blobs(n, mul32(s), [-1.5, 1.3], [1.5, -1.3], 0.62); }},
+  outlier: {name:"One outlier", note:"separable, but only just",
+    build:function(n, s){
+      var d = blobs(n - 1, mul32(s), [-1.7, 1.5], [1.9, -1.2], 0.5);
+      d.P.push([-0.2, 1.2]); d.Y.push(-1);
+      return d;
+    }},
+  overlap: {name:"Overlapping groups", note:"needs slack",
+    build:function(n, s){ return blobs(n, mul32(s), [-0.85, 0.75], [0.85, -0.75], 0.95); }},
+  moons: {name:"Two moons", note:"curved and interleaved",
+    build:function(n, s){
+      var r = mul32(s), P = [], Y = [], h = Math.round(n / 2), i, S = 2.4, nz = 0.17;
+      for(i = 0; i < n; i++){
+        var up = i < h, t = Math.PI * r();
+        if(up) P.push([S * (Math.cos(t) - 0.5) + nz * gaussFrom(r), S * (Math.sin(t) - 0.25) + nz * gaussFrom(r)]);
+        else P.push([S * (0.5 - Math.cos(t)) + nz * gaussFrom(r), S * (0.25 - Math.sin(t)) + nz * gaussFrom(r)]);
+        Y.push(up ? 1 : -1);
+      }
+      return {P:P, Y:Y};
+    }},
+  rings: {name:"Two rings", note:"one inside the other",
+    build:function(n, s){ return rings(n, mul32(s), 1.0, 2.3, 0.18); }},
+  xor: {name:"XOR quadrants", note:"opposite corners share a class",
+    build:function(n, s){ return xor(n, mul32(s), 1.35, 0.5); }}
+};
+
+/* ---------------- kernels ---------------- */
+function makeKernel(type, gam, p, c){
+  if(type === "rbf") return function(a, b){ var dx = a[0] - b[0], dy = a[1] - b[1]; return Math.exp(-gam * (dx * dx + dy * dy)); };
+  if(type === "poly") return function(a, b){ return Math.pow(gam * (a[0] * b[0] + a[1] * b[1]) + c, p); };
+  return function(a, b){ return a[0] * b[0] + a[1] * b[1]; };
+}
+function gram(P, k){
+  var n = P.length, K = new Float64Array(n * n), i, j;
+  for(i = 0; i < n; i++) for(j = i; j < n; j++){ var v = k(P[i], P[j]); K[i * n + j] = v; K[j * n + i] = v; }
+  return K;
+}
+
+/* ---------------- SMO with the maximal violating pair ----------------
+   e_t = F_t - y_t with F_t = sum_s alpha_s y_s K(s, t). The KKT gap is
+   max over I_low of e minus min over I_up of e; b cancels out of it. */
+var TOL = 1e-3, EPS = 1e-9;
+function smoNew(K, Y, C){
+  var n = Y.length;
+  var s = {n:n, K:K, Y:Y, C:C, a:new Float64Array(n), F:new Float64Array(n), b:0, it:0,
+           gap:Infinity, done:n < 2, histD:[0], histP:[], last:null};
+  smoBias(s); s.histP.push(primal(s)); smoGap(s);
+  return s;
+}
+function inUp(s, t){ return (s.Y[t] > 0 && s.a[t] < s.C - EPS) || (s.Y[t] < 0 && s.a[t] > EPS); }
+function inLow(s, t){ return (s.Y[t] < 0 && s.a[t] < s.C - EPS) || (s.Y[t] > 0 && s.a[t] > EPS); }
+function smoGap(s){
+  var iu = -1, jl = -1, eu = Infinity, el = -Infinity;
+  for(var t = 0; t < s.n; t++){
+    var e = s.F[t] - s.Y[t];
+    if(inUp(s, t) && e < eu){ eu = e; iu = t; }
+    if(inLow(s, t) && e > el){ el = e; jl = t; }
+  }
+  s.gap = (iu < 0 || jl < 0) ? 0 : el - eu;
+  s.pi = iu; s.pj = jl;
+  if(s.gap < TOL) s.done = true;
+  return s.gap;
+}
+function smoBias(s){
+  var sum = 0, m = 0, eu = Infinity, el = -Infinity, t;
+  for(t = 0; t < s.n; t++){
+    var e = s.F[t] - s.Y[t];
+    if(s.a[t] > EPS && s.a[t] < s.C - EPS){ sum += -e; m++; }
+    if(inUp(s, t)) eu = Math.min(eu, e);
+    if(inLow(s, t)) el = Math.max(el, e);
+  }
+  if(m) s.b = sum / m;
+  else if(isFinite(eu) && isFinite(el)) s.b = -(eu + el) / 2;
+  else s.b = 0;
+}
+function wNorm2(s){ var v = 0; for(var t = 0; t < s.n; t++) v += s.a[t] * s.Y[t] * s.F[t]; return Math.max(0, v); }
+function dual(s){ var v = 0; for(var t = 0; t < s.n; t++) v += s.a[t]; return v - 0.5 * wNorm2(s); }
+function primal(s){
+  var h = 0;
+  for(var t = 0; t < s.n; t++) h += Math.max(0, 1 - s.Y[t] * (s.F[t] + s.b));
+  return 0.5 * wNorm2(s) + s.C * h;
+}
+/* One step on the pair (i, j). Returns what changed, so the drawing can rewind it. */
+function smoStep(s){
+  if(s.done) return null;
+  smoGap(s);
+  if(s.done) return null;
+  var i = s.pi, j = s.pj, n = s.n, K = s.K, Y = s.Y, C = s.C;
+  var ai = s.a[i], aj = s.a[j], L, H;
+  if(Y[i] !== Y[j]){ L = Math.max(0, aj - ai); H = Math.min(C, C + aj - ai); }
+  else { L = Math.max(0, ai + aj - C); H = Math.min(C, ai + aj); }
+  var eta = Math.max(1e-12, K[i * n + i] + K[j * n + j] - 2 * K[i * n + j]);
+  var ei = s.F[i] - Y[i], ej = s.F[j] - Y[j];
+  var ajn = Math.min(H, Math.max(L, aj + Y[j] * (ei - ej) / eta));
+  var ain = ai + Y[i] * Y[j] * (aj - ajn);
+  if(ain < 0) ain = 0; if(ain > C) ain = C;
+  var dai = ain - ai, daj = ajn - aj, b0 = s.b;
+  s.a[i] = ain; s.a[j] = ajn;
+  for(var t = 0; t < n; t++) s.F[t] += dai * Y[i] * K[i * n + t] + daj * Y[j] * K[j * n + t];
+  smoBias(s);
+  s.it++;
+  s.histD.push(dual(s)); s.histP.push(primal(s));
+  s.last = {i:i, j:j, dai:dai, daj:daj, b0:b0, b1:s.b, gap:s.gap, ai0:ai, aj0:aj};
+  smoGap(s);
+  if(s.it > 30000) s.done = true;
+  return s.last;
+}
+function smoSolve(s){ while(!s.done) smoStep(s); return s; }
+
+/* ---------------- canvas helpers (same conventions as the Chapter 11 page) ---------------- */
+function ensure(cv){
+  var r = cv.getBoundingClientRect();
+  if(r.width < 4 || r.height < 4) return null;
+  var dpr = window.devicePixelRatio || 1;
+  if(cv._w !== r.width || cv._h !== r.height || cv._d !== dpr){
+    cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+    cv._w = r.width; cv._h = r.height; cv._d = dpr;
+  }
+  var c = cv.getContext("2d");
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return {c:c, W:r.width, H:r.height};
+}
+function mkPlot(c, W, H, L, R, T, B, xa, xb, ya, yb){
+  var p = {c:c, L:L, T:T, w:W - L - R, h:H - T - B, xa:xa, xb:xb, ya:ya, yb:yb, W:W, H:H};
+  p.X = function(x){ return p.L + (x - p.xa) / (p.xb - p.xa) * p.w; };
+  p.Y = function(y){ return p.T + (p.yb - y) / (p.yb - p.ya) * p.h; };
+  p.ix = function(px){ return p.xa + (px - p.L) / p.w * (p.xb - p.xa); };
+  p.iy = function(py){ return p.yb - (py - p.T) / p.h * (p.yb - p.ya); };
+  p.s = p.w / (xb - xa);
+  p.clip = function(){ c.save(); c.beginPath(); c.rect(p.L, p.T, p.w, p.h); c.clip(); };
+  p.done = function(){ c.restore(); };
+  return p;
+}
+function mkView(c, W, H, L, R, T, B, half){
+  var w = W - L - R, h = H - T - B, hx = half, hy = half;
+  if(w >= h) hx = half * w / h; else hy = half * h / w;
+  return mkPlot(c, W, H, L, R, T, B, -hx, hx, -hy, hy);
+}
+function niceStep(range, want){
+  var raw = range / want, e = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10)), n = raw / e;
+  return (n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10) * e;
+}
+var FONT = '"Bricolage Grotesque", "Trebuchet MS", sans-serif';
+function font(c, w, size){ c.font = w + " " + size + "px " + FONT; }
+function frame(p, o){
+  var c = p.c, i;
+  o = o || {};
+  if(!o.noBg){ c.fillStyle = COL.blush; c.fillRect(p.L, p.T, p.w, p.h); }
+  font(c, 600, 11); c.lineWidth = 1;
+  var sy = niceStep(p.yb - p.ya, o.ny || 5), sx = niceStep(p.xb - p.xa, o.nx || 6);
+  c.textAlign = "right"; c.textBaseline = "middle";
+  for(i = Math.ceil(p.ya / sy - 1e-9); i * sy <= p.yb + 1e-9; i++){
+    var y = p.Y(i * sy);
+    if(!o.noGrid){ c.strokeStyle = o.gridCol || COL.stone; c.beginPath(); c.moveTo(p.L, y + 0.5); c.lineTo(p.L + p.w, y + 0.5); c.stroke(); }
+    c.fillStyle = COL.ink2; c.fillText(o.yfmt ? o.yfmt(i * sy) : fmt(i * sy, sy < 1 ? (sy < 0.1 ? 2 : 1) : 0), p.L - 6, y);
+  }
+  if(!o.noX){
+    c.textAlign = "center"; c.textBaseline = "top";
+    for(i = Math.ceil(p.xa / sx - 1e-9); i * sx <= p.xb + 1e-9; i++){
+      var x = p.X(i * sx);
+      if(!o.noGrid){ c.strokeStyle = o.gridCol || COL.stone; c.beginPath(); c.moveTo(x + 0.5, p.T); c.lineTo(x + 0.5, p.T + p.h); c.stroke(); }
+      c.fillStyle = COL.ink2; c.fillText(fmt(i * sx, sx < 1 ? 1 : 0), x, p.T + p.h + 5);
+    }
+  }
+  c.strokeStyle = COL.ink; c.lineWidth = 1.4;
+  c.beginPath(); c.moveTo(p.L + 0.5, p.T); c.lineTo(p.L + 0.5, p.T + p.h + 0.5); c.lineTo(p.L + p.w, p.T + p.h + 0.5); c.stroke();
+  font(c, 600, 11); c.fillStyle = COL.ink2;
+  if(o.xlab){ c.textAlign = "right"; c.textBaseline = "bottom"; c.fillText(o.xlab, p.L + p.w, p.H - 1); }
+  if(o.ylab){ c.textAlign = "left"; c.textBaseline = "top"; c.fillText(o.ylab, p.L + 6, p.T + 4); }
+}
+function tag(c, s, x, y, align, col, w, size){
+  font(c, w || 700, size || 11.5);
+  var tw = c.measureText(s).width, h = (size || 11.5) + 5;
+  var x0 = align === "right" ? x - tw - 4 : align === "center" ? x - tw / 2 - 2 : x - 2;
+  c.fillStyle = "rgba(252,241,239,.9)"; c.fillRect(x0, y - h + 3, tw + 6, h);
+  c.textAlign = align || "left"; c.textBaseline = "alphabetic"; c.fillStyle = col || COL.ink; c.fillText(s, x, y);
+}
+function ringAt(c, X, Y, r, col, w, dash){
+  c.save(); if(dash) c.setLineDash(dash);
+  c.beginPath(); c.arc(X, Y, r, 0, Math.PI * 2); c.strokeStyle = col; c.lineWidth = w || 2; c.stroke(); c.restore();
+}
+/* Class +1 is a red disc, class -1 an ink square, as in the slides' figure. */
+function marker(c, X, Y, r, y, alpha){
+  c.save(); c.globalAlpha = alpha === undefined ? 1 : alpha;
+  c.lineWidth = 1.4; c.strokeStyle = "rgba(252,241,239,.95)";
+  if(y > 0){ c.beginPath(); c.arc(X, Y, r, 0, Math.PI * 2); c.fillStyle = COL.red; c.fill(); c.stroke(); }
+  else { var q = r * 0.9; c.fillStyle = COL.ink; c.fillRect(X - q, Y - q, 2 * q, 2 * q); c.strokeRect(X - q, Y - q, 2 * q, 2 * q); }
+  c.restore();
+}
+function swatch(y){
+  return y > 0 ? '<svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5" fill="#d74a49"/></svg>'
+               : '<svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect x="2" y="2" width="9" height="9" fill="#183e4b"/></svg>';
+}
+function lineSwatch(col, dash, w){
+  return '<svg width="22" height="13" viewBox="0 0 22 13" aria-hidden="true"><line x1="1" y1="6.5" x2="21" y2="6.5" stroke="' + col + '" stroke-width="' + (w || 2.2) + '"' + (dash ? ' stroke-dasharray="' + dash + '"' : '') + '/></svg>';
+}
+function ringSwatch(col, dash){
+  return '<svg width="15" height="15" viewBox="0 0 15 15" aria-hidden="true"><circle cx="7.5" cy="7.5" r="6" fill="none" stroke="' + col + '" stroke-width="1.8"' + (dash ? ' stroke-dasharray="' + dash + '"' : '') + '/></svg>';
+}
+function legendItem(sw, t){ return "<span>" + sw + t + "</span>"; }
+function kvHTML(rows){
+  var h = "";
+  rows.forEach(function(r){
+    if(r.full) h += '<span class="full">' + r.full + "</span>";
+    else h += "<span>" + r[0] + "</span><span" + (r[2] ? ' class="hi"' : "") + ">" + r[1] + "</span>";
+  });
+  return h;
+}
+function buildChips(host, items, initial, fn){
+  host.innerHTML = "";
+  var api = {set:function(k){
+    var all = host.querySelectorAll(".chip");
+    for(var i = 0; i < all.length; i++) all[i].setAttribute("aria-pressed", all[i].getAttribute("data-k") === k ? "true" : "false");
+  }};
+  items.forEach(function(it){
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.setAttribute("data-k", it.k);
+    b.innerHTML = it.name + (it.note ? "<small>" + it.note + "</small>" : "");
+    b.setAttribute("aria-pressed", it.k === initial ? "true" : "false");
+    b.addEventListener("click", function(){ api.set(it.k); fn(it.k); });
+    host.appendChild(b);
+  });
+  return api;
+}
+
+/* ---------------- decision field: shading and contours ---------------- */
+var RGB = {blush:hexRGB(COL.blush), red:hexRGB(COL.red), ink:hexRGB(COL.ink)};
+var fieldCv = document.createElement("canvas");
+function paintField(p, vals, gx, gy){
+  if(fieldCv.width !== gx || fieldCv.height !== gy){ fieldCv.width = gx; fieldCv.height = gy; }
+  var fc = fieldCv.getContext("2d"), img = fc.createImageData(gx, gy), D = img.data, k, a, b;
+  for(var r = 0; r < gy; r++) for(var q = 0; q < gx; q++){
+    var f = vals[r * gx + q], m = Math.min(1, Math.abs(f) / 1.6), to = f >= 0 ? RGB.red : RGB.ink;
+    a = f === 0 ? 0 : (f > 0 ? 0.07 + 0.17 * m : 0.05 + 0.11 * m);
+    if(Math.abs(f) < 1 && f !== 0) a *= 0.72;
+    k = ((gy - 1 - r) * gx + q) * 4;
+    for(b = 0; b < 3; b++) D[k + b] = Math.round(RGB.blush[b] + (to[b] - RGB.blush[b]) * a);
+    D[k + 3] = 255;
+  }
+  fc.putImageData(img, 0, 0);
+  var c = p.c; c.save(); c.imageSmoothingEnabled = true;
+  var dx = p.w / (gx - 1) / 2, dy = p.h / (gy - 1) / 2;
+  c.drawImage(fieldCv, p.L - dx, p.T - dy, p.w + 2 * dx, p.h + 2 * dy);
+  c.restore();
+}
+/* Marching squares on node values; node (q, r) sits at x = xa + q * dx, y = ya + r * dy. */
+function contour(p, vals, gx, gy, level, col, width, dash){
+  var c = p.c, xs = (p.xb - p.xa) / (gx - 1), ys = (p.yb - p.ya) / (gy - 1);
+  c.save(); c.strokeStyle = col; c.lineWidth = width; if(dash) c.setLineDash(dash); c.lineCap = "round";
+  c.beginPath();
+  function P(q, r){ return [p.X(p.xa + q * xs), p.Y(p.ya + r * ys)]; }
+  function lerp(a, b, va, vb){ var t = (level - va) / (vb - va); return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; }
+  for(var r = 0; r < gy - 1; r++) for(var q = 0; q < gx - 1; q++){
+    var v0 = vals[r * gx + q], v1 = vals[r * gx + q + 1], v2 = vals[(r + 1) * gx + q + 1], v3 = vals[(r + 1) * gx + q];
+    var idx = (v0 > level ? 1 : 0) | (v1 > level ? 2 : 0) | (v2 > level ? 4 : 0) | (v3 > level ? 8 : 0);
+    if(idx === 0 || idx === 15) continue;
+    var p0 = P(q, r), p1 = P(q + 1, r), p2 = P(q + 1, r + 1), p3 = P(q, r + 1);
+    var eB = function(){ return lerp(p0, p1, v0, v1); }, eR = function(){ return lerp(p1, p2, v1, v2); };
+    var eT = function(){ return lerp(p3, p2, v3, v2); }, eL = function(){ return lerp(p0, p3, v0, v3); };
+    var segs;
+    switch(idx){
+      case 1: case 14: segs = [[eL(), eB()]]; break;
+      case 2: case 13: segs = [[eB(), eR()]]; break;
+      case 3: case 12: segs = [[eL(), eR()]]; break;
+      case 4: case 11: segs = [[eR(), eT()]]; break;
+      case 6: case 9: segs = [[eB(), eT()]]; break;
+      case 7: case 8: segs = [[eL(), eT()]]; break;
+      case 5: case 10:
+        var mid = (v0 + v1 + v2 + v3) / 4 > level;
+        segs = (idx === 5) === mid ? [[eL(), eT()], [eB(), eR()]] : [[eL(), eB()], [eR(), eT()]];
+        break;
+    }
+    segs.forEach(function(sg){ c.moveTo(sg[0][0], sg[0][1]); c.lineTo(sg[1][0], sg[1][1]); });
+  }
+  c.stroke(); c.restore();
+}
+
+/* ================= 1. Training tab ================= */
+var Train = (function(){
+  var st = {ds:"sep", n:40, seed:1, kern:"linear", gam:0.5, deg:2, coef:1, C:10, speed:4, addCls:1,
+            playing:false, oneStep:false, hover:-1, drag:-1, dirty:false};
+  var d, k, K, s, half, view = null, grid = null, Kg = null, Gf = null, anim = null, tt = 0, lastKey = "";
+  var GX = 70;
+
+  /* ---- model ---- */
+  function newData(){
+    var g = DATA[st.ds].build(st.n, 31 + st.seed * 13);
+    d = {P:g.P, Y:g.Y};
+    var m = 0;
+    d.P.forEach(function(q){ m = Math.max(m, Math.abs(q[0]), Math.abs(q[1])); });
+    half = Math.max(3.2, m * 1.12);
+    live();
+  }
+  function bothClasses(){
+    var a = 0, b = 0;
+    d.Y.forEach(function(y){ if(y > 0) a++; else b++; });
+    return a > 0 && b > 0;
+  }
+  function gridFor(p){
+    var gy = Math.max(12, Math.round(GX * p.h / p.w)), key = [p.xa, p.xb, p.ya, p.yb, GX, gy].join("|");
+    if(grid && grid.key === key) return false;
+    var nodes = [], q, r;
+    for(r = 0; r < gy; r++) for(q = 0; q < GX; q++)
+      nodes.push([p.xa + q * (p.xb - p.xa) / (GX - 1), p.ya + r * (p.yb - p.ya) / (gy - 1)]);
+    grid = {key:key, gx:GX, gy:gy, nodes:nodes, m:nodes.length};
+    return true;
+  }
+  function buildKg(){
+    if(!grid) return;
+    var n = d.P.length, m = grid.m, t, g;
+    Kg = new Float64Array(n * m);
+    for(t = 0; t < n; t++) for(g = 0; g < m; g++) Kg[t * m + g] = k(d.P[t], grid.nodes[g]);
+    syncGf();
+  }
+  function syncGf(){
+    if(!grid || !Kg) return;
+    var n = d.P.length, m = grid.m, t, g;
+    Gf = new Float64Array(m);
+    for(t = 0; t < n; t++){
+      var c = s.a[t] * s.Y[t];
+      if(c === 0) continue;
+      for(g = 0; g < m; g++) Gf[g] += c * Kg[t * m + g];
+    }
+  }
+  /* Any change to data, kernel or C re-solves at once, so sliders feel live. */
+  function live(){
+    stop();
+    k = makeKernel(st.kern, st.gam, st.deg, st.coef);
+    K = gram(d.P, k);
+    s = smoNew(K, d.Y.slice(), st.C);
+    if(bothClasses()) smoSolve(s); else s.done = true;
+    anim = null; tt = 0;
+    buildKg();
+    report();
+  }
+  function restart(){
+    stop();
+    s = smoNew(K, d.Y.slice(), st.C);
+    if(!bothClasses()) s.done = true;
+    anim = null; tt = 0; syncGf(); report();
+  }
+  function g(t){ return s.F[t] + s.b; }
+  function wLinear(){
+    var w = [0, 0];
+    for(var t = 0; t < d.P.length; t++){ var c = s.a[t] * s.Y[t]; w[0] += c * d.P[t][0]; w[1] += c * d.P[t][1]; }
+    return w;
+  }
+  function counts(){
+    var o = {sv:0, free:0, bound:0, err:0, slack:0};
+    for(var t = 0; t < s.n; t++){
+      if(s.a[t] > EPS){ o.sv++; if(s.a[t] >= s.C - EPS) o.bound++; else o.free++; }
+      var m = s.Y[t] * g(t);
+      if(m < 0) o.err++;
+      if(m < 1 - 5e-3) o.slack++;
+    }
+    return o;
+  }
+
+  /* ---- animation timing ---- */
+  function dur(){
+    var it = s.it, base = it <= 3 ? 1700 : it <= 10 ? 800 : it <= 30 ? 380 : 170;
+    return reduced ? 120 : base * 4 / st.speed;
+  }
+  function stop(){ st.playing = false; st.oneStep = false; $("svPlay").textContent = "Run"; }
+  function play(one){ st.playing = true; st.oneStep = !!one; $("svPlay").textContent = one ? "Run" : "Pause"; }
+  function begin(){
+    var info = smoStep(s);
+    if(!info){ anim = null; stop(); report(); return false; }
+    var m = grid ? grid.m : 0, gi, yi = s.Y[info.i] * info.dai, yj = s.Y[info.j] * info.daj;
+    for(gi = 0; gi < m; gi++) Gf[gi] += yi * Kg[info.i * m + gi] + yj * Kg[info.j * m + gi];
+    anim = info; tt = 0;
+    return true;
+  }
+  function step(dt){
+    if(st.dirty){ st.dirty = false; live(); }
+    if(st.playing){
+      if(!anim){ if(!begin()) return; }
+      tt += dt;
+      if(tt >= dur()){
+        anim = null; tt = 0;
+        if(st.oneStep || s.done) stop();
+      }
+    }
+    var key = s.it + "|" + (anim ? Math.floor(clamp01(tt / dur()) * 4) : -1) + "|" + st.playing + "|" + st.hover;
+    if(key !== lastKey){ lastKey = key; report(); }
+  }
+  function tau(){ return anim ? ease(clamp01(tt / dur())) : 1; }
+  function fieldVals(){
+    var m = grid.m, out = new Float64Array(m), gi, T = tau();
+    if(anim){
+      var yi = s.Y[anim.i] * anim.dai, yj = s.Y[anim.j] * anim.daj, b = anim.b0 + (anim.b1 - anim.b0) * T, back = 1 - T;
+      for(gi = 0; gi < m; gi++) out[gi] = Gf[gi] - back * (yi * Kg[anim.i * m + gi] + yj * Kg[anim.j * m + gi]) + b;
+    } else for(gi = 0; gi < m; gi++) out[gi] = Gf[gi] + s.b;
+    var flat = true;
+    for(gi = 0; gi < s.n; gi++) if(s.a[gi] > EPS){ flat = false; break; }
+    if(flat && !anim) out.fill(0);
+    return out;
+  }
+  function alphaShown(t){
+    if(!anim) return s.a[t];
+    var T = tau();
+    if(t === anim.i) return anim.ai0 + anim.dai * T;
+    if(t === anim.j) return anim.aj0 + anim.daj * T;
+    return s.a[t];
+  }
+
+  /* ---- the map ---- */
+  function drawMap(){
+    var E = ensure($("svMap"));
+    if(!E) return;
+    var c = E.c, p = mkView(c, E.W, E.H, 40, 14, 12, 28, half), n = d.P.length, i;
+    view = p;
+    if(gridFor(p)) buildKg();
+    c.clearRect(0, 0, E.W, E.H);
+    c.fillStyle = COL.blush; c.fillRect(p.L, p.T, p.w, p.h);
+    var vals = fieldVals(), gx = grid.gx, gy = grid.gy, has = false;
+    for(i = 0; i < vals.length; i++) if(vals[i] !== 0){ has = true; break; }
+    p.clip();
+    if(has) paintField(p, vals, gx, gy);
+    p.done();
+    frame(p, {noBg:true, gridCol:"rgba(139,160,164,.28)", nx:7, ny:6, xlab:"x₁", ylab:"x₂"});
+    p.clip();
+    if(has){
+      contour(p, vals, gx, gy, 1, COL.red, 1.6, [7, 5]);
+      contour(p, vals, gx, gy, -1, COL.ink, 1.6, [7, 5]);
+      contour(p, vals, gx, gy, 0, COL.ink, 2.6);
+      regionLabels(p, vals, gx, gy);
+    }
+    var lin = st.kern === "linear" && has, w = lin ? wLinear() : null, w2 = w ? w[0] * w[0] + w[1] * w[1] : 0;
+    if(lin && w2 > 1e-10 && !anim){
+      /* slack: the step from x_i to its own margin, x + (y - g(x)) w / ||w||^2 */
+      c.save(); c.strokeStyle = COL.mute; c.lineWidth = 1.5; c.setLineDash([3, 3]);
+      for(i = 0; i < n; i++){
+        var gi = g(i), sl = 1 - d.Y[i] * gi;
+        if(sl <= 5e-3) continue;
+        var sc = (d.Y[i] - gi) / w2;
+        c.beginPath(); c.moveTo(p.X(d.P[i][0]), p.Y(d.P[i][1]));
+        c.lineTo(p.X(d.P[i][0] + sc * w[0]), p.Y(d.P[i][1] + sc * w[1])); c.stroke();
+      }
+      c.restore();
+      geometry(p, w, w2);
+    }
+    var rad = n > 100 ? 4.4 : n > 50 ? 5.2 : 6.2;
+    if(anim){
+      var A = d.P[anim.i], B = d.P[anim.j];
+      c.save(); c.strokeStyle = COL.red; c.lineWidth = 1.8; c.setLineDash([5, 4]);
+      c.beginPath(); c.moveTo(p.X(A[0]), p.Y(A[1])); c.lineTo(p.X(B[0]), p.Y(B[1])); c.stroke(); c.restore();
+    }
+    for(i = 0; i < n; i++){
+      var X = p.X(d.P[i][0]), Y = p.Y(d.P[i][1]), a = alphaShown(i);
+      marker(c, X, Y, rad, d.Y[i]);
+      if(a > EPS){
+        if(a >= st.C - EPS) ringAt(c, X, Y, rad + 4.5, COL.red, 1.9, [3, 2.5]);
+        else ringAt(c, X, Y, rad + 4.5, COL.ink, 1.9);
+      }
+    }
+    if(anim){
+      var T = tau(), pulse = reduced ? 0 : Math.sin(T * Math.PI) * 5;
+      [[anim.i, "i"], [anim.j, "j"]].forEach(function(q){
+        var X = p.X(d.P[q[0]][0]), Y = p.Y(d.P[q[0]][1]);
+        ringAt(c, X, Y, rad + 9 + pulse, COL.red, 2.6);
+        tag(c, q[1] + " = " + (q[0] + 1) + ", α = " + fmt(alphaShown(q[0]), 3), X + rad + 14, Y - 8, "left", COL.red, 800, 12);
+      });
+    }
+    if(st.hover >= 0 && st.hover < n && !anim){
+      var h = st.hover, hx = p.X(d.P[h][0]), hy = p.Y(d.P[h][1]), m = d.Y[h] * g(h);
+      ringAt(c, hx, hy, rad + 9, COL.ink, 2.2);
+      var txt = "point " + (h + 1) + ":  α = " + fmt(s.a[h], 3) + ",  y·g(x) = " + fmt(m, 2) + ",  ξ = " + fmt(Math.max(0, 1 - m), 2);
+      var toLeft = hx > p.L + p.w - 300;
+      tag(c, txt, toLeft ? hx - rad - 12 : hx + rad + 12, hy + (hy < p.T + 40 ? 26 : -12), toLeft ? "right" : "left", COL.ink, 700, 12);
+    }
+    p.done();
+    if(!bothClasses()){
+      font(c, 600, 13); c.fillStyle = COL.ink2; c.textAlign = "center"; c.textBaseline = "middle";
+      c.fillText("Add points of both classes to train.", p.L + p.w / 2, p.T + p.h / 2);
+    } else if(!has && !anim){
+      font(c, 600, 13); c.fillStyle = COL.ink2; c.textAlign = "center"; c.textBaseline = "middle";
+      c.fillText("Every α starts at 0, so w = 0 and there is no boundary yet.", p.L + p.w / 2, p.T + 26);
+    }
+  }
+  function regionLabels(p, vals, gx, gy){
+    var bi = -1, bv = -Infinity, wi = -1, wv = Infinity, q, r;
+    for(r = Math.floor(gy * 0.12); r < gy * 0.88; r++) for(q = Math.floor(gx * 0.1); q < gx * 0.9; q++){
+      var v = vals[r * gx + q];
+      if(v > bv){ bv = v; bi = r * gx + q; }
+      if(v < wv){ wv = v; wi = r * gx + q; }
+    }
+    if(bv > 1.2){ var P = grid.nodes[bi]; tag(p.c, "ℛ₊  g(x) > 0", p.X(P[0]), p.Y(P[1]), "center", COL.red, 800, 13); }
+    if(wv < -1.2){ var Q = grid.nodes[wi]; tag(p.c, "ℛ₋  g(x) < 0", p.X(Q[0]), p.Y(Q[1]), "center", COL.ink, 800, 13); }
+  }
+  /* w, the margin d = 2/||w|| and the boundary point closest to the origin. */
+  function geometry(p, w, w2){
+    var c = p.c, nw = Math.sqrt(w2), x0 = [-s.b * w[0] / w2, -s.b * w[1] / w2], u = [-w[1] / nw, w[0] / nw];
+    var off = Math.min(half * 0.55, 1.6), a = [x0[0] + off * u[0], x0[1] + off * u[1]];
+    var lo = [a[0] - w[0] / w2, a[1] - w[1] / w2], hi = [a[0] + w[0] / w2, a[1] + w[1] / w2];
+    c.save(); c.strokeStyle = COL.ink; c.fillStyle = COL.ink; c.lineWidth = 1.8;
+    arrow(c, p.X(lo[0]), p.Y(lo[1]), p.X(hi[0]), p.Y(hi[1]), true);
+    var b2 = [x0[0] - off * u[0], x0[1] - off * u[1]], tip = [b2[0] + 0.9 * w[0] / nw, b2[1] + 0.9 * w[1] / nw];
+    c.strokeStyle = COL.red; c.fillStyle = COL.red; c.lineWidth = 2.2;
+    arrow(c, p.X(b2[0]), p.Y(b2[1]), p.X(tip[0]), p.Y(tip[1]), false);
+    c.restore();
+    tag(c, "d = 2/‖w‖ = " + fmt(2 / nw, 2), p.X(hi[0]) + 8, p.Y(hi[1]) - 6, "left", COL.ink, 800, 12.5);
+    tag(c, "w", p.X(tip[0]) + 7, p.Y(tip[1]) - 5, "left", COL.red, 800, 13);
+  }
+  function arrow(c, x0, y0, x1, y1, both){
+    var ang = Math.atan2(y1 - y0, x1 - x0), L = 9;
+    c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+    function head(x, y, a){ c.beginPath(); c.moveTo(x, y); c.lineTo(x - L * Math.cos(a - 0.4), y - L * Math.sin(a - 0.4));
+      c.lineTo(x - L * Math.cos(a + 0.4), y - L * Math.sin(a + 0.4)); c.closePath(); c.fill(); }
+    head(x1, y1, ang); if(both) head(x0, y0, ang + Math.PI);
+  }
+
+  /* ---- lower charts ---- */
+  function drawObj(){
+    var E = ensure($("svObj"));
+    if(!E) return;
+    var c = E.c, D = s.histD, P = s.histP, N = Math.max(1, D.length - 1), i;
+    c.clearRect(0, 0, E.W, E.H);
+    var top = 0;
+    for(i = 0; i < D.length; i++) top = Math.max(top, D[i]);
+    top = Math.max(top, P[P.length - 1]) * 1.6 + 1e-3;
+    var p = mkPlot(c, E.W, E.H, 46, 12, 12, 30, 0, N, 0, top);
+    frame(p, {ny:4, nx:5, xlab:"SMO step", ylab:"objective"});
+    p.clip();
+    [[P, COL.ink, 2], [D, COL.red, 2.4]].forEach(function(o){
+      c.strokeStyle = o[1]; c.lineWidth = o[2]; c.beginPath();
+      for(var q = 0; q < o[0].length; q++){ var y = p.Y(Math.min(o[0][q], top * 1.05)); if(q) c.lineTo(p.X(q), y); else c.moveTo(p.X(q), y); }
+      c.stroke();
+    });
+    p.done();
+    var dl = D[D.length - 1], pl = P[P.length - 1];
+    tag(c, "P = " + fmt(pl, 3), p.L + p.w - 4, Math.max(p.T + 14, p.Y(Math.min(pl, top)) - 6), "right", COL.ink, 800, 11.5);
+    tag(c, "D(α) = " + fmt(dl, 3), p.L + p.w - 4, Math.min(p.T + p.h - 4, p.Y(dl) + 18), "right", COL.red, 800, 11.5);
+  }
+  function drawAlpha(){
+    var E = ensure($("svAlpha"));
+    if(!E) return;
+    var c = E.c, n = d.P.length, i, order = [];
+    c.clearRect(0, 0, E.W, E.H);
+    for(i = 0; i < n; i++) if(d.Y[i] > 0) order.push(i);
+    for(i = 0; i < n; i++) if(d.Y[i] < 0) order.push(i);
+    var mx = 0;
+    for(i = 0; i < n; i++) mx = Math.max(mx, alphaShown(i));
+    var top = mx > 0 ? Math.max(mx * 1.18, st.C <= mx * 1.6 ? st.C * 1.1 : 0) : Math.min(st.C * 1.1, 1);
+    var p = mkPlot(c, E.W, E.H, 46, 12, 12, 30, 0, Math.max(n, 1), 0, top);
+    frame(p, {ny:4, noX:true, xlab:"points, class +1 then −1", ylab:"α"});
+    var bw = Math.max(1, p.w / Math.max(n, 1) - 1.5);
+    order.forEach(function(t, q){
+      var a = alphaShown(t), x = p.X(q + 0.5) - bw / 2, y = p.Y(Math.min(a, top));
+      c.fillStyle = d.Y[t] > 0 ? COL.red : COL.ink;
+      c.fillRect(x, y, bw, p.Y(0) - y);
+      var hot = (anim && (t === anim.i || t === anim.j)) || t === st.hover;
+      if(hot){ c.strokeStyle = anim && (t === anim.i || t === anim.j) ? COL.red : COL.ink; c.lineWidth = 2;
+        c.strokeRect(x - 2, Math.min(y, p.Y(0) - 3) - 2, bw + 4, Math.max(3, p.Y(0) - y) + 4); }
+    });
+    if(st.C <= top){
+      c.save(); c.strokeStyle = COL.ink; c.lineWidth = 1.3; c.setLineDash([6, 4]);
+      c.beginPath(); c.moveTo(p.L, p.Y(st.C)); c.lineTo(p.L + p.w, p.Y(st.C)); c.stroke(); c.restore();
+      tag(c, "C = " + fmtC(st.C), p.L + p.w - 4, p.Y(st.C) - 4, "right", COL.ink, 800, 11.5);
+    } else tag(c, "C = " + fmtC(st.C) + " is above the top", p.L + p.w - 4, p.T + 14, "right", COL.ink, 700, 11);
+  }
+  function draw(){ drawMap(); drawObj(); drawAlpha(); }
+
+  /* ---- words ---- */
+  function caption(){
+    if(!bothClasses()) return "Training needs at least one point of each class. Pick a data set or click to add points.";
+    var o = counts();
+    if(anim){
+      var A = anim;
+      return "Step " + s.it + ": points <b>" + (A.i + 1) + "</b> and <b>" + (A.j + 1) + "</b> violate the KKT conditions most (gap " + fmt(A.gap, 3) +
+        "). SMO moves α<sub>" + (A.i + 1) + "</sub> from " + fmt(A.ai0, 3) + " to " + fmt(A.ai0 + A.dai, 3) + " and α<sub>" + (A.j + 1) + "</sub> from " +
+        fmt(A.aj0, 3) + " to " + fmt(A.aj0 + A.daj, 3) + ", keeping Σα<sub>i</sub>y<sub>i</sub> = 0.";
+    }
+    if(s.it === 0) return "Every α<sub>i</sub> is 0, so <b>w</b> = 0. Press <b>Run</b> to train, or <b>One step</b> to move one pair of multipliers.";
+    if(!s.done) return "Paused after " + s.it + " steps. The KKT gap is " + fmt(s.gap, 3) + ", above the tolerance 0.001.";
+    var t = "Converged after <b>" + s.it + "</b> SMO steps. <b>" + o.sv + "</b> support vectors define the boundary: " + o.free + " on the margin and " + o.bound + " at the bound α = C.";
+    if(st.kern === "linear"){ var w = wLinear(); t += " The margin is d = 2/‖w‖ = <b>" + fmt(2 / Math.sqrt(w[0] * w[0] + w[1] * w[1]), 2) + "</b>."; }
+    return t + " Press <b>Restart</b> to watch it train from α = 0.";
+  }
+  function legend(){
+    var h = legendItem(swatch(1), "class y = +1") + legendItem(swatch(-1), "class y = −1") +
+      legendItem(lineSwatch(COL.ink, null, 2.6), "g(x) = 0") + legendItem(lineSwatch(COL.red, "5 3", 1.6), "g(x) = +1") +
+      legendItem(lineSwatch(COL.ink, "5 3", 1.6), "g(x) = −1") + legendItem(ringSwatch(COL.ink), "support vector, 0 < α < C") +
+      legendItem(ringSwatch(COL.red, "3 2"), "support vector, α = C");
+    if(st.kern === "linear") h += legendItem(lineSwatch(COL.mute, "3 3", 1.5), "slack ξ, step to its margin");
+    $("svLegend").innerHTML = h;
+  }
+  function report(){
+    var o = counts(), B, T;
+    if(!bothClasses()){ B = "waiting"; T = "for both classes"; }
+    else if(anim){ B = "step " + s.it; T = '<span class="ph">updating α<sub>' + (anim.i + 1) + "</sub>, α<sub>" + (anim.j + 1) + "</sub></span>"; }
+    else if(s.it === 0){ B = "ready"; T = "α = 0"; }
+    else if(s.done){ B = "converged"; T = '<span class="ph">' + o.sv + " support vectors</span>"; }
+    else { B = "paused"; T = "step " + s.it; }
+    $("svStampB").textContent = B; $("svStampS").innerHTML = T;
+    $("svCaption").innerHTML = caption();
+    var call = st.kern === "linear" ? "kernel='linear'" : st.kern === "rbf" ? "kernel='rbf', gamma=" + fmt(st.gam, 2) :
+      "kernel='poly', degree=" + st.deg + ", gamma=" + fmt(st.gam, 2) + ", coef0=" + fmt(st.coef, 1);
+    var w2 = wNorm2(s);
+    $("svState").innerHTML = kvHTML([
+      ["SMO steps", s.it],
+      ["KKT gap (tolerance 0.001)", isFinite(s.gap) ? fmt(s.gap, 4) : "–", !s.done],
+      ["support vectors, α > 0", o.sv, true],
+      ["on the margin, 0 < α < C", o.free],
+      ["at the bound, α = C", o.bound],
+      ["inside margin or wrong, ξ > 0", o.slack],
+      ["training errors", o.err],
+      [st.kern === "linear" ? "margin d = 2/‖w‖" : "2/‖w‖ in feature space", w2 > 1e-12 ? fmt(2 / Math.sqrt(w2), 3) : "–"],
+      ["bias b", fmt(s.b, 3)],
+      ["dual D(α)", fmt(dual(s), 3)],
+      {full:"SVC(" + call + ", C=" + fmtC(st.C) + ")"}
+    ]);
+    $("svCWhat").innerHTML = st.C >= 300 ? "Large C: violations are expensive, close to the <b>hard margin</b>." :
+      st.C <= 0.3 ? "Small C: violations are cheap, so the margin is wide and many points get <b>slack</b>." :
+      "C prices each unit of slack ξ<sub>i</sub> in the objective.";
+    $("svPlay").textContent = st.playing && !st.oneStep ? "Pause" : "Run";
+  }
+
+  /* ---- controls ---- */
+  var kernEq = {linear:"κ(x, z) = xᵀz", poly:"κ(x, z) = (γ xᵀz + c)ᵖ", rbf:"κ(x, z) = exp(−γ‖x − z‖²)"};
+  function showKernCtl(){
+    $("svGamWrap").hidden = st.kern === "linear";
+    $("svDegWrap").hidden = st.kern !== "poly";
+    $("svCoefWrap").hidden = st.kern !== "poly";
+    $("svKernEq").textContent = kernEq[st.kern];
+    legend();
+  }
+  buildChips($("svKern"), [{k:"linear", name:"Linear"}, {k:"poly", name:"Polynomial"}, {k:"rbf", name:"RBF"}], st.kern,
+    function(key){ st.kern = key; showKernCtl(); live(); });
+  var dataChips = buildChips($("svData"), Object.keys(DATA).map(function(key){ return {k:key, name:DATA[key].name, note:DATA[key].note}; }), st.ds,
+    function(key){ st.ds = key; newData(); });
+  buildChips($("svAddCls"), [{k:"1", name:"+1, red"}, {k:"-1", name:"−1, ink"}], "1", function(key){ st.addCls = +key; });
+  $("svPlay").addEventListener("click", function(){
+    if(st.playing && !st.oneStep){ stop(); report(); return; }
+    if(s.done) restart();
+    play(false); report();
+  });
+  $("svStep").addEventListener("click", function(){ if(s.done) restart(); if(!anim) play(true); });
+  $("svFinish").addEventListener("click", function(){ stop(); anim = null; smoSolve(s); syncGf(); report(); });
+  $("svRestart").addEventListener("click", function(){ restart(); play(false); report(); });
+  $("svNew").addEventListener("click", function(){ st.seed++; newData(); });
+  $("svClear").addEventListener("click", function(){ d = {P:[], Y:[]}; live(); });
+  onInput("svCs", function(){ st.C = Math.pow(10, +this.value); $("svC").textContent = fmtC(st.C); live(); });
+  onInput("svSpeeds", function(){ st.speed = +this.value; $("svSpeed").textContent = st.speed; });
+  onInput("svGams", function(){ st.gam = Math.pow(10, +this.value); $("svGam").textContent = fmt(st.gam, 2); live(); });
+  onInput("svDegs", function(){ st.deg = +this.value; $("svDeg").textContent = st.deg; live(); });
+  onInput("svCoefs", function(){ st.coef = +this.value; $("svCoef").textContent = fmt(st.coef, 1); live(); });
+  onInput("svNs", function(){ st.n = +this.value; $("svN").textContent = st.n; newData(); });
+
+  /* Pointer: click empty space to add, drag a point to move it, right-click a point to delete it. */
+  var cv = $("svMap");
+  function nearest(ev){
+    if(!view) return {i:-1};
+    var r = cv.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top, best = -1, bd = 13 * 13;
+    for(var i = 0; i < d.P.length; i++){
+      var dx = view.X(d.P[i][0]) - px, dy = view.Y(d.P[i][1]) - py, dd = dx * dx + dy * dy;
+      if(dd < bd){ bd = dd; best = i; }
+    }
+    return {i:best, x:view.ix(px), y:view.iy(py), inside:px >= view.L && px <= view.L + view.w && py >= view.T && py <= view.T + view.h};
+  }
+  cv.addEventListener("contextmenu", function(ev){ ev.preventDefault(); });
+  cv.addEventListener("pointerdown", function(ev){
+    var h = nearest(ev);
+    $("svHint").className = "hint gone";
+    if(ev.button === 2){ if(h.i >= 0){ d.P.splice(h.i, 1); d.Y.splice(h.i, 1); st.hover = -1; st.dirty = true; } return; }
+    if(h.i >= 0){ st.drag = h.i; cv.setPointerCapture(ev.pointerId); return; }
+    if(h.inside){ d.P.push([h.x, h.y]); d.Y.push(st.addCls); st.dirty = true; }
+  });
+  cv.addEventListener("pointermove", function(ev){
+    var h = nearest(ev);
+    if(st.drag >= 0){
+      d.P[st.drag] = [Math.max(view.xa, Math.min(view.xb, h.x)), Math.max(view.ya, Math.min(view.yb, h.y))];
+      st.hover = st.drag; st.dirty = true; return;
+    }
+    if(h.i !== st.hover){ st.hover = h.i; }
+  });
+  function endDrag(){ st.drag = -1; }
+  cv.addEventListener("pointerup", endDrag);
+  cv.addEventListener("pointercancel", endDrag);
+  cv.addEventListener("pointerleave", function(){ if(st.drag < 0) st.hover = -1; });
+
+  $("svC").textContent = fmtC(st.C);
+  showKernCtl();
+  newData();
+  return {draw:draw, step:step};
+})();
+
+/* ================= 2. Kernel trick tab ================= */
+var Lift = (function(){
+  var st = {ds:"rings", seed:1, n:120, t:1, target:-1, spin:!reduced, yaw:0.75, pitch:0.42, sel:[], down:null, seen:false};
+  var d, s, w3 = [0, 0, 0], PHI = [], M = null, flatVals = null, flatKey = "", proj = [], view2 = null;
+  var SQ2 = Math.SQRT2;
+  function phi(x){ return [x[0] * x[0], SQ2 * x[0] * x[1], x[1] * x[1]]; }
+  var SETS = {
+    rings:{name:"Two rings", note:"separate on x₁² + x₂²", build:function(n, sd){ return rings(n, mul32(sd), 1.0, 2.1, 0.12); }},
+    xor:{name:"XOR quadrants", note:"separate on the sign of x₁x₂", build:function(n, sd){ return xor(n, mul32(sd), 1.3, 0.38); }}
+  };
+  function build(){
+    var g = SETS[st.ds].build(st.n, 57 + st.seed * 11);
+    d = {P:g.P, Y:g.Y};
+    /* A linear SVM on phi(x) has Gram matrix (x_i . x_j)^2, the polynomial kernel with gamma = 1, c = 0, p = 2. */
+    s = smoSolve(smoNew(gram(d.P, makeKernel("poly", 1, 2, 0)), d.Y.slice(), 100));
+    PHI = d.P.map(phi);
+    w3 = [0, 0, 0];
+    for(var t = 0; t < d.P.length; t++){ var c = s.a[t] * s.Y[t]; w3[0] += c * PHI[t][0]; w3[1] += c * PHI[t][1]; w3[2] += c * PHI[t][2]; }
+    var z1 = 0, z2 = 0, z3 = 0, r0 = 0;
+    PHI.forEach(function(z, i){ z1 = Math.max(z1, z[0]); z2 = Math.max(z2, Math.abs(z[1])); z3 = Math.max(z3, z[2]);
+      r0 = Math.max(r0, Math.abs(d.P[i][0]), Math.abs(d.P[i][1])); });
+    M = {c1:z1 / 2, c3:z3 / 2, S:Math.max(z1 / 2, z3 / 2, z2) * 1.04, S0:r0 * 1.04};
+    st.sel = []; flatKey = "";
+    report();
+  }
+  /* Display coordinates: X from z1 = x1^2, Y (depth) from z3 = x2^2, Z (up) from z2 = sqrt2 x1 x2. */
+  function posAt(i, t){
+    var e = ease(t), x = d.P[i], z = PHI[i];
+    var a = [x[0] / M.S0, x[1] / M.S0, 0], b = [(z[0] - M.c1) / M.S, (z[2] - M.c3) / M.S, z[1] / M.S];
+    return [a[0] + (b[0] - a[0]) * e, a[1] + (b[1] - a[1]) * e, a[2] + (b[2] - a[2]) * e];
+  }
+  function camera(E){
+    var cy = Math.cos(st.yaw), sy = Math.sin(st.yaw), cp = Math.cos(st.pitch), sp = Math.sin(st.pitch);
+    var sc = Math.min(E.W, E.H) * 0.3, ox = E.W / 2, oy = E.H / 2 + 8;
+    return function(v){
+      var xr = v[0] * cy - v[1] * sy, yr = v[0] * sy + v[1] * cy;
+      var up = v[2] * cp + yr * sp, depth = yr * cp - v[2] * sp, k = 4.2 / (4.2 + depth);
+      return [ox + sc * xr * k, oy - sc * up * k, depth, k];
+    };
+  }
+  function planePoly(cam){
+    /* w . z + b = 0 in display coordinates: z1 = X S + c1, z3 = Y S + c3, z2 = Z S. */
+    var A = w3[0] * M.S, B = w3[2] * M.S, Cz = w3[1] * M.S, D0 = w3[0] * M.c1 + w3[2] * M.c3 + s.b;
+    function f(v){ return A * v[0] + B * v[1] + Cz * v[2] + D0; }
+    var cs = [], i, j, pts = [];
+    for(i = 0; i < 8; i++) cs.push([i & 1 ? 1 : -1, i & 2 ? 1 : -1, i & 4 ? 1 : -1]);
+    for(i = 0; i < 8; i++) for(j = i + 1; j < 8; j++){
+      var diff = (cs[i][0] !== cs[j][0]) + (cs[i][1] !== cs[j][1]) + (cs[i][2] !== cs[j][2]);
+      if(diff !== 1) continue;
+      var fa = f(cs[i]), fb = f(cs[j]);
+      if((fa > 0) === (fb > 0)) continue;
+      var u = fa / (fa - fb);
+      pts.push(cam([cs[i][0] + (cs[j][0] - cs[i][0]) * u, cs[i][1] + (cs[j][1] - cs[i][1]) * u, cs[i][2] + (cs[j][2] - cs[i][2]) * u]));
+    }
+    if(pts.length < 3) return null;
+    var mx = 0, my = 0, md = 0;
+    pts.forEach(function(q){ mx += q[0]; my += q[1]; md += q[2]; });
+    mx /= pts.length; my /= pts.length; md /= pts.length;
+    pts.sort(function(a, b){ return Math.atan2(a[1] - my, a[0] - mx) - Math.atan2(b[1] - my, b[0] - mx); });
+    return {pts:pts, depth:md};
+  }
+  function step(dt){
+    if(st.target >= 0){
+      var dir = st.target > st.t ? 1 : -1;
+      st.t += dir * dt / (reduced ? 200 : 2600);
+      if((dir > 0 && st.t >= st.target) || (dir < 0 && st.t <= st.target)){ st.t = st.target; st.target = -1; }
+      $("ktTs").value = st.t; report();
+    }
+    if(st.spin && !st.down) st.yaw += dt * 0.00022;
+  }
+  function draw(){ drawMap(); drawFlat(); }
+  function drawMap(){
+    var E = ensure($("ktMap"));
+    if(!E) return;
+    var c = E.c, cam = camera(E), t = st.t, i, n = d.P.length;
+    c.clearRect(0, 0, E.W, E.H);
+    c.fillStyle = COL.blush; c.fillRect(0, 0, E.W, E.H);
+    /* the input plane fades out as the cube fades in */
+    var floor = [[-1, -1, 0], [1, -1, 0], [1, 1, 0], [-1, 1, 0]].map(cam);
+    c.save(); c.globalAlpha = 1 - t;
+    c.beginPath(); floor.forEach(function(q, k){ if(k) c.lineTo(q[0], q[1]); else c.moveTo(q[0], q[1]); }); c.closePath();
+    c.fillStyle = COL.grey; c.fill(); c.strokeStyle = COL.mute; c.lineWidth = 1.2; c.stroke(); c.restore();
+    c.save(); c.globalAlpha = t; c.strokeStyle = COL.stone; c.lineWidth = 1.3;
+    for(i = 0; i < 8; i++) for(var j = i + 1; j < 8; j++){
+      var a = [i & 1 ? 1 : -1, i & 2 ? 1 : -1, i & 4 ? 1 : -1], b = [j & 1 ? 1 : -1, j & 2 ? 1 : -1, j & 4 ? 1 : -1];
+      if((a[0] !== b[0]) + (a[1] !== b[1]) + (a[2] !== b[2]) !== 1) continue;
+      var A = cam(a), B = cam(b); c.beginPath(); c.moveTo(A[0], A[1]); c.lineTo(B[0], B[1]); c.stroke();
+    }
+    c.restore();
+    function axisLab(v, s, al){ var q = cam(v); c.save(); c.globalAlpha = al; tag(c, s, q[0], q[1], "center", COL.ink2, 800, 12.5); c.restore(); }
+    proj = [];
+    for(i = 0; i < n; i++){ var q = cam(posAt(i, t)); proj.push({i:i, x:q[0], y:q[1], depth:q[2], k:q[3]}); }
+    var order = proj.slice().sort(function(u, v){ return v.depth - u.depth; });
+    var pl = t > 0.7 ? planePoly(cam) : null, pa = clamp01((t - 0.7) / 0.3), drawn = false;
+    function drawPlane(){
+      if(!pl || drawn) return; drawn = true;
+      c.save(); c.globalAlpha = pa;
+      c.beginPath(); pl.pts.forEach(function(q, k){ if(k) c.lineTo(q[0], q[1]); else c.moveTo(q[0], q[1]); }); c.closePath();
+      c.fillStyle = "rgba(24,62,75,.16)"; c.fill(); c.strokeStyle = COL.ink; c.lineWidth = 2; c.stroke(); c.restore();
+    }
+    order.forEach(function(o){
+      if(pl && o.depth < pl.depth) drawPlane();
+      var r = 5.2 * o.k;
+      marker(c, o.x, o.y, r, d.Y[o.i], 0.95);
+      if(s.a[o.i] > EPS && t > 0.98) ringAt(c, o.x, o.y, r + 4, COL.ink, 1.6);
+    });
+    drawPlane();
+    if(t > 0.02) { axisLab([1.25, -1, -1], "x₁²", t); axisLab([-1, 1.25, -1], "x₂²", t); axisLab([-1, -1, 1.2], "√2 x₁x₂", t); }
+    if(t < 0.98) { axisLab([1.2, 0, 0], "x₁", 1 - t); axisLab([0, 1.2, 0], "x₂", 1 - t); }
+    if(st.sel.length){
+      var P0 = proj[st.sel[0]];
+      if(st.sel.length > 1){ var P1 = proj[st.sel[1]]; c.save(); c.strokeStyle = COL.red; c.lineWidth = 2; c.setLineDash([5, 4]);
+        c.beginPath(); c.moveTo(P0.x, P0.y); c.lineTo(P1.x, P1.y); c.stroke(); c.restore(); }
+      st.sel.forEach(function(si, k){ var o = proj[si]; ringAt(c, o.x, o.y, 11, COL.red, 2.6); tag(c, k ? "z" : "x", o.x + 13, o.y - 9, "left", COL.red, 800, 13); });
+    }
+  }
+  function drawFlat(){
+    var E = ensure($("ktFlat"));
+    if(!E) return;
+    var c = E.c, half = M.S0 * 1.12, p = mkView(c, E.W, E.H, 40, 14, 10, 26, half), n = d.P.length, i;
+    view2 = p;
+    var gx = 64, gy = Math.max(12, Math.round(gx * p.h / p.w)), key = [p.xa, p.xb, p.ya, p.yb, gy, st.ds, st.seed].join("|");
+    if(key !== flatKey){
+      flatKey = key; flatVals = new Float64Array(gx * gy);
+      for(var r = 0; r < gy; r++) for(var q = 0; q < gx; q++){
+        var x = [p.xa + q * (p.xb - p.xa) / (gx - 1), p.ya + r * (p.yb - p.ya) / (gy - 1)], z = phi(x);
+        flatVals[r * gx + q] = w3[0] * z[0] + w3[1] * z[1] + w3[2] * z[2] + s.b;
+      }
+    }
+    c.clearRect(0, 0, E.W, E.H);
+    p.clip(); paintField(p, flatVals, gx, gy); p.done();
+    frame(p, {noBg:true, gridCol:"rgba(139,160,164,.28)", nx:6, ny:4, xlab:"x₁", ylab:"x₂"});
+    p.clip();
+    contour(p, flatVals, gx, gy, 1, COL.red, 1.5, [6, 4]);
+    contour(p, flatVals, gx, gy, -1, COL.ink, 1.5, [6, 4]);
+    contour(p, flatVals, gx, gy, 0, COL.ink, 2.4);
+    for(i = 0; i < n; i++){
+      var X = p.X(d.P[i][0]), Y = p.Y(d.P[i][1]);
+      marker(c, X, Y, 4.4, d.Y[i]);
+      if(s.a[i] > EPS) ringAt(c, X, Y, 8, COL.ink, 1.5);
+    }
+    st.sel.forEach(function(si){ ringAt(c, p.X(d.P[si][0]), p.Y(d.P[si][1]), 10, COL.red, 2.4); });
+    p.done();
+  }
+  function report(){
+    var t = st.t, nm = st.ds === "rings" ? "the two rings" : "the XOR quadrants";
+    $("ktT").textContent = t.toFixed(2);
+    $("ktStampB").textContent = t >= 1 ? "lifted" : t <= 0 ? "flat" : "lifting";
+    $("ktStampS").innerHTML = '<span class="ph">t = ' + t.toFixed(2) + "</span>";
+    var cap;
+    if(t <= 0) cap = "The data sit in the plane (x₁, x₂). No straight line separates " + nm + ".";
+    else if(t < 1) cap = "Each point moves toward <b>Φ(x)</b> = (x₁², √2 x₁x₂, x₂²). The third coordinate pulls the classes apart.";
+    else cap = "In the feature space the plane <b>" + fmt(w3[0], 2) + " z₁" + sgn(w3[1]) + " z₂" + sgn(w3[2]) + " z₃" + sgn(s.b) +
+      " = 0</b> separates " + nm + ". A linear SVM on Φ(x) found it, with " + countSV() + " support vectors.";
+    $("ktCaption").innerHTML = cap;
+    var rows;
+    if(st.sel.length < 2){
+      rows = [{full:st.sel.length ? "Point x is chosen. Click a second point z." : "Click a point to choose x, then a second point z."},
+        ["x", st.sel.length ? pt(d.P[st.sel[0]]) : "–"], ["z", "–"]];
+    } else {
+      var x = d.P[st.sel[0]], z = d.P[st.sel[1]], px = phi(x), pz = phi(z), dot = x[0] * z[0] + x[1] * z[1];
+      var lhs = px[0] * pz[0] + px[1] * pz[1] + px[2] * pz[2];
+      rows = [["x", pt(x)], ["z", pt(z)], ["Φ(x)", pt(px)], ["Φ(z)", pt(pz)],
+        ["Φ(x)ᵀΦ(z), 3-D dot product", fmt(lhs, 4), true], ["(xᵀz)², kernel in 2-D", fmt(dot * dot, 4), true],
+        {full:"Same number. The kernel needs one 2-D dot product and a square, and never builds Φ."}];
+    }
+    $("ktCheck").innerHTML = kvHTML(rows);
+    $("ktSpin").textContent = st.spin ? "Stop rotating" : "Rotate";
+    $("ktSpin").setAttribute("aria-pressed", st.spin ? "true" : "false");
+  }
+  function sgn(v){ return (v < 0 ? " − " : " + ") + fmt(Math.abs(v), 2); }
+  function pt(v){ return "(" + v.map(function(a){ return fmt(a, 2); }).join(", ") + ")"; }
+  function countSV(){ var m = 0; for(var t = 0; t < s.n; t++) if(s.a[t] > EPS) m++; return m; }
+  function legend(){
+    $("ktLegend").innerHTML = legendItem(swatch(1), "class y = +1") + legendItem(swatch(-1), "class y = −1") +
+      legendItem('<svg width="18" height="13" viewBox="0 0 18 13" aria-hidden="true"><rect x="1" y="1" width="16" height="11" fill="rgba(24,62,75,.16)" stroke="#183e4b" stroke-width="1.6"/></svg>', "separating plane in Φ-space") +
+      legendItem(ringSwatch(COL.ink), "support vector") + legendItem(ringSwatch(COL.red), "chosen pair x, z");
+  }
+
+  buildChips($("ktData"), [{k:"rings", name:SETS.rings.name, note:SETS.rings.note}, {k:"xor", name:SETS.xor.name, note:SETS.xor.note}], st.ds,
+    function(k){ st.ds = k; build(); st.t = 0; st.target = 1; });
+  $("ktNew").addEventListener("click", function(){ st.seed++; build(); });
+  $("ktLiftBtn").addEventListener("click", function(){ if(st.t >= 1) st.t = 0; st.target = 1; });
+  $("ktFlatBtn").addEventListener("click", function(){ if(st.t <= 0) st.t = 1; st.target = 0; });
+  $("ktSpin").addEventListener("click", function(){ st.spin = !st.spin; report(); });
+  onInput("ktTs", function(){ st.target = -1; st.t = +this.value; report(); });
+  var cv = $("ktMap");
+  cv.addEventListener("pointerdown", function(ev){
+    st.down = {x:ev.clientX, y:ev.clientY, moved:false}; cv.setPointerCapture(ev.pointerId); $("ktHint").className = "hint gone";
+  });
+  cv.addEventListener("pointermove", function(ev){
+    if(!st.down) return;
+    var dx = ev.clientX - st.down.x, dy = ev.clientY - st.down.y;
+    if(Math.abs(dx) + Math.abs(dy) > 4) st.down.moved = true;
+    if(st.down.moved){
+      st.yaw += dx * 0.008; st.pitch = Math.max(-0.2, Math.min(1.45, st.pitch + dy * 0.006));
+      st.down.x = ev.clientX; st.down.y = ev.clientY;
+    }
+  });
+  cv.addEventListener("pointerup", function(ev){
+    if(st.down && !st.down.moved){
+      var r = cv.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top, best = -1, bd = 15 * 15;
+      proj.forEach(function(o){ var dd = (o.x - px) * (o.x - px) + (o.y - py) * (o.y - py); if(dd < bd){ bd = dd; best = o.i; } });
+      if(best >= 0){ if(st.sel.indexOf(best) < 0){ st.sel.push(best); if(st.sel.length > 2) st.sel.shift(); } report(); }
+    }
+    st.down = null;
+  });
+  cv.addEventListener("pointercancel", function(){ st.down = null; });
+
+  build(); legend();
+  /* The first visit plays the lift once. */
+  function shown(){ if(!st.seen){ st.seen = true; st.t = 0; st.target = 1; report(); } }
+  return {draw:draw, step:step, shown:shown};
+})();
+
+/* ================= tabs and loop ================= */
+var active = "train";
+function show(which){
+  active = which;
+  $("tabTrain").setAttribute("aria-selected", which === "train" ? "true" : "false");
+  $("tabLift").setAttribute("aria-selected", which === "lift" ? "true" : "false");
+  $("paneTrain").className = "tab" + (which === "train" ? " on" : "");
+  $("paneLift").className = "tab" + (which === "lift" ? " on" : "");
+  if(which === "lift") Lift.shown();
+}
+$("tabTrain").addEventListener("click", function(){ show("train"); });
+$("tabLift").addEventListener("click", function(){ show("lift"); });
+if(location.hash === "#lift") show("lift");
+var last = 0;
+function tick(now){
+  var dt = last ? Math.min(60, now - last) : 16;
+  last = now;
+  try {
+    if(active === "train"){ Train.step(dt); Train.draw(); }
+    else { Lift.step(dt); Lift.draw(); }
+  } catch(err){ console.error(err); }
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+})();
+</script>
+
+</body></html>
