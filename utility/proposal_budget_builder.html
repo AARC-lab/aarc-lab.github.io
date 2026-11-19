@@ -920,12 +920,9 @@ function calc(P){
       }
       /* No paid months in the year (a budget year of a few days rounds to zero): no tuition or insurance either. */
       if(payMo<=1e-9){ tu=0; ins=0; }
-      /* Tuition and insurance are rounded as a pair (largest remainder), so together they equal their rounded sum,
-         as the UAH sheet's GRA rate does. */
-      { const tgt=rnd(tu+ins); let a=Math.floor(tu+1e-9), b=Math.floor(ins+1e-9), k=tgt-a-b;
-        const order=(tu-a)>=(ins-b)?['a','b']:['b','a'];
-        for(const w of order){ if(k<=0) break; if(w==='a'&&tu>0){a++;k--;} else if(w==='b'&&ins>0){b++;k--;} }
-        tu=a; ins=b; }
+      /* Tuition and insurance are rounded as a pair, so together they equal their rounded sum, as the UAH sheet's GRA
+         rate does: insurance is rounded on its own and tuition takes the rest (the workbook uses the same formula). */
+      { const insR=rnd(ins); tu=g.tuition?rnd(tu+ins)-insR:0; ins=insR; }
       st=rnd(st); fee=rnd(fee);
       const fr=rnd((st+(r.stuFringeTuition?tu:0)+(r.stuFringeIns?ins:0)+(r.stuFringeIntl?fee:0))*stuFr);
       C.grad[k]+=st; C.tuition[k]+=tu; C.insurance[k]+=ins; C.intl[k]+=fee; C.fringeStu[k]+=fr;
@@ -1068,7 +1065,7 @@ function calc(P){
   if(N){ const y0=new Date(per[0].start).getUTCFullYear(), y1=new Date(per[N-1].end).getUTCFullYear();
     for(let y=y0;y<=y1;y++){ const t=tp(y); const sg=buildSegs(Date.UTC(y,0,1),Date.UTC(y,11,31),tp,fs0,quarter); cal.push({y,spring:t.spring,summer:t.summer,fall:t.fall,own:t.own,invalid:t.invalid,sm:sg.reduce((a,g)=>a+g.fs,0)}); out[`cal.${y}`]=cal[cal.length-1].sm;
       out[`calT.${y}`]=tp===tr?out[`cal.${y}`]:buildSegs(Date.UTC(y,0,1),Date.UTC(y,11,31),tr,fs0,quarter).reduce((a,g)=>a+g.fs,0); } }
-  return {cal,fullYr,fs0,baseFY,per,N,C,out,L,warn,salaries,personnel,tdc,exSub,excl,mtdc,idc,total,cum,eqCount,ugradHeads:heads,season:S,subCap:cap};
+  return {cal,fullYr,fs0,baseFY,per,segs,tr,N,C,out,L,warn,salaries,personnel,tdc,exSub,excl,mtdc,idc,total,cum,eqCount,ugradHeads:heads,season:S,subCap:cap};
 }
 const sumArr=a=>(a||[]).reduce((s,v)=>s+v,0);
 function pctText(v){ return `${+num(v).toFixed(3)}%`; }
@@ -1141,10 +1138,11 @@ function buildWorkbook(ExcelJS,P,R){
   wb.creator='Proposal Budget Builder'; wb.lastModifiedBy='Proposal Budget Builder';
   wb.created=new Date(); wb.modified=new Date();
   wb.title=P.info.title||'Proposal budget';
+  wb.calcProperties={fullCalcOnLoad:true};
   const K={ink:'FF0D0D0D',gold:'FFCFAE70',deep:'FF86693A',wash:'FFF7F1E3',line:'FFD9D4C9',line2:'FFBDB6A7',mute:'FF6B675F',white:'FFFFFFFF',zebra:'FFFBFAF7',soft:'FFF5F4F0',link:'FF1F5FAD',input:'FF1F4E9E'};
   const USD='"$"#,##0;-"$"#,##0;"$"0';
   const USDc='"$"#,##0.00;-"$"#,##0.00;"$"0.00';
-  const PCT='0.0%', PCT2='0.00%', HRS='#,##0', MO='0.000';
+  const PCT='0.0%', PCT2='0.00%', HRS='#,##0', MO='0.000', FAC='0.0000';
   const font=o=>Object.assign({name:'Calibri',size:11,color:{argb:K.ink}},o||{});
   const solid=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
   const bd=(c,s)=>({style:s||'thin',color:{argb:c}});
@@ -1157,6 +1155,15 @@ function buildWorkbook(ExcelJS,P,R){
   const ks=Array.from({length:N},(_,k)=>k);
   const put=(ws,row,vals)=>{ vals.forEach((v,i)=>{ if(v!==undefined) ws.getCell(row,i+1).value=v; }); return ws.getRow(row); };
   const lines=(text,chars)=>Math.max(1,String(text||'').split('\n').reduce((s,part)=>s+Math.max(1,Math.ceil(part.length/Math.max(chars,1))),0));
+  /* Formula helpers: a quoted sheet reference, a number written into a formula, and a formula cell with its cached result. */
+  const q=n=>`'${String(n).replace(/'/g,"''")}'`;
+  const X=(sh,c,rw)=>`${q(sh)}!${c}${rw}`;
+  const fx=v=>String(+(+v).toPrecision(12));
+  const Fm=(formula,result)=>({formula,result:(typeof result==='number'&&!isFinite(result))?0:result});
+  const sumF=(refs,result)=>refs.length?Fm(refs.join('+'),result):0;
+  const esc=(nm,s)=>s>0?`*(1+${nm})^${s}`:'';
+  const inputCell=c=>{ c.font=font({size:10.5,color:{argb:K.input}}); };
+  const nameCell=(ws,row,col,name)=>{ wb.definedNames.add(`${q(ws.name)}!$${L(col)}$${row}`,name); };
 
   /* Sheet header: label, wrapped title, subtitle and a gold rule. Row heights grow with the text so nothing is clipped. */
   function sheet(name,width,widths,landscape){
@@ -1193,6 +1200,11 @@ function buildWorkbook(ExcelJS,P,R){
       else if(zebra) c.fill=solid(K.zebra);
     }
   }
+  function darkRow(ws,row,width,numFrom,fmt){
+    const gr=ws.getRow(row);
+    for(let i=1;i<=width;i++){ const c=gr.getCell(i); c.fill=solid(K.ink); c.font=font({bold:true,color:{argb:i>=numFrom?K.gold:K.white}}); if(i>=numFrom&&fmt) c.numFmt=typeof fmt==='function'?fmt(i):fmt; c.alignment={vertical:'middle',horizontal:i>=numFrom?'right':'left',indent:i===1?1:0}; c.border=box(K.ink); }
+    gr.height=22;
+  }
   function sectionLabel(ws,row,width,text){
     ws.mergeCells(row,1,row,width);
     const c=ws.getCell(row,1); c.value=text.toUpperCase(); c.font=font({size:9.5,bold:true,color:{argb:K.deep}});
@@ -1204,18 +1216,86 @@ function buildWorkbook(ExcelJS,P,R){
     ws.getRow(row).height=Math.max(16,lines(text,span/0.95)*13+3);
   }
 
-  /* ---------- Budget Summary ---------- */
+  /* ---------- Calendar pieces the formulas are built from ---------- */
+  const fs0=R.fs0, baseFY=R.baseFY, fyB=`FY${baseFY}`;
+  const stepsOf=(y,m)=>Math.max(0,fyOfDate(y,m,fs0)-baseFY);
+  /* Months in each budget year, split at the fiscal-year start (where raises happen). */
+  const fyParts=ks.map(k=>{
+    const mp=new Map();
+    (R.segs[k]||[]).forEach(g=>{ const s=stepsOf(g.y,g.m), fy=fyOfDate(g.y,g.m,fs0);
+      if(!mp.has(s)) mp.set(s,{s,fy0:fy,fy1:fy,fa:0,fs:0,pieces:[]});
+      const o=mp.get(s); o.fa+=g.fa; o.fs+=g.fs; o.fy0=Math.min(o.fy0,fy); o.fy1=Math.max(o.fy1,fy); o.pieces.push(g); });
+    return [...mp.values()].sort((a,b)=>a.s-b.s);
+  });
+  const G=Math.max(1,...fyParts.map(p=>p.length));
+  const partsOf=k=>{ const p=fyParts[k].slice(); while(p.length<G) p.push({s:(p.length?p[p.length-1].s+1:0),fy0:0,fy1:0,fa:0,fs:0,pieces:[]}); return p; };
+  const partLab=g=>G===1?'':(G===2?[' before raise',' after raise'][g]:` part ${g+1}`);
+  const fyText=k=>fyParts[k].map(p=>p.fy0===p.fy1?`FY${p.fy0}`:`FY${p.fy0}–${p.fy1}`).join(' · ');
+  /* Academic years in each budget year (tuition and insurance change on September 1). */
+  const ayParts=ks.map(k=>{ const set=new Set(); (R.segs[k]||[]).forEach(g=>set.add(ayOf(g.y,g.m))); return [...set].sort((a,b)=>a-b); });
+  const GA=Math.max(1,...ayParts.map(a=>a.length));
+  const ayLab=a=>GA===1?'':(GA===2?[', first AY',', second AY'][a]:`, AY part ${a+1}`);
+  const ayText=ay=>`${ay}–${String(ay+1).slice(2)}`;
+
+  /* ---------- Sheets, in tab order ---------- */
   const W=N+2;
   const sumWidths=[52,...Array(N).fill(16),18];
   const valSpan=sumWidths.slice(1).reduce((s,w)=>s+w,0);
   const ws=sheet('Budget Summary',W,sumWidths);
+
+  const people=[...R.L.senior,...R.L.postdoc];
+  const anyAmt=people.some(x=>x.byAmt);
+  const pc=[]; const pcol={};
+  const addP=(key,label,fmt,width)=>{ pc.push({key,label,fmt,width}); pcol[key]=L(pc.length); };
+  addP('name','Name','text',26); addP('role','Role','text',13); addP('yr','Year','center',6); addP('per','Budget period','text',22); addP('fy','Fiscal years','center',15);
+  addP('base',`Base salary (${fyB})`,USD,14); addP('appt','Appointment','center',12); addP('ea','Academic effort',PCT,10); addP('es','Summer effort',PCT,10);
+  if(anyAmt) addP('amt','Salary amount entered',USD,14);
+  for(let g=0;g<G;g++){ addP('am'+g,`Academic months${partLab(g)}`,MO,11); addP('sm'+g,`Summer months${partLab(g)}`,MO,11); }
+  for(let g=0;g<G;g++) addP('mp'+g,`Monthly pay at 100%${partLab(g)}`,USDc,13);
+  addP('pma','Academic person-months',MO,11); addP('pms','Summer person-months',MO,11);
+  addP('salx','Salary before rounding',USDc,14); addP('sal','Salary requested',USD,13); addP('frr','Fringe rate',PCT2,10); addP('fb','Fringe benefits',USD,13); addP('tot','Salary + fringe',USD,14);
+  const wp=sheet('Personnel',pc.length,pc.map(c=>c.width));
+
+  const gc=[]; const gcol={};
+  const addG=(key,label,fmt,width)=>{ gc.push({key,label,fmt,width}); gcol[key]=L(gc.length); };
+  addG('name','Graduate student','text',24); addG('yr','Year','center',6); addG('per','Budget period','text',22); addG('fy','Fiscal years','center',15);
+  addG('base',`Annual stipend (${fyB})`,USD,13); addG('ea','Academic appointment',PCT,11); addG('es','Summer appointment',PCT,11);
+  for(let g=0;g<G;g++){ addG('am'+g,`Academic months${partLab(g)}`,MO,11); addG('sm'+g,`Summer months${partLab(g)}`,MO,11); }
+  addG('hr','Hours','#,##0',9); addG('st','Stipend',USD,12);
+  addG('ays','Academic years','center',15);
+  for(let a=0;a<GA;a++) addG('tm'+a,`Tuition months${ayLab(a)}`,MO,11);
+  addG('tu','Tuition',USD,12); addG('ins','Health insurance',USD,12); addG('fee','International fees',USD,12); addG('fr',`Fringe (${pctText(r.stuFringe)})`,USD,12); addG('tot','Total',USD,13); addG('note','Notes','text',44);
+  const uc=[]; const ucol={};
+  const addU=(key,label,fmt)=>{ uc.push({key,label,fmt}); ucol[key]=L(uc.length); };
+  addU('name','Undergraduate group','text'); addU('yr','Year','center'); addU('per','Budget period','text'); addU('fy','Fiscal years','center'); addU('cnt','Students','center'); addU('basis','Pay basis','center');
+  addU('rate',`Hourly rate (${fyB})`,USDc); addU('sa',`Academic stipend per student (${fyB})`,USD); addU('ss',`Summer stipend per student (${fyB})`,USD);
+  addU('ha','Academic hours per student, or share of stipend','#,##0.##'); addU('hs','Summer hours per student, or share of stipend','#,##0.##');
+  addU('hrs','Total hours','#,##0.0'); addU('pay','Pay',USD); addU('fr',`Fringe (${pctText(r.stuFringe)})`,USD); addU('tot','Total',USD);
+  const stuW=Math.max(gc.length,uc.length);
+  const wsd=sheet('Students',stuW,Array.from({length:stuW},(_,i)=>Math.max(gc[i]?gc[i].width:0,i<3?[24,6,22][i]:13)));
+
+  const tw=[30,22,12,12,9,9,7,8,13,12,12,13,12,12,12,10,12,15,15,10,15];
+  const wt=sheet('Travel',21,tw);
+  const itemW=[40,24,16,13,9,14,15,10,15,30];
+  const wEq=sheet('Equipment',10,itemW);
+  const wMs=sheet('Materials & Supplies',10,itemW);
+  const wPub=sheet('Publications',Math.max(5,W),[46,14,16,10,16,...Array(Math.max(0,W-5)).fill(14)],false);
+  const wOth=sheet('Other Costs',Math.max(6,W),[46,14,16,10,16,18,...Array(Math.max(0,W-6)).fill(14)],false);
+  const subW=[46,...Array(N).fill(16),18];
+  const wsb=sheet('Subawards',W,subW);
+  const wr=sheet('Rates & Tuition',6,[34,26,18,20,18,20],false);
+  const ays=(T.years||[]).map(y=>num(y.ay)).filter(Boolean);
+  const wg=ays.length?sheet('Tuition Grid',14,[12,12,...Array(12).fill(11)]):null;
+
+  /* ---------- Budget Summary: proposal facts and the rates every formula uses ---------- */
   let row=6;
-  const kv=(label,val,fmt)=>{
+  const kv=(label,val,fmt,name,isInput)=>{
     const lc=ws.getCell(row,1); lc.value=label; lc.font=font({size:10,color:{argb:K.mute}}); lc.alignment={indent:1,vertical:'middle'}; lc.border=box();
     if(W>2) ws.mergeCells(row,2,row,W);
-    const vc=ws.getCell(row,2); vc.value=(val===''||val==null)?'':val; vc.font=font({bold:true}); vc.alignment={horizontal:'left',vertical:'middle',wrapText:true}; if(fmt) vc.numFmt=fmt;
+    const vc=ws.getCell(row,2); vc.value=(val===''||val==null)?'':val; vc.font=font({bold:true,color:{argb:isInput?K.input:K.ink}}); vc.alignment={horizontal:'left',vertical:'middle',wrapText:true}; if(fmt) vc.numFmt=fmt;
     for(let i=2;i<=W;i++) ws.getCell(row,i).border=box();
     ws.getRow(row).height=typeof val==='string'?Math.max(18,lines(val,valSpan/1.1)*15+3):18;
+    if(name) nameCell(ws,row,2,name);
     return row++;
   };
   sectionLabel(ws,row++,W,'Proposal');
@@ -1235,29 +1315,437 @@ function buildWorkbook(ExcelJS,P,R){
   kv('Project period',`${period}  (${N} budget year${N>1?'s':''})`);
   kv('Date prepared',new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}));
   row++;
-  sectionLabel(ws,row++,W,'Rates');
-  kv('Fringe benefits, faculty & senior personnel',num(r.fringe)/100,PCT2);
-  kv('Fringe benefits, postdocs',blankOr(r.postdocFringe,num(r.fringe))/100,PCT2);
-  const idcRow=kv('Indirect cost rate (MTDC base)',num(r.idc)/100,PCT2);
-  kv('Fringe benefits, graduate & undergraduate students',num(r.stuFringe)/100,PCT2);
+  sectionLabel(ws,row++,W,'Rates (blue cells feed every formula in this workbook)');
+  const facRow=kv('Fringe benefits, faculty & senior personnel',num(r.fringe)/100,PCT2,'FringeFaculty',true);
+  if(r.postdocFringe===''||r.postdocFringe==null) kv('Fringe benefits, postdocs',Fm('FringeFaculty',num(r.fringe)/100),PCT2,'FringePostdoc');
+  else kv('Fringe benefits, postdocs',num(r.postdocFringe)/100,PCT2,'FringePostdoc',true);
+  kv('Indirect cost rate (MTDC base)',num(r.idc)/100,PCT2,'IndirectRate',true);
+  kv('Fringe benefits, graduate & undergraduate students',num(r.stuFringe)/100,PCT2,'FringeStudent',true);
   kv('Student fringe charged on',['Stipends and wages',...stuFringeExtras(r).map(x=>'GRA '+x)].join(', '));
-  kv('Salary escalation per year',num(r.salaryEsc)/100,PCT2);
-  kv('Student stipend & wage escalation per year',num(r.studentEsc)/100,PCT2);
-  kv('Raises take effect',`${MONTHS_FULL[R.fs0]} 1 each year (fiscal year start). Base figures are FY${R.baseFY}.`);
+  kv('Salary escalation per year',num(r.salaryEsc)/100,PCT2,'SalaryEscalation',true);
+  kv('Student stipend & wage escalation per year',num(r.studentEsc)/100,PCT2,'StudentEscalation',true);
+  kv('Raises take effect',`${MONTHS_FULL[fs0]} 1 each year (fiscal year start). Base figures are ${fyB}.`);
+  kv('Pay rate, 9-month appointments',facText(r).replace(/^./,c=>c.toUpperCase()));
+  kv('Salary factor, 9-month to 12-month rate',num(r.facFactor)||12/9,FAC,'Factor9to12',true);
   kv('Equipment rule',equipRuleText(r));
-  kv('Subaward amount in the indirect base',isFinite(R.subCap)?`First ${capText(R)} of each subaward`:'Whole subaward');
+  const capFinite=isFinite(R.subCap);
+  if(capFinite) kv('Subaward amount in the indirect base (first $ of each subaward)',R.subCap,USD,'SubawardCap',true);
+  else kv('Subaward amount in the indirect base','Whole subaward');
   kv('Summer by year',r.summerBasis==='calendar'?(R.cal.map(c=>`${c.y}: ${dd(c.summer)} – ${dd(c.fall-DAY)}`).join('   ·   ')||summerLabel(r)):'UAH budget template: May 8 – Aug 23 every year (3.5 months)');
   kv('Months counted',r.quarterMonths!==false?'To the nearest quarter month':'In half-month steps');
-  kv('Pay rate, 9-month appointments',facText(r).replace(/^./,c=>c.toUpperCase()));
   row++;
-  const hdr=row;
-  head(ws,hdr,['Budget category',...R.per.map((p,k)=>`Year ${k+1}`),'Total'],22);
-  const subh=ws.getRow(hdr+1); subh.height=18;
+  const sumHdr=row;
+
+  /* ---------- Rates & Tuition: academic-year rates, international fees, GRA hours ---------- */
+  let rr=6;
+  sectionLabel(wr,rr++,6,'Tuition and health insurance by academic year');
+  head(wr,rr,['Academic year','Period','Tuition per month','Health insurance per month','Tuition per year','Health insurance per year']); rr++;
+  const rf=['center','text',USDc,USDc,USD,USD];
+  const tRows=(T.years||[]).filter(y=>num(y.ay)>0).map(y=>({ay:num(y.ay),tu:num(y.tuition),ins:num(y.insurance)})).sort((a,b)=>a.ay-b.ay);
+  const need=new Set(tRows.map(x=>x.ay)); ayParts.forEach(a=>a.forEach(ay=>need.add(ay)));
+  const ayRow={};
+  let escRow=0;
+  if(need.size&&tRows.length){
+    const lo=Math.min(...need), hi=Math.max(...need);
+    const firstIn=tRows[0].ay;
+    /* Rows past the end of the rate table grow by the escalation rate. Rows before it shrink by it. */
+    const plan=[]; for(let ay=lo;ay<=hi;ay++) plan.push(ay);
+    const escAt=6+2+(hi-lo+1);
+    escRow=escAt;
+    const filled={};
+    plan.forEach(ay=>{ ayRow[ay]=rr+(ay-lo); });
+    plan.forEach((ay,i)=>{
+      const rw=rr+i, hit=tRows.find(x=>x.ay===ay);
+      let c3,c4;
+      if(hit){ c3=hit.tu; c4=hit.ins; }
+      else if(ay<firstIn){ c3=Fm(`C${ayRow[ay+1]}/(1+TuitionEscalation)`,ayMonthly(T,ay,'tuition')); c4=Fm(`D${ayRow[ay+1]}/(1+TuitionEscalation)`,ayMonthly(T,ay,'insurance')); }
+      else { c3=Fm(`C${ayRow[ay-1]}*(1+TuitionEscalation)`,ayMonthly(T,ay,'tuition')); c4=Fm(`D${ayRow[ay-1]}*(1+TuitionEscalation)`,ayMonthly(T,ay,'insurance')); }
+      put(wr,rw,[ayText(ay)+(hit?'':' (projected)'),`9/1/${ay} – 8/31/${ay+1}`,c3,c4,Fm(`C${rw}*12`,ayMonthly(T,ay,'tuition')*12),Fm(`D${rw}*12`,ayMonthly(T,ay,'insurance')*12)]);
+      body(wr,rw,6,rf,i%2===1);
+      if(hit){ inputCell(wr.getCell(rw,3)); inputCell(wr.getCell(rw,4)); }
+      filled[ay]=1;
+    });
+    rr+=plan.length;
+  }
+  const kv2=(l,v,fmt,bold,name,isInput)=>{ put(wr,rr,[l,v]); body(wr,rr,2,['text',fmt||'text'],false,bold?{bold:true}:null); wr.getCell(rr,2).alignment={horizontal:'right'}; if(isInput) inputCell(wr.getCell(rr,2)); if(name) nameCell(wr,rr,2,name); return rr++; };
+  kv2('Escalation for years past the table',num(T.esc)/100,PCT,false,'TuitionEscalation',true);
+  rr++;
+  sectionLabel(wr,rr++,6,'GRA international fees per year');
+  const fa=kv2('Fall',num(T.intl.fall),USD,false,'IntlFeeFall',true); kv2('Spring',num(T.intl.spring),USD,false,'IntlFeeSpring',true); const fcr=kv2('Summer',num(T.intl.summer),USD,false,'IntlFeeSummer',true);
+  kv2('Total per year',Fm(`SUM(B${fa}:B${fcr})`,num(T.intl.fall)+num(T.intl.spring)+num(T.intl.summer)),USD,true);
+  rr++;
+  sectionLabel(wr,rr++,6,'GRA hours');
+  const hy=kv2('Hours per year at 100%',num(T.hours.year)||1040,HRS,false,'GRAHoursYear',true);
+  kv2('Hours per month at 100%',Fm(`B${hy}/12`,(num(T.hours.year)||1040)/12),'#,##0.00');
+  kv2('Hours per year at 50%',Fm(`B${hy}/2`,(num(T.hours.year)||1040)/2),HRS);
+  const tuRef=ay=>ayRow[ay]?X('Rates & Tuition','C',ayRow[ay]):'0', insRef=ay=>ayRow[ay]?X('Rates & Tuition','D',ayRow[ay]):'0';
+
+  /* ---------- Personnel ---------- */
+  let pr=6;
+  head(wp,pr,pc.map(c=>c.label),46); pr++;
+  wp.views=[{state:'frozen',ySplit:6,xSplit:1,showGridLines:false}];
+  const pFmts=pc.map(c=>c.fmt);
+  const subRows=[]; const pRows=[];
+  const meth=r.facMethod||'ninth', facV=num(r.facFactor)||12/9, salG=1+num(r.salaryEsc)/100;
+  if(!people.length){ wp.getCell(pr,1).value='No senior personnel or postdocs entered.'; pr++; }
+  people.forEach((x,pi)=>{
+    const a=pr; const rowsK=[]; const nine=x.appt!==12; const isPD=pi>=R.L.senior.length;
+    const split=nine&&meth==='split';
+    x.yrs.forEach((y,k)=>{
+      const rw=pr; rowsK.push(rw);
+      const parts=partsOf(k), acMo=R.fullYr[k].a;
+      const c=key=>`${pcol[key]}${rw}`;
+      const baseRef=k===0?null:`$${pcol.base}$${a}`;
+      /* Monthly pay at 100% effort in each fiscal-year part. */
+      const payExpr=s=>nine?(meth==='ninth'?`${c('base')}*Factor9to12/12${esc('SalaryEscalation',s)}`:`${c('base')}/${fx(acMo)}${esc('SalaryEscalation',s)}`):`${c('base')}/12${esc('SalaryEscalation',s)}`;
+      const payVal=s=>{ const b=x.salary*Math.pow(salG,s); return nine?(meth==='ninth'?b*facV/12:b/acMo):b/12; };
+      const sumPayExpr=(g,s)=>split?`${c('base')}/9${esc('SalaryEscalation',s)}`:c('mp'+g);
+      const sumPayVal=s=>split?x.salary*Math.pow(salG,s)/9:payVal(s);
+      const eA=y.a/100, eS=y.s/100;
+      const acadExpr=parts.map((p,g)=>`${c('mp'+g)}*${c('am'+g)}`).join('+');
+      const capExpr=parts.map((p,g)=>`${sumPayExpr(g,p.s)}*${c('sm'+g)}`).join('+');
+      const acadVal=parts.reduce((t,p)=>t+payVal(p.s)*p.fa,0)*eA, capVal=parts.reduce((t,p)=>t+sumPayVal(p.s)*p.fs,0);
+      const salX=acadVal+capVal*eS;
+      const vals={name:x.name,role:x.role,yr:k+1,per:perL(R.per[k]),fy:fyText(k),
+        base:k===0?x.salary:Fm(baseRef,x.salary),appt:nine?'9-month':'12-month',ea:eA,
+        es:x.byAmt?Fm(`IF((${capExpr})>0,MAX(0,(${c('amt')}-(${acadExpr})*${c('ea')})/(${capExpr})),0)`,eS):eS};
+      if(anyAmt) vals.amt=x.byAmt?y.req:'';
+      parts.forEach((p,g)=>{ vals['am'+g]=p.fa; vals['sm'+g]=p.fs; vals['mp'+g]=Fm(payExpr(p.s),payVal(p.s)); });
+      vals.pma=Fm(`(${parts.map((p,g)=>c('am'+g)).join('+')})*${c('ea')}${split?`*9/${fx(acMo)}`:''}`,y.pmA);
+      vals.pms=Fm(`(${parts.map((p,g)=>c('sm'+g)).join('+')})*${c('es')}`,y.pmS);
+      vals.salx=Fm(`(${acadExpr})*${c('ea')}+(${capExpr})*${c('es')}`,salX);
+      vals.sal=Fm(`ROUND(${c('salx')},0)`,y.sal);
+      const own=isPD?(P.postdocs[pi-R.L.senior.length]||{}).fringe:(P.senior[pi]||{}).fringe;
+      vals.frr=(own===''||own==null)?Fm(isPD?'FringePostdoc':'FringeFaculty',x.fr):x.fr;
+      vals.fb=Fm(`ROUND(${c('salx')}*(1+${c('frr')}),0)-${c('sal')}`,y.fb);
+      vals.tot=Fm(`${c('sal')}+${c('fb')}`,y.sal+y.fb);
+      put(wp,rw,pc.map(cc=>vals[cc.key]));
+      body(wp,rw,pc.length,pFmts,k%2===1);
+      const inKeys=['ea',...(x.byAmt?['amt']:['es']),...parts.flatMap((p,g)=>['am'+g,'sm'+g]),...(k===0?['base']:[])];
+      if((own!==''&&own!=null)) inKeys.push('frr');
+      inKeys.forEach(kk=>inputCell(wp.getCell(rw,pc.findIndex(cc=>cc.key===kk)+1)));
+      pr++;
+    });
+    const b=pr-1;
+    const S=(key,res)=>Fm(`SUM(${pcol[key]}${a}:${pcol[key]}${b})`,res);
+    const tv={name:`${x.name} total`,pma:S('pma',x.yrs.reduce((s,y)=>s+y.pmA,0)),pms:S('pms',x.yrs.reduce((s,y)=>s+y.pmS,0)),sal:S('sal',x.yrs.reduce((s,y)=>s+y.sal,0)),fb:S('fb',x.yrs.reduce((s,y)=>s+y.fb,0)),tot:S('tot',x.tot)};
+    put(wp,pr,pc.map(cc=>tv[cc.key]===undefined?'':tv[cc.key]));
+    body(wp,pr,pc.length,pFmts,false,{bold:true}); subRows.push(pr); pr++;
+    pRows.push({x,isPD,rows:rowsK});
+  });
+  if(subRows.length){
+    const sumOf=(key,result)=>Fm(subRows.map(q2=>`${pcol[key]}${q2}`).join('+'),result);
+    const salAll=sumArr(R.C.senior)+sumArr(R.C.postdoc), frAll=sumArr(R.C.fringe);
+    const tv={name:'All senior personnel & postdocs',sal:sumOf('sal',salAll),fb:sumOf('fb',frAll),tot:sumOf('tot',salAll+frAll)};
+    put(wp,pr,pc.map(cc=>tv[cc.key]===undefined?'':tv[cc.key]));
+    const firstNum=pc.findIndex(cc=>cc.key==='sal')+1;
+    darkRow(wp,pr,pc.length,firstNum,USD); pr++;
+  }
+  if(people.length){
+    pr++;
+    note(wp,pr,pc.length,`Blue cells are inputs. Months come from the budget calendar (${r.summerBasis==='calendar'?'term dates':'UAH template: summer May 8 – Aug 23'}), split at the ${MONTHS_FULL[fs0]} 1 raise. Monthly pay at 100% is ${meth==='ninth'?'the 9-month base × Factor9to12 ÷ 12':'the base ÷ the academic months'} for 9-month appointments and base ÷ 12 for 12-month appointments, raised by SalaryEscalation once per fiscal year after ${fyB}. Salary = monthly pay × months × effort. Salary + fringe is rounded as one figure, so fringe = ROUND(salary before rounding × (1 + fringe rate)) − salary requested.${anyAmt?' Where a salary amount was entered, summer effort is solved from it.':''} Rates live on the Budget Summary sheet.`,pc.reduce((s,c)=>s+c.width,0)); pr++;
+  }
+
+  /* ---------- Students ---------- */
+  let sr=6;
+  const stuG=1+num(r.studentEsc)/100;
+  sectionLabel(wsd,sr++,stuW,'Graduate research assistants');
+  head(wsd,sr,gc.map(c=>c.label),46); sr++;
+  const gFmts=gc.map(c=>c.fmt);
+  const gTot=[]; const gRows=[];
+  if(!R.L.grad.length){ wsd.getCell(sr,1).value='No graduate students entered.'; sr++; }
+  R.L.grad.forEach((gx,gi)=>{
+    const gIn=P.grads[gi]||{}; const share=blankOr(gIn.share,100)/100;
+    const a=sr; const rowsK=[];
+    gx.yrs.forEach((y,k)=>{
+      const rw=sr; rowsK.push(rw);
+      const c=key=>`${gcol[key]}${rw}`;
+      const parts=partsOf(k), eA=y.a/100, eS=y.s/100;
+      const payMo=parts.reduce((t,p)=>t+(eA>0?p.fa:0)+(eS>0?p.fs:0),0);
+      const ayl=ayParts[k];
+      const tmW=ayl.map(ay=>payMo>1e-9?(R.segs[k]||[]).filter(g=>ayOf(g.y,g.m)===ay).reduce((t,g)=>t+(eA>0?g.fa0:0)+(eS>0?g.fs0:0),0):0);
+      while(tmW.length<GA) tmW.push(0);
+      const vals={name:gx.name,yr:k+1,per:perL(R.per[k]),fy:fyText(k),base:k===0?num(gIn.stipend):Fm(`$${gcol.base}$${a}`,num(gIn.stipend)),ea:eA,es:eS};
+      parts.forEach((p,g)=>{ vals['am'+g]=p.fa; vals['sm'+g]=p.fs; });
+      const effSum=parts.map((p,g)=>`${c('am'+g)}*${c('ea')}+${c('sm'+g)}*${c('es')}`).join('+');
+      vals.hr=Fm(`(${effSum})*GRAHoursYear/12`,y.hr);
+      vals.st=Fm(`ROUND(${c('base')}/12*(${parts.map((p,g)=>`(${c('am'+g)}*${c('ea')}+${c('sm'+g)}*${c('es')})${esc('StudentEscalation',p.s)}`).join('+')}),0)`,y.st);
+      vals.ays=ayl.map(ayText).join(' · ');
+      for(let ai=0;ai<GA;ai++) vals['tm'+ai]=tmW[ai];
+      const tuX=ayl.map((ay,ai)=>`${c('tm'+ai)}*${tuRef(ay)}`).join('+')||'0';
+      const insX=ayl.map((ay,ai)=>`${c('tm'+ai)}*${insRef(ay)}`).join('+')||'0';
+      vals.ins=gIn.insurance?Fm(`ROUND(${insX},0)`,y.ins):0;
+      vals.tu=gIn.tuition?Fm(`ROUND(${share!==1?fx(share)+'*':''}(${tuX})${gIn.insurance?`+${insX}`:''},0)${gIn.insurance?`-${c('ins')}`:''}`,y.tu):0;
+      const pp=R.per[k]; const feeTerms=[];
+      if(gIn.intl){ if(eA>0&&hitsDate(pp,R.tr,'fall')) feeTerms.push('IntlFeeFall'); if(eA>0&&hitsDate(pp,R.tr,'spring')) feeTerms.push('IntlFeeSpring'); if(eS>0&&hitsDate(pp,R.tr,'summer')) feeTerms.push('IntlFeeSummer'); }
+      vals.fee=feeTerms.length?Fm(`ROUND(${feeTerms.join('+')},0)`,y.fee):0;
+      vals.fr=Fm(`ROUND((${c('st')}${r.stuFringeTuition?`+${c('tu')}`:''}${r.stuFringeIns?`+${c('ins')}`:''}${r.stuFringeIntl?`+${c('fee')}`:''})*FringeStudent,0)`,y.fr);
+      vals.tot=Fm(`${c('st')}+${c('tu')}+${c('ins')}+${c('fee')}+${c('fr')}`,y.st+y.tu+y.ins+y.fee+y.fr);
+      vals.note=k===0?gx.flags+(feeTerms.length||!gIn.intl?'':''):'';
+      put(wsd,rw,gc.map(cc=>vals[cc.key]===undefined?'':vals[cc.key]));
+      body(wsd,rw,gc.length,gFmts,k%2===1);
+      if(vals.note){ const nc=wsd.getCell(rw,gc.length); nc.alignment={vertical:'middle',wrapText:true,indent:1}; wsd.getRow(rw).height=Math.max(18,lines(vals.note,44)*14+4); }
+      ['ea','es',...parts.flatMap((p,g)=>['am'+g,'sm'+g]),...Array.from({length:GA},(_,ai)=>'tm'+ai),...(k===0?['base']:[])].forEach(kk=>inputCell(wsd.getCell(rw,gc.findIndex(cc=>cc.key===kk)+1)));
+      sr++;
+    });
+    const b=sr-1;
+    const S2=(key,res)=>Fm(`SUM(${gcol[key]}${a}:${gcol[key]}${b})`,res);
+    const sy=fn=>gx.yrs.reduce((s,y)=>s+fn(y),0);
+    const tv={name:`${gx.name} total`,hr:S2('hr',sy(y=>y.hr)),st:S2('st',sy(y=>y.st)),tu:S2('tu',sy(y=>y.tu)),ins:S2('ins',sy(y=>y.ins)),fee:S2('fee',sy(y=>y.fee)),fr:S2('fr',sy(y=>y.fr)),tot:S2('tot',gx.tot)};
+    put(wsd,sr,gc.map(cc=>tv[cc.key]===undefined?'':tv[cc.key]));
+    body(wsd,sr,gc.length,gFmts,false,{bold:true}); gTot.push(sr); sr++;
+    gRows.push(rowsK);
+  });
+  if(gTot.length>1){
+    const S3=(key,res)=>Fm(gTot.map(q2=>`${gcol[key]}${q2}`).join('+'),res);
+    const sg=fn=>R.L.grad.reduce((a,g)=>a+g.yrs.reduce((b,y)=>b+fn(y),0),0);
+    const tv={name:'All graduate students',hr:S3('hr',sg(y=>y.hr)),st:S3('st',sg(y=>y.st)),tu:S3('tu',sg(y=>y.tu)),ins:S3('ins',sg(y=>y.ins)),fee:S3('fee',sg(y=>y.fee)),fr:S3('fr',sg(y=>y.fr)),tot:S3('tot',R.L.grad.reduce((a,g)=>a+g.tot,0))};
+    put(wsd,sr,gc.map(cc=>tv[cc.key]===undefined?'':tv[cc.key]));
+    const hrI=gc.findIndex(cc=>cc.key==='hr')+1;
+    darkRow(wsd,sr,gc.length,hrI,i=>i===hrI?HRS:USD); wsd.getCell(sr,gc.length).value=''; sr++;
+  }
+  sr++;
+  sectionLabel(wsd,sr++,stuW,'Undergraduate students');
+  head(wsd,sr,uc.map(c=>c.label),46); sr++;
+  const uFmts=uc.map(c=>c.fmt);
+  const uTot=[]; const uRows=[];
+  if(!R.L.ugrad.length){ wsd.getCell(sr,1).value='No undergraduate students entered.'; sr++; }
+  R.L.ugrad.forEach((ux,ui)=>{
+    const uIn=P.ugrads[ui]||{}; const hourly=ux.basis==='hourly';
+    const a=sr; const rowsK=[];
+    ux.yrs.forEach((y,k)=>{
+      const rw=sr; rowsK.push(rw);
+      const c=key=>`${ucol[key]}${rw}`;
+      const parts=partsOf(k), fA=R.fullYr[k].a, fS=R.fullYr[k].s;
+      const first=key=>k===0?null:`$${ucol[key]}$${a}`;
+      const vals={name:ux.name,yr:k+1,per:perL(R.per[k]),fy:fyText(k),cnt:k===0?ux.count:Fm(first('cnt'),ux.count),basis:hourly?'Hourly':'Stipend',
+        rate:hourly?(k===0?num(uIn.rate):Fm(first('rate'),num(uIn.rate))):'',
+        sa:hourly?'':(k===0?num(uIn.stipA):Fm(first('sa'),num(uIn.stipA))),ss:hourly?'':(k===0?num(uIn.stipS):Fm(first('ss'),num(uIn.stipS))),
+        ha:hourly?y.a:y.a/100,hs:hourly?y.s:y.s/100};
+      const fa=p=>`${fx(p.fa)}/${fx(fA)}`, fsx=p=>`${fx(p.fs)}/${fx(fS)}`;
+      if(hourly){
+        vals.hrs=Fm(`${c('cnt')}*(${parts.map(p=>`${c('ha')}*${fa(p)}+${c('hs')}*${fsx(p)}`).join('+')})`,y.hrs);
+        vals.pay=Fm(`ROUND(${c('rate')}*${c('cnt')}*(${parts.map(p=>`(${c('ha')}*${fa(p)}+${c('hs')}*${fsx(p)})${esc('StudentEscalation',p.s)}`).join('+')}),0)`,y.wage);
+      }else{
+        vals.hrs='';
+        vals.pay=Fm(`ROUND(${c('cnt')}*(${parts.map(p=>`(${c('sa')}*${c('ha')}*${fa(p)}+${c('ss')}*${c('hs')}*${fsx(p)})${esc('StudentEscalation',p.s)}`).join('+')}),0)`,y.wage);
+      }
+      vals.fr=Fm(`ROUND(${c('pay')}*FringeStudent,0)`,y.fr);
+      vals.tot=Fm(`${c('pay')}+${c('fr')}`,y.wage+y.fr);
+      put(wsd,rw,uc.map(cc=>vals[cc.key]===undefined?'':vals[cc.key]));
+      body(wsd,rw,uc.length,uFmts,k%2===1);
+      if(!hourly){ wsd.getCell(rw,uc.findIndex(cc=>cc.key==='ha')+1).numFmt=PCT; wsd.getCell(rw,uc.findIndex(cc=>cc.key==='hs')+1).numFmt=PCT; }
+      ['ha','hs',...(k===0?['cnt',hourly?'rate':'sa',...(hourly?[]:['ss'])]:[])].forEach(kk=>inputCell(wsd.getCell(rw,uc.findIndex(cc=>cc.key===kk)+1)));
+      sr++;
+    });
+    const b=sr-1;
+    const S=(key,res)=>Fm(`SUM(${ucol[key]}${a}:${ucol[key]}${b})`,res);
+    const sy=fn=>ux.yrs.reduce((s,y)=>s+fn(y),0);
+    const tv={name:`${ux.name} total`,hrs:hourly?S('hrs',sy(y=>y.hrs)):'',pay:S('pay',sy(y=>y.wage)),fr:S('fr',sy(y=>y.fr)),tot:S('tot',ux.tot)};
+    put(wsd,sr,uc.map(cc=>tv[cc.key]===undefined?'':tv[cc.key]));
+    body(wsd,sr,uc.length,uFmts,false,{bold:true}); uTot.push(sr); sr++;
+    uRows.push(rowsK);
+  });
+  if(uTot.length>1){
+    const S4=(key,res)=>Fm(uTot.map(q2=>`${ucol[key]}${q2}`).join('+'),res);
+    const su=fn=>R.L.ugrad.reduce((a,u)=>a+u.yrs.reduce((b,y)=>b+fn(y),0),0);
+    const tv={name:'All undergraduate students',pay:S4('pay',su(y=>y.wage)),fr:S4('fr',su(y=>y.fr)),tot:S4('tot',R.L.ugrad.reduce((a,u)=>a+u.tot,0))};
+    put(wsd,sr,uc.map(cc=>tv[cc.key]===undefined?'':tv[cc.key]));
+    darkRow(wsd,sr,uc.length,uc.findIndex(cc=>cc.key==='pay')+1,USD); sr++;
+  }
+  sr++;
+  note(wsd,sr,stuW,`Blue cells are inputs. Months come from the budget calendar, split at the ${MONTHS_FULL[fs0]} 1 raise, and stipends rise by StudentEscalation once per fiscal year after ${fyB}. Stipend = annual stipend ÷ 12 × months × appointment. Hours = months × appointment × GRAHoursYear ÷ 12. Tuition months are the months with an appointment in each academic year, by the day, and the monthly rates come from the Rates & Tuition sheet. Tuition and insurance are rounded as a pair: insurance is rounded on its own and tuition takes the rest. International fees are charged for the fall and spring terms with an academic appointment and the summer term with a summer appointment.`,gc.reduce((s,c)=>s+c.width,0));
+
+  /* ---------- Travel ---------- */
+  let tr=6;
+  head(wt,tr,['Trip','Destination','Type','Budget year','Trips per year','Travelers','Days','Hotel nights','Registration per person','Registration under','Meals per day','Meals first & last day','Hotel per night','Airfare per person','Ground per person','Ground charged','Misc. per person','Travel cost per traveler','Travel cost per budget year','Years budgeted','Budget total'],44); tr++;
+  const tf=['text','text','center','center','center','center','center','center',USDc,'center',USDc,USDc,USDc,USDc,USDc,'center',USDc,USDc,USD,'center',USD];
+  const t0=tr; const tripRow=[];
+  if(!R.L.travel.length){ wt.getCell(tr,1).value='No trips entered.'; tr++; }
+  R.L.travel.forEach((x,i)=>{
+    const t=x.t; tripRow[i]=tr;
+    const autoN=t.nights===''||t.nights==null;
+    put(wt,tr,[t.name||`Trip ${i+1}`,t.dest||'',t.kind||'Domestic',x.yearLabel,blankOr(t.count,1),num(t.travelers),num(t.days),autoN?Fm(`MAX(G${tr}-1,0)`,x.nights):x.nights,num(t.reg),x.regNone?'Not budgeted':(x.regOut?'Other':'Travel'),num(t.mealDay),num(t.mealFL),num(t.hotel),num(t.flight),num(t.ground),t.groundBasis==='day'?'per day':'per trip',num(t.misc),
+      Fm(`IF(J${tr}="Travel",I${tr},0)+IF(G${tr}>=2,2*L${tr}+(G${tr}-2)*K${tr},IF(G${tr}>=1,L${tr},0))+H${tr}*M${tr}+N${tr}+IF(P${tr}="per day",O${tr}*G${tr},O${tr})+Q${tr}`,x.pp),
+      Fm(`ROUND(E${tr}*F${tr}*R${tr},0)`,x.yearCost),x.years,Fm(`S${tr}*T${tr}`,x.yearCost*x.years)]);
+    body(wt,tr,21,tf,i%2===1);
+    for(let cc=5;cc<=17;cc++) if(cc!==10&&cc!==16&&!(cc===8&&autoN)) inputCell(wt.getCell(tr,cc));
+    tr++;
+  });
+  if(R.L.travel.length){
+    put(wt,tr,['All travel','','','','','','','','','','','','','','','','','','','',Fm(`SUM(U${t0}:U${tr-1})`,sumArr(R.C.travel))]);
+    body(wt,tr,21,tf,false,{bold:true}); tr++;
+  }
+  /* Spread each line over the budget years it is charged in. */
+  function byYear(wsx,startRow,title,list,valueRef,yearsOf,width,label){
+    let rw=startRow;
+    sectionLabel(wsx,rw++,Math.max(width,N+2),title);
+    head(wsx,rw,[label,...R.per.map((p,k)=>`Year ${k+1}`),'Total'],22); rw++;
+    const fm=['text',...Array(N).fill(USD),USD];
+    const r0=rw; const cells=[];
+    list.forEach((x,i)=>{
+      const yrs=new Set(yearsOf(x,i)); const vr=valueRef(x,i);
+      put(wsx,rw,[x.label,...ks.map(k=>yrs.has(k)?Fm(vr.ref,vr.val):0),Fm(`SUM(B${rw}:${L(N+1)}${rw})`,vr.val*yrs.size)]);
+      body(wsx,rw,N+2,fm,i%2===1); cells.push(rw); rw++;
+    });
+    const totRow=rw;
+    put(wsx,rw,['Total by budget year',...ks.map(k=>list.length?Fm(`SUM(${L(k+2)}${r0}:${L(k+2)}${rw-1})`,list.reduce((s,x,i)=>s+(new Set(yearsOf(x,i)).has(k)?valueRef(x,i).val:0),0)):0),list.length?Fm(`SUM(B${rw}:${L(N+1)}${rw})`,list.reduce((s,x,i)=>s+valueRef(x,i).val*new Set(yearsOf(x,i)).size,0)):0]);
+    body(wsx,rw,N+2,fm,false,{bold:true}); rw++;
+    return {next:rw,totRow,lineRows:cells};
+  }
+  /* "Years budgeted" counts the years a line is charged in the by-year table. */
+  const yearsLink=(wsx,col,mainRows,by,vals)=>mainRows.forEach((mr,i)=>{ const lr=by.lineRows[i]; if(!lr) return; wsx.getCell(mr,col).value=Fm(`COUNTIF(B${lr}:${L(N+1)}${lr},"<>0")`,vals[i]); });
+  tr++;
+  const travY=byYear(wt,tr,'Travel by budget year',R.L.travel.map((x,i)=>({label:x.t.name||`Trip ${i+1}`,x})),(x,i)=>({ref:`$S$${tripRow[i]}`,val:x.x.yearCost}),(x)=>yearsFor(x.x.t.year,N),21,'Trip');
+  yearsLink(wt,20,tripRow,travY,R.L.travel.map(x=>x.yearCost?x.years:0));
+  tr=travY.next+1;
+  note(wt,tr,21,'Blue cells are inputs. Registration marked Other is budgeted under Other direct costs instead of Travel. Registration marked Not budgeted is listed for reference and left out of the budget. Meals use the first and last day rate twice and the full daily rate for the days between. Hotel is charged per night, so the checkout day is not counted (nights default to days minus one). Ground transport is charged per day of travel or once per trip. Every cost is per traveler, then multiplied by the number of travelers.',tw.reduce((s,w)=>s+w,0));
+  tr+=2;
+  /* Itemized breakdown for each trip, laid out like the UAH travel worksheet, linked to the trip row above. */
+  R.L.travel.forEach((x,i)=>{
+    const tw0=tripRow[i];
+    sectionLabel(wt,tr++,7,`Trip ${i+1} breakdown: ${x.t.name||'Trip'}${x.t.dest?`, ${x.t.dest}`:''}`);
+    head(wt,tr,['Cost item','Rate','Units per traveler','Units','Per traveler','Travelers','Trip total'],30); tr++;
+    const bf=['text',USDc,'center','text',USDc,'center',USDc];
+    const b0=tr;
+    const link={air:[`N${tw0}`,'1'],lodge:[`M${tw0}`,`H${tw0}`],mfull:[`K${tw0}`,`MAX(G${tw0}-2,0)`],mfl:[`L${tw0}`,`MIN(G${tw0},2)`],ground:[`O${tw0}`,`IF(P${tw0}="per day",G${tw0},1)`],reg:[`I${tw0}`,`IF(J${tw0}="Travel",1,0)`],misc:[`Q${tw0}`,'1']};
+    x.lines.forEach(([key,label,rate,units,ulabel],j)=>{
+      const lk=link[key];
+      put(wt,tr,[label,Fm(lk[0],rate),Fm(lk[1],units),ulabel,Fm(`B${tr}*C${tr}`,rate*units),Fm(`F${tw0}`,x.n),Fm(`E${tr}*F${tr}`,rate*units*x.n)]);
+      body(wt,tr,7,bf,j%2===1); tr++;
+    });
+    const b1=tr-1;
+    put(wt,tr,['Trip total','','','',Fm(`SUM(E${b0}:E${b1})`,x.pp),Fm(`F${tw0}`,x.n),Fm(`SUM(G${b0}:G${b1})`,x.trip)]); body(wt,tr,7,bf,false,{bold:true}); const tt=tr; tr++;
+    put(wt,tr,['Trips per year','','','','','',Fm(`E${tw0}`,x.c)]); body(wt,tr,7,['text','','','','','','center'],false); const tc=tr; tr++;
+    put(wt,tr,['Cost per budget year','','','','','',Fm(`ROUND(G${tt}*G${tc},0)`,x.yearCost)]); body(wt,tr,7,bf,false,{bold:true}); tr+=2;
+  });
+
+  /* ---------- Equipment and Materials & Supplies ---------- */
+  function itemSheet(wm,list,emptyText,totalLabel,totalVal,noteText){
+    let mr=6;
+    head(wm,mr,['Item','Vendor','Classified','Budget year','Quantity','Unit cost','Line total','Years budgeted','Budget total','Quote']); mr++;
+    const mf=['text','text','center','center','center',USDc,USDc,'center',USD,'text'];
+    const m0=mr; const rowsI=[];
+    if(!list.length){ wm.getCell(mr,1).value=emptyText; body(wm,mr,10,mf,false); mr++; }
+    list.forEach((x,i)=>{
+      const it=x.it; rowsI.push(mr);
+      put(wm,mr,[it.desc||`Item ${i+1}`,it.vendor||'',x.manual?'By hand':'By rule',x.yearLabel,x.q,x.unit,Fm(`ROUND(E${mr}*F${mr},2)`,x.line),x.years,Fm(`G${mr}*H${mr}`,x.line*x.years),'']);
+      body(wm,mr,10,mf,i%2===1);
+      for(const cc of [5,6]) inputCell(wm.getCell(mr,cc));
+      const link=String(it.link||'').trim();
+      if(/^https?:\/\//i.test(link)){ const c=wm.getCell(mr,10); c.value={text:'Open quote',hyperlink:link,tooltip:link}; c.font=font({size:10.5,color:{argb:K.link},underline:true}); }
+      mr++;
+    });
+    put(wm,mr,[totalLabel,'','','','','','','',list.length?Fm(`SUM(I${m0}:I${mr-1})`,totalVal):0,'']);
+    body(wm,mr,10,mf,false,{bold:true}); mr+=2;
+    const by=byYear(wm,mr,'By budget year',list.map((x,i)=>({label:x.it.desc||`Item ${i+1}`,x})),(x,i)=>({ref:`$G$${rowsI[i]}`,val:x.x.line}),(x)=>yearsFor(x.x.it.year,N),10,'Item');
+    yearsLink(wm,8,rowsI,by,list.map(x=>x.line?x.years:0));
+    mr=by.next+1;
+    note(wm,mr,10,noteText,itemW.reduce((s,w)=>s+w,0));
+    return by;
+  }
+  const eqBy=itemSheet(wEq,R.L.items.filter(x=>x.isEq),'No equipment budgeted.','Total equipment',sumArr(R.C.equip),`Blue cells are inputs. Equipment rule: ${equipRuleText(r).toLowerCase()}. Equipment carries no indirect cost.`);
+  const msBy=itemSheet(wMs,R.L.items.filter(x=>!x.isEq),'No materials or supplies budgeted.','Total materials & supplies',sumArr(R.C.supplies),'Blue cells are inputs. Items below the equipment rule, or classed as supplies by hand. Materials and supplies bear indirect cost.');
+
+  /* ---------- Publications and Other Costs ---------- */
+  function costSheet(wo,list,withBase,emptyText,totalLabel,totalVal,noteText,amtOf){
+    const width=withBase?6:5;
+    let orow=6;
+    head(wo,orow,['Description','Budget year','Amount per year','Years budgeted','Budget total',...(withBase?['In indirect base']:[])]); orow++;
+    const of=['text','center',USD,'center',USD,'center'];
+    const o0=orow; const rowsO=[];
+    if(!list.length){ wo.getCell(orow,1).value=emptyText; body(wo,orow,width,of,false); orow++; }
+    list.forEach((x,i)=>{
+      rowsO.push(orow);
+      const amt=amtOf?amtOf(x,orow):x.amt;
+      put(wo,orow,[x.o.desc||x.name||`Line ${i+1}`,x.yearLabel,amt,x.years,Fm(`C${orow}*D${orow}`,x.amt*x.years),...(withBase?[x.excl?'No':'Yes']:[])]);
+      body(wo,orow,width,of,i%2===1); if(typeof amt==='number') inputCell(wo.getCell(orow,3)); orow++;
+    });
+    put(wo,orow,[totalLabel,'','','',list.length?Fm(`SUM(E${o0}:E${orow-1})`,totalVal):0,...(withBase?['']:[])]);
+    body(wo,orow,width,of,false,{bold:true}); orow+=2;
+    const by=byYear(wo,orow,'By budget year',list.map((x,i)=>({label:x.o.desc||x.name||`Line ${i+1}`,x})),(x,i)=>({ref:`$C$${rowsO[i]}`,val:x.x.amt}),(x)=>yearsFor(x.x.o.year,N),width,'Description');
+    yearsLink(wo,4,rowsO,by,list.map(x=>x.amt?x.years:0));
+    orow=by.next+1;
+    if(noteText) note(wo,orow,Math.max(width,N+2),noteText,[46,14,16,10,16,18].slice(0,width).reduce((s,w)=>s+w,0));
+    return by;
+  }
+  const pubBy=costSheet(wPub,R.L.pubs,false,'No publication costs budgeted.','Total publication costs',sumArr(R.C.pubs),'Blue cells are inputs.');
+  const othBy=costSheet(wOth,R.L.other,true,'No other direct costs budgeted.','Total other direct costs',sumArr(R.C.other),'Blue cells are inputs. Program or solicitation specific costs. Lines marked No in the last column, such as participant support, stay out of the indirect cost base. Conference registration moved here from a trip is linked to the Travel sheet.',
+    (x,orow)=>x.fromTrip!=null&&tripRow[x.fromTrip]?Fm(`ROUND(${X('Travel','I',tripRow[x.fromTrip])}*${X('Travel','F',tripRow[x.fromTrip])}*${X('Travel','E',tripRow[x.fromTrip])},0)`,x.amt):x.amt);
+
+  /* ---------- Subawards ---------- */
+  let br=6;
+  head(wsb,br,['Subaward',...R.per.map((p,k)=>`Year ${k+1}`),'Total'],22); br++;
+  const yc=k=>L(2+k);
+  const sbFmt=['text',...Array(N).fill(USD),USD];
+  const totRows={amt:[],inc:[],exc:[],idc:[]};
+  if(!R.L.subs.length){ wsb.getCell(br,1).value='No subawards budgeted.'; body(wsb,br,W,sbFmt,false); br++; }
+  R.L.subs.forEach(s=>{
+    wsb.mergeCells(br,1,br,W);
+    const nc=wsb.getCell(br,1); nc.value=`${s.name}${s.pi?`  ·  PI: ${s.pi}`:''}`; nc.font=font({bold:true,color:{argb:K.deep}}); nc.fill=solid(K.wash); nc.alignment={indent:1,vertical:'middle'};
+    for(let i=1;i<=W;i++) wsb.getCell(br,i).border=box();
+    wsb.getRow(br).height=19; br++;
+    const rowFor=(label,vals,key,opts)=>{
+      put(wsb,br,[label,...ks.map(k=>vals(k,br)),Fm(`SUM(${yc(0)}${br}:${yc(N-1)}${br})`,ks.reduce((a,k)=>{ const v=vals(k,br); return a+(typeof v==='number'?v:v.result); },0))]);
+      body(wsb,br,W,sbFmt,false,opts); totRows[key].push(br); return br++;
+    };
+    const ra=rowFor('Amount requested',(k)=>s.yrs[k].amt,'amt');
+    for(let k=0;k<N;k++) inputCell(wsb.getCell(ra,2+k));
+    const ri=rowFor(capFinite?`In the indirect base (first ${capText(R)})`:'In the indirect base',(k,rw)=>Fm(capFinite?(k===0?`MIN(${yc(k)}${ra},SubawardCap)`:`MIN(${yc(k)}${ra},MAX(0,SubawardCap-SUM($${yc(0)}${rw}:${yc(k-1)}${rw})))`):`${yc(k)}${ra}`,s.yrs[k].inc),'inc');
+    rowFor('Outside the indirect base',(k)=>Fm(`${yc(k)}${ra}-${yc(k)}${ri}`,s.yrs[k].exc),'exc');
+    rowFor('Indirect charged by the institution',(k)=>Fm(`ROUND(${yc(k)}${ri}*IndirectRate,0)`,s.yrs[k].idc),'idc');
+  });
+  const subTot={};
+  if(R.L.subs.length){
+    br++;
+    const totalFor=(label,key,res)=>{
+      put(wsb,br,[label,...ks.map(k=>Fm(totRows[key].map(q2=>`${yc(k)}${q2}`).join('+'),res(k))),Fm(`SUM(${yc(0)}${br}:${yc(N-1)}${br})`,ks.reduce((a,k)=>a+res(k),0))]);
+      body(wsb,br,W,sbFmt,false,{bold:true}); subTot[key]=br; br++;
+    };
+    totalFor('All subawards','amt',k=>R.C.subs[k]);
+    totalFor('In the indirect base','inc',k=>R.C.subIncl[k]);
+    totalFor('Outside the indirect base','exc',k=>R.exSub[k]);
+    totalFor('Indirect charged by the institution','idc',k=>R.L.subs.reduce((a,s)=>a+s.yrs[k].idc,0));
+  }
+  br++;
+  note(wsb,br,W,`Blue cells are inputs. The institution charges its indirect rate on the first ${capText(R)} of each subaward over the life of the project (SubawardCap on the Budget Summary). The rest of each subaward is a direct cost outside the indirect base. The indirect line shows the share of the budget's indirect costs that comes from each subaward.`,subW.reduce((s,w)=>s+w,0));
+
+  /* ---------- Tuition Grid ---------- */
+  if(wg){
+    let gr=6;
+    note(wg,gr,14,'Cost of 12 months for a student who starts in the given month, from the monthly rates on the Rates & Tuition sheet. Months that straddle September 1 blend two academic-year rates.',[12,12,...Array(12).fill(11)].reduce((s,w)=>s+w,0)); gr+=2;
+    head(wg,gr,['Calendar year','',...MON.map(m=>m.toUpperCase())],22); gr++;
+    const a=Math.min(...ays), b=Math.max(...ays);
+    const cellF=(Y,M,col)=>{ const [ay1,n1,ay2,n2]=M<8?[Y-1,8-M,Y,4+M]:[Y,20-M,Y+1,M-8];
+      const t=[]; if(n1&&ayRow[ay1]) t.push(`${n1}*${X('Rates & Tuition',col,ayRow[ay1])}`); if(n2&&ayRow[ay2]) t.push(`${n2}*${X('Rates & Tuition',col,ayRow[ay2])}`);
+      return t.length?`ROUND(${t.join('+')},0)`:null; };
+    for(let Y=a;Y<=b;Y++){
+      const r1=wg.getRow(gr), r3=wg.getRow(gr+1);
+      r1.getCell(1).value=Y; r1.getCell(2).value='Tuition'; r3.getCell(2).value='Insurance';
+      for(let M=0;M<12;M++){
+        const show=!(Y===a&&M<8)&&!(Y===b&&M>8);
+        const c1=r1.getCell(3+M), c2=r3.getCell(3+M);
+        const f1=show?cellF(Y,M,'C'):null, f2=show?cellF(Y,M,'D'):null;
+        if(f1){ c1.value=Fm(f1,Math.round(twelveMonthCost(T,Y,M,'tuition'))); c2.value=Fm(f2,Math.round(twelveMonthCost(T,Y,M,'insurance'))); }
+        else { c1.fill=solid(K.soft); c2.fill=solid(K.soft); }
+        c1.numFmt=USD; c2.numFmt=USD;
+        c1.font=font({size:10.5}); c2.font=font({size:10.5,italic:true,color:{argb:'FFB0306A'}});
+        c1.border=box(); c2.border=box();
+      }
+      r1.getCell(1).font=font({bold:true}); r1.getCell(2).font=font({size:10,bold:true}); r3.getCell(2).font=font({size:10,italic:true,color:{argb:'FFB0306A'},bold:true});
+      for(const c of [r1.getCell(1),r1.getCell(2),r3.getCell(1),r3.getCell(2)]) c.border=box();
+      gr+=2;
+    }
+  }
+
+  /* ---------- Budget Summary table: each line links to its detail sheet ---------- */
+  row=sumHdr;
+  head(ws,row,['Budget category',...R.per.map((p,k)=>`Year ${k+1}`),'Total'],22);
+  const subh=ws.getRow(row+1); subh.height=18;
   subh.getCell(1).value='Budget period'; R.per.forEach((p,k)=>{ subh.getCell(2+k).value=perL(p); }); subh.getCell(W).value=period;
   for(let i=1;i<=W;i++){ const c=subh.getCell(i); c.font=font({size:8.5,color:{argb:K.white}}); c.fill=solid(K.ink); c.alignment={horizontal:i===1?'left':'center',vertical:'middle',indent:i===1?1:0}; c.border=box(K.ink); }
-  ws.pageSetup.printTitlesRow=`${hdr}:${hdr+1}`;
-  row=hdr+2;
-  const yc=k=>L(2+k);
+  ws.pageSetup.printTitlesRow=`${row}:${row+1}`;
+  row+=2;
   function styleLine(rw,kind){
     for(let i=1;i<=W;i++){
       const c=rw.getCell(i); const isNum=i>1;
@@ -1279,6 +1767,28 @@ function buildWorkbook(ExcelJS,P,R){
       c.border=border;
     }
   }
+  /* Where each summary line comes from. */
+  const pcell=(rw,key)=>X('Personnel',pcol[key],rw), gcell=(rw,key)=>X('Students',gcol[key],rw), ucell=(rw,key)=>X('Students',ucol[key],rw);
+  const sen=pRows.filter(p=>!p.isPD), pds=pRows.filter(p=>p.isPD);
+  const byYearRef=(sh,by,k,round)=>{ const f=X(sh,L(k+2),by.totRow); return round?`ROUND(${f},0)`:f; };
+  const link={
+    pd:k=>pds.map(p=>pcell(p.rows[k],'sal')),
+    gr:k=>gRows.map(rs=>gcell(rs[k],'st')),
+    ug:k=>uRows.map(rs=>ucell(rs[k],'pay')),
+    fr:k=>pRows.map(p=>pcell(p.rows[k],'fb')),
+    frs:k=>[...gRows.map(rs=>gcell(rs[k],'fr')),...uRows.map(rs=>ucell(rs[k],'fr'))],
+    eq:k=>R.L.items.some(x=>x.isEq)?[byYearRef('Equipment',eqBy,k,true)]:[],
+    tr:k=>R.L.travel.length?[byYearRef('Travel',travY,k,false)]:[],
+    ms:k=>R.L.items.some(x=>!x.isEq)?[byYearRef('Materials & Supplies',msBy,k,true)]:[],
+    pub:k=>R.L.pubs.length?[byYearRef('Publications',pubBy,k,true)]:[],
+    intl:k=>gRows.map(rs=>gcell(rs[k],'fee')),
+    tu:k=>gRows.map(rs=>gcell(rs[k],'tu')),
+    ins:k=>gRows.map(rs=>gcell(rs[k],'ins')),
+    sub:k=>R.L.subs.length?[X('Subawards',yc(k),subTot.amt)]:[],
+    xsub:k=>R.L.subs.length?[`-${X('Subawards',yc(k),subTot.exc)}`]:[]
+  };
+  sen.forEach((p,i)=>{ link['sen'+i]=k=>[pcell(p.rows[k],'sal')]; });
+  R.L.other.forEach((o,i)=>{ link['oth'+i]=k=>[X('Other Costs',L(k+2),othBy.lineRows[i])]; });
   const rowOf={};
   summaryModel(P,R).forEach(m=>{
     const rw=ws.getRow(row);
@@ -1286,283 +1796,26 @@ function buildWorkbook(ExcelJS,P,R){
     rw.getCell(1).value=m.l;
     ks.forEach(k=>{
       const c=yc(k); let v=m.v[k];
-      if(m.parts) v={formula:m.parts.map(id=>`${c}${rowOf[id]}`).join('+'),result:m.v[k]};
-      else if(m.negOf) v={formula:`-${c}${rowOf[m.negOf]}`,result:m.v[k]};
-      else if(m.idcOf) v={formula:`ROUND(${c}${rowOf[m.idcOf]}*$B$${idcRow},0)`,result:m.v[k]};
-      else if(m.cumOf) v=k===0?{formula:`${c}${rowOf[m.cumOf]}`,result:m.v[k]}:{formula:`${yc(k-1)}${row}+${c}${rowOf[m.cumOf]}`,result:m.v[k]};
+      if(m.parts) v=Fm(m.parts.map(id=>`${c}${rowOf[id]}`).join('+'),m.v[k]);
+      else if(m.negOf) v=Fm(`-${c}${rowOf[m.negOf]}`,m.v[k]);
+      else if(m.idcOf) v=Fm(`ROUND(${c}${rowOf[m.idcOf]}*IndirectRate,0)`,m.v[k]);
+      else if(m.cumOf) v=k===0?Fm(`${c}${rowOf[m.cumOf]}`,m.v[k]):Fm(`${yc(k-1)}${row}+${c}${rowOf[m.cumOf]}`,m.v[k]);
+      else if(link[m.id]){ const refs=link[m.id](k); v=refs.length?Fm(refs.join('+'),m.v[k]):0; }
       rw.getCell(2+k).value=v;
     });
-    if(m.k!=='cum') rw.getCell(W).value={formula:`SUM(${yc(0)}${row}:${yc(N-1)}${row})`,result:sumArr(m.v)};
+    if(m.k!=='cum') rw.getCell(W).value=Fm(`SUM(${yc(0)}${row}:${yc(N-1)}${row})`,sumArr(m.v));
     styleLine(rw,m.k);
     rw.height=m.k==='grand'?24:(m.k==='tot'?20:Math.max(17,lines(m.l,sumWidths[0]/1.05)*15+2));
     rowOf[m.id]=row; row++;
   });
   row+=1;
   sectionLabel(ws,row++,W,'Notes & assumptions');
-  assumptions(P,R).forEach((t,i)=>{
+  [...assumptions(P,R),'This workbook is live. Blue cells are inputs, and the lines above are formulas that link to the Personnel, Students, Travel, Equipment, Materials & Supplies, Publications, Other Costs and Subawards sheets. Change a rate above or an input on any sheet and the totals recalculate. Month counts come from the budget calendar and are entered as numbers.'].forEach((t,i)=>{
     ws.mergeCells(row,1,row,W);
     const c=ws.getCell(row,1); c.value=`${i+1}.  ${t}`; c.font=font({size:10,color:{argb:K.mute}}); c.alignment={wrapText:true,vertical:'top',indent:1};
     ws.getRow(row).height=Math.max(16,lines(t,(52+16*N+18)/1.0)*14+4);
     row++;
   });
-
-  /* ---------- Personnel ---------- */
-  const wp=sheet('Personnel',14,[28,17,7,24,15,13,11,11,11,11,16,10,15,16]);
-  let pr=6;
-  head(wp,pr,['Name','Role','Year','Budget period','Base salary at year start','Appointment','Academic effort','Summer effort','Academic months','Summer months','Salary requested','Fringe rate','Fringe benefits','Salary + fringe']); pr++;
-  wp.views=[{state:'frozen',ySplit:6,showGridLines:false}];
-  const people=[...R.L.senior,...R.L.postdoc];
-  const pf=['text','text','center','text',USD,'center',PCT,PCT,MO,MO,USD,PCT,USD,USD];
-  const r2=v=>Math.round(v*100)/100, r3=v=>Math.round(v*1000)/1000;
-  const subRows=[];
-  if(!people.length){ wp.getCell(pr,1).value='No senior personnel or postdocs entered.'; pr++; }
-  people.forEach(x=>{
-    const a=pr;
-    x.yrs.forEach((y,k)=>{
-      put(wp,pr,[x.name,x.role,k+1,perL(R.per[k]),Math.round(y.base),x.appt===12?'12-month':'9-month',y.a/100,y.s/100,r3(y.pmA),r3(y.pmS),y.sal,x.fr,y.fb,{formula:`K${pr}+M${pr}`,result:y.sal+y.fb}]);
-      body(wp,pr,14,pf,k%2===1); pr++;
-    });
-    const b=pr-1;
-    put(wp,pr,[`${x.name} total`,'','','','','','','',{formula:`SUM(I${a}:I${b})`,result:x.yrs.reduce((s,y)=>s+r3(y.pmA),0)},{formula:`SUM(J${a}:J${b})`,result:x.yrs.reduce((s,y)=>s+r3(y.pmS),0)},{formula:`SUM(K${a}:K${b})`,result:x.yrs.reduce((s,y)=>s+y.sal,0)},'',{formula:`SUM(M${a}:M${b})`,result:x.yrs.reduce((s,y)=>s+y.fb,0)},{formula:`SUM(N${a}:N${b})`,result:x.tot}]);
-    body(wp,pr,14,pf,false,{bold:true}); subRows.push(pr); pr++;
-  });
-  if(subRows.length){
-    const sumOf=(col,result)=>({formula:subRows.map(q=>`${col}${q}`).join('+'),result});
-    const salAll=sumArr(R.C.senior)+sumArr(R.C.postdoc), frAll=sumArr(R.C.fringe);
-    const gr=put(wp,pr,['All senior personnel & postdocs','','','','','','','','','',sumOf('K',salAll),'',sumOf('M',frAll),sumOf('N',salAll+frAll)]);
-    for(let i=1;i<=14;i++){ const c=gr.getCell(i); c.fill=solid(K.ink); c.font=font({bold:true,color:{argb:i>10?K.gold:K.white}}); if(i>10) c.numFmt=USD; c.alignment={vertical:'middle',horizontal:i>10?'right':'left',indent:i===1?1:0}; c.border=box(K.ink); }
-    gr.height=22; pr++;
-  }
-  if(people.length){ pr++; note(wp,pr,14,'Salary + fringe is rounded as one figure, the way the UAH sheet multiplies an hourly rate that already holds fringe. Salary is rounded on its own and fringe takes the rest, so fringe can differ by $1 from rounded salary × rate.'); }
-
-  /* ---------- Students ---------- */
-  const wsd=sheet('Students',14,[30,8,24,15,12,12,10,14,14,14,14,13,15,34]);
-  let sr=6;
-  const stuRate=num(r.stuFringe)/100;
-  sectionLabel(wsd,sr++,14,'Graduate research assistants');
-  head(wsd,sr,['Graduate student','Year','Budget period','Annual stipend at year start','Academic appointment','Summer appointment','Hours','Stipend','Tuition','Health insurance','International fees',`Fringe (${pctText(r.stuFringe)})`,'Total','Notes']); sr++;
-  const gf=['text','center','text',USD,PCT,PCT,HRS,USD,USD,USD,USD,USD,USD,'text'];
-  const gTot=[];
-  if(!R.L.grad.length){ wsd.getCell(sr,1).value='No graduate students entered.'; sr++; }
-  R.L.grad.forEach(g=>{
-    const a=sr;
-    g.yrs.forEach((y,k)=>{
-      put(wsd,sr,[g.name,k+1,perL(R.per[k]),Math.round(y.base),y.a/100,y.s/100,Math.round(y.hr),y.st,y.tu,y.ins,y.fee,{formula:`ROUND((H${sr}${r.stuFringeTuition?`+I${sr}`:''}${r.stuFringeIns?`+J${sr}`:''}${r.stuFringeIntl?`+K${sr}`:''})*${stuRate},0)`,result:y.fr},{formula:`SUM(H${sr}:L${sr})`,result:y.st+y.tu+y.ins+y.fee+y.fr},k===0?g.flags:'']);
-      body(wsd,sr,14,gf,k%2===1); sr++;
-    });
-    const b=sr-1;
-    const S2=(col,result)=>({formula:`SUM(${col}${a}:${col}${b})`,result});
-    const sy=fn=>g.yrs.reduce((s,y)=>s+fn(y),0);
-    put(wsd,sr,[`${g.name} total`,'','','','','',S2('G',sy(y=>Math.round(y.hr))),S2('H',sy(y=>y.st)),S2('I',sy(y=>y.tu)),S2('J',sy(y=>y.ins)),S2('K',sy(y=>y.fee)),S2('L',sy(y=>y.fr)),S2('M',g.tot),'']);
-    body(wsd,sr,14,gf,false,{bold:true}); gTot.push(sr); sr++;
-  });
-  if(gTot.length>1){
-    const S3=(col,res)=>({formula:gTot.map(q=>`${col}${q}`).join('+'),result:res});
-    const sg=fn=>R.L.grad.reduce((a,g)=>a+g.yrs.reduce((b,y)=>b+fn(y),0),0);
-    const gr=put(wsd,sr,['All graduate students','','','','','',S3('G',sg(y=>Math.round(y.hr))),S3('H',sg(y=>y.st)),S3('I',sg(y=>y.tu)),S3('J',sg(y=>y.ins)),S3('K',sg(y=>y.fee)),S3('L',sg(y=>y.fr)),S3('M',R.L.grad.reduce((a,g)=>a+g.tot,0)),'']);
-    for(let c=1;c<=14;c++){ const cl=gr.getCell(c); cl.fill=solid(K.ink); cl.font=font({bold:true,color:{argb:c>6?K.gold:K.white}}); if(c>7&&c<14) cl.numFmt=USD; if(c===7) cl.numFmt=HRS; cl.alignment={horizontal:c>6&&c<14?'right':'left',indent:c===1?1:0}; cl.border=box(K.ink); }
-    sr++;
-  }
-  sr++;
-  sectionLabel(wsd,sr++,14,'Undergraduate students');
-  head(wsd,sr,['Undergraduate group','Year','Budget period','Students','Pay basis','Average hourly rate','Academic stipend per student','Summer stipend per student','Academic hours or % per student','Summer hours or % per student','Total hours','Pay',`Fringe (${pctText(r.stuFringe)})`,'Total']); sr++;
-  const uf=['text','center','text','center','center',USDc,USD,USD,'#,##0.##','#,##0.##','#,##0.0',USD,USD,USD];
-  const uTot=[];
-  if(!R.L.ugrad.length){ wsd.getCell(sr,1).value='No undergraduate students entered.'; sr++; }
-  R.L.ugrad.forEach(u=>{
-    const a=sr; const hourly=u.basis==='hourly';
-    u.yrs.forEach((y,k)=>{
-      put(wsd,sr,[u.name,k+1,perL(R.per[k]),u.count,hourly?'Hourly':'Stipend',hourly?y.rate:'',hourly?'':Math.round(y.sA),hourly?'':Math.round(y.sS),hourly?y.a:`${y.a}%`,hourly?y.s:`${y.s}%`,hourly?y.hrs:'',hourly?{formula:`ROUND(K${sr}*F${sr},0)`,result:y.wage}:y.wage,{formula:`ROUND(L${sr}*${stuRate},0)`,result:y.fr},{formula:`L${sr}+M${sr}`,result:y.wage+y.fr}]);
-      body(wsd,sr,14,uf,k%2===1);
-      if(!hourly){ wsd.getCell(sr,9).alignment={horizontal:'right'}; wsd.getCell(sr,10).alignment={horizontal:'right'}; }
-      sr++;
-    });
-    const b=sr-1;
-    const sy=fn=>u.yrs.reduce((s,y)=>s+fn(y),0);
-    put(wsd,sr,[`${u.name} total`,'','','','','','','','','',hourly?{formula:`SUM(K${a}:K${b})`,result:sy(y=>y.hrs)}:'',{formula:`SUM(L${a}:L${b})`,result:sy(y=>y.wage)},{formula:`SUM(M${a}:M${b})`,result:sy(y=>y.fr)},{formula:`SUM(N${a}:N${b})`,result:u.tot}]);
-    body(wsd,sr,14,uf,false,{bold:true}); uTot.push(sr); sr++;
-  });
-  if(uTot.length>1){
-    const S4=(col,res)=>({formula:uTot.map(q=>`${col}${q}`).join('+'),result:res});
-    const su=fn=>R.L.ugrad.reduce((a,u)=>a+u.yrs.reduce((b,y)=>b+fn(y),0),0);
-    const ur=put(wsd,sr,['All undergraduate students','','','','','','','','','','',S4('L',su(y=>y.wage)),S4('M',su(y=>y.fr)),S4('N',R.L.ugrad.reduce((a,u)=>a+u.tot,0))]);
-    for(let c=1;c<=14;c++){ const cl=ur.getCell(c); cl.fill=solid(K.ink); cl.font=font({bold:true,color:{argb:c>11?K.gold:K.white}}); if(c>11) cl.numFmt=USD; cl.alignment={horizontal:c>11?'right':'left',indent:c===1?1:0}; cl.border=box(K.ink); }
-    sr++;
-  }
-
-  /* ---------- Travel ---------- */
-  const tw=[30,22,12,12,9,9,7,8,13,12,12,13,12,12,12,10,12,15,15,10,15];
-  const wt=sheet('Travel',21,tw);
-  let tr=6;
-  head(wt,tr,['Trip','Destination','Type','Budget year','Trips per year','Travelers','Days','Hotel nights','Registration per person','Registration under','Meals per day','Meals first & last day','Hotel per night','Airfare per person','Ground per person','Ground charged','Misc. per person','Travel cost per traveler','Travel cost per budget year','Years budgeted','Budget total'],44); tr++;
-  const tf=['text','text','center','center','center','center','center','center',USDc,'center',USDc,USDc,USDc,USDc,USDc,'center',USDc,USDc,USD,'center',USD];
-  const t0=tr;
-  if(!R.L.travel.length){ wt.getCell(tr,1).value='No trips entered.'; tr++; }
-  R.L.travel.forEach((x,i)=>{
-    const t=x.t;
-    put(wt,tr,[t.name||`Trip ${i+1}`,t.dest||'',t.kind||'Domestic',x.yearLabel,blankOr(t.count,1),num(t.travelers),num(t.days),x.nights,num(t.reg),x.regNone?'Not budgeted':(x.regOut?'Other':'Travel'),num(t.mealDay),num(t.mealFL),num(t.hotel),num(t.flight),num(t.ground),t.groundBasis==='day'?'per day':'per trip',num(t.misc),
-      {formula:`IF(J${tr}="Travel",I${tr},0)+IF(G${tr}>=2,2*L${tr}+(G${tr}-2)*K${tr},IF(G${tr}>=1,L${tr},0))+H${tr}*M${tr}+N${tr}+IF(P${tr}="per day",O${tr}*G${tr},O${tr})+Q${tr}`,result:x.pp},
-      {formula:`ROUND(E${tr}*F${tr}*R${tr},0)`,result:x.yearCost},x.years,{formula:`S${tr}*T${tr}`,result:x.yearCost*x.years}]);
-    body(wt,tr,21,tf,i%2===1);
-    for(let cc=5;cc<=17;cc++) if(cc!==10&&cc!==16) wt.getCell(tr,cc).font=font({size:10.5,color:{argb:K.input}});
-    tr++;
-  });
-  if(R.L.travel.length){
-    put(wt,tr,['All travel','','','','','','','','','','','','','','','','','','','',{formula:`SUM(U${t0}:U${tr-1})`,result:sumArr(R.C.travel)}]);
-    body(wt,tr,21,tf,false,{bold:true}); tr++;
-  }
-  tr++;
-  note(wt,tr,21,'Registration marked Other is budgeted under Other direct costs instead of Travel. Registration marked Not budgeted is listed for reference and left out of the budget. Meals use the first and last day rate twice and the full daily rate for the days between. Hotel is charged per night, so the checkout day is not counted (nights default to days minus one). Ground transport is charged per day of travel or once per trip. Every cost is per traveler, then multiplied by the number of travelers. Change any blue input and the totals recalculate.',tw.reduce((s,w)=>s+w,0));
-  tr+=2;
-  /* Itemized breakdown for each trip, laid out like the UAH travel worksheet. */
-  R.L.travel.forEach((x,i)=>{
-    sectionLabel(wt,tr++,7,`Trip ${i+1} breakdown: ${x.t.name||'Trip'}${x.t.dest?`, ${x.t.dest}`:''}`);
-    head(wt,tr,['Cost item','Rate','Units per traveler','Units','Per traveler','Travelers','Trip total'],30); tr++;
-    const bf=['text',USDc,'center','text',USDc,'center',USDc];
-    const b0=tr;
-    x.lines.forEach(([key,label,rate,units,ulabel],j)=>{
-      put(wt,tr,[label,rate,units,ulabel,{formula:`B${tr}*C${tr}`,result:rate*units},x.n,{formula:`E${tr}*F${tr}`,result:rate*units*x.n}]);
-      body(wt,tr,7,bf,j%2===1); wt.getCell(tr,2).font=font({size:10.5,color:{argb:K.input}}); wt.getCell(tr,3).font=font({size:10.5,color:{argb:K.input}}); tr++;
-    });
-    const b1=tr-1;
-    put(wt,tr,['Trip total','','','',{formula:`SUM(E${b0}:E${b1})`,result:x.pp},x.n,{formula:`SUM(G${b0}:G${b1})`,result:x.trip}]); body(wt,tr,7,bf,false,{bold:true}); const tt=tr; tr++;
-    put(wt,tr,['Trips per year','','','','','',x.c]); body(wt,tr,7,['text','','','','','','center'],false); const tc=tr; tr++;
-    put(wt,tr,['Cost per budget year','','','','','',{formula:`ROUND(G${tt}*G${tc},0)`,result:x.yearCost}]); body(wt,tr,7,bf,false,{bold:true}); tr+=2;
-  });
-
-  /* ---------- Equipment and Materials & Supplies ---------- */
-  function itemSheet(name,list,emptyText,totalLabel,totalVal,noteText){
-    const widths=[40,24,16,13,9,14,15,10,15,30];
-    const wm=sheet(name,10,widths);
-    let mr=6;
-    head(wm,mr,['Item','Vendor','Classified','Budget year','Quantity','Unit cost','Line total','Years budgeted','Budget total','Quote']); mr++;
-    const mf=['text','text','center','center','center',USDc,USDc,'center',USD,'text'];
-    const m0=mr;
-    if(!list.length){ wm.getCell(mr,1).value=emptyText; body(wm,mr,10,mf,false); mr++; }
-    list.forEach((x,i)=>{
-      const it=x.it;
-      put(wm,mr,[it.desc||`Item ${i+1}`,it.vendor||'',x.manual?'By hand':'By rule',x.yearLabel,x.q,x.unit,{formula:`E${mr}*F${mr}`,result:x.line},x.years,{formula:`G${mr}*H${mr}`,result:x.line*x.years},'']);
-      body(wm,mr,10,mf,i%2===1);
-      for(const cc of [5,6]) wm.getCell(mr,cc).font=font({size:10.5,color:{argb:K.input}});
-      const link=String(it.link||'').trim();
-      if(/^https?:\/\//i.test(link)){ const c=wm.getCell(mr,10); c.value={text:'Open quote',hyperlink:link,tooltip:link}; c.font=font({size:10.5,color:{argb:K.link},underline:true}); }
-      mr++;
-    });
-    put(wm,mr,[totalLabel,'','','','','','','',list.length?{formula:`SUM(I${m0}:I${mr-1})`,result:totalVal}:0,'']);
-    body(wm,mr,10,mf,false,{bold:true}); mr++;
-    mr++;
-    note(wm,mr,10,noteText,widths.reduce((s,w)=>s+w,0));
-  }
-  itemSheet('Equipment',R.L.items.filter(x=>x.isEq),'No equipment budgeted.','Total equipment',sumArr(R.C.equip),`Equipment rule: ${equipRuleText(r).toLowerCase()}. Equipment carries no indirect cost.`);
-  itemSheet('Materials & Supplies',R.L.items.filter(x=>!x.isEq),'No materials or supplies budgeted.','Total materials & supplies',sumArr(R.C.supplies),'Items below the equipment rule, or classed as supplies by hand. Materials and supplies bear indirect cost.');
-
-  /* ---------- Publications and Other Costs ---------- */
-  function costSheet(name,list,withBase,emptyText,totalLabel,totalVal,noteText){
-    const widths=withBase?[46,14,16,10,16,18]:[46,14,16,10,16];
-    const width=widths.length;
-    const wo=sheet(name,width,widths,false);
-    let orow=6;
-    head(wo,orow,['Description','Budget year','Amount per year','Years budgeted','Budget total',...(withBase?['In indirect base']:[])]); orow++;
-    const of=['text','center',USD,'center',USD,'center'];
-    const o0=orow;
-    if(!list.length){ wo.getCell(orow,1).value=emptyText; body(wo,orow,width,of,false); orow++; }
-    list.forEach((x,i)=>{
-      put(wo,orow,[x.o.desc||`Line ${i+1}`,x.yearLabel,x.amt,x.years,{formula:`C${orow}*D${orow}`,result:x.amt*x.years},...(withBase?[x.excl?'No':'Yes']:[])]);
-      body(wo,orow,width,of,i%2===1); wo.getCell(orow,3).font=font({size:10.5,color:{argb:K.input}}); orow++;
-    });
-    put(wo,orow,[totalLabel,'','','',list.length?{formula:`SUM(E${o0}:E${orow-1})`,result:totalVal}:0,...(withBase?['']:[])]);
-    body(wo,orow,width,of,false,{bold:true}); orow+=2;
-    if(noteText) note(wo,orow,width,noteText,widths.reduce((s,w)=>s+w,0));
-  }
-  costSheet('Publications',R.L.pubs,false,'No publication costs budgeted.','Total publication costs',sumArr(R.C.pubs),'');
-  costSheet('Other Costs',R.L.other,true,'No other direct costs budgeted.','Total other direct costs',sumArr(R.C.other),'Program or solicitation specific costs. Lines marked No in the last column, such as participant support, stay out of the indirect cost base.');
-
-  /* ---------- Subawards ---------- */
-  const subW=[46,...Array(N).fill(16),18];
-  const wsb=sheet('Subawards',W,subW);
-  let br=6;
-  head(wsb,br,['Subaward',...R.per.map((p,k)=>`Year ${k+1}`),'Total'],22); br++;
-  const sbFmt=['text',...Array(N).fill(USD),USD];
-  const totRows={amt:[],inc:[],exc:[],idc:[]};
-  if(!R.L.subs.length){ wsb.getCell(br,1).value='No subawards budgeted.'; body(wsb,br,W,sbFmt,false); br++; }
-  R.L.subs.forEach(s=>{
-    wsb.mergeCells(br,1,br,W);
-    const nc=wsb.getCell(br,1); nc.value=`${s.name}${s.pi?`  ·  PI: ${s.pi}`:''}`; nc.font=font({bold:true,color:{argb:K.deep}}); nc.fill=solid(K.wash); nc.alignment={indent:1,vertical:'middle'};
-    for(let i=1;i<=W;i++) wsb.getCell(br,i).border=box();
-    wsb.getRow(br).height=19; br++;
-    const rowFor=(label,vals,key,opts)=>{
-      put(wsb,br,[label,...ks.map(k=>vals(k,br)),{formula:`SUM(${yc(0)}${br}:${yc(N-1)}${br})`,result:ks.reduce((a,k)=>{ const v=vals(k,br); return a+(typeof v==='number'?v:v.result); },0)}]);
-      body(wsb,br,W,sbFmt,false,opts); totRows[key].push(br); return br++;
-    };
-    const ra=rowFor('Amount requested',(k)=>s.yrs[k].amt,'amt');
-    for(let k=0;k<N;k++) wsb.getCell(ra,2+k).font=font({size:10.5,color:{argb:K.input}});
-    const ri=rowFor(`In the indirect base (first ${capText(R)})`,(k)=>s.yrs[k].inc,'inc');
-    rowFor('Outside the indirect base',(k,rr)=>({formula:`${yc(k)}${ra}-${yc(k)}${ri}`,result:s.yrs[k].exc}),'exc');
-    rowFor(`Indirect charged by the institution (${pctText(r.idc)})`,(k)=>({formula:`ROUND(${yc(k)}${ri}*${num(r.idc)/100},0)`,result:s.yrs[k].idc}),'idc');
-  });
-  if(R.L.subs.length){
-    br++;
-    const totalFor=(label,key,res)=>{
-      put(wsb,br,[label,...ks.map(k=>({formula:totRows[key].map(q=>`${yc(k)}${q}`).join('+'),result:res(k)})),{formula:`SUM(${yc(0)}${br}:${yc(N-1)}${br})`,result:ks.reduce((a,k)=>a+res(k),0)}]);
-      body(wsb,br,W,sbFmt,false,{bold:true}); br++;
-    };
-    totalFor('All subawards','amt',k=>R.C.subs[k]);
-    totalFor('In the indirect base','inc',k=>R.C.subIncl[k]);
-    totalFor('Outside the indirect base','exc',k=>R.exSub[k]);
-    totalFor('Indirect charged by the institution','idc',k=>R.L.subs.reduce((a,s)=>a+s.yrs[k].idc,0));
-  }
-  br++;
-  note(wsb,br,W,`The institution charges its indirect rate on the first ${capText(R)} of each subaward over the life of the project. The rest of each subaward is a direct cost outside the indirect base. The indirect line above shows the share of the budget's indirect costs that comes from each subaward.`,subW.reduce((s,w)=>s+w,0));
-
-  /* ---------- Rates & Tuition ---------- */
-  const wr=sheet('Rates & Tuition',6,[34,26,18,20,18,20],false);
-  let rr=6;
-  sectionLabel(wr,rr++,6,'Tuition and health insurance by academic year');
-  head(wr,rr,['Academic year','Period','Tuition per month','Health insurance per month','Tuition per year','Health insurance per year']); rr++;
-  const rf=['center','text',USDc,USDc,USD,USD];
-  (T.years||[]).filter(y=>num(y.ay)).sort((a,b)=>num(a.ay)-num(b.ay)).forEach((y,i)=>{
-    const ay=num(y.ay);
-    put(wr,rr,[`${ay}–${String(ay+1).slice(2)}`,`9/1/${ay} – 8/31/${ay+1}`,num(y.tuition),num(y.insurance),{formula:`C${rr}*12`,result:num(y.tuition)*12},{formula:`D${rr}*12`,result:num(y.insurance)*12}]);
-    body(wr,rr,6,rf,i%2===1); rr++;
-  });
-  const kv2=(l,v,fmt,bold)=>{ put(wr,rr,[l,v]); body(wr,rr,2,['text',fmt||'text'],false,bold?{bold:true}:null); wr.getCell(rr,2).alignment={horizontal:'right'}; return rr++; };
-  kv2('Escalation for years past the table',num(T.esc)/100,PCT);
-  rr++;
-  sectionLabel(wr,rr++,6,'GRA international fees per year');
-  const fa=kv2('Fall',num(T.intl.fall),USD); kv2('Spring',num(T.intl.spring),USD); const fc=kv2('Summer',num(T.intl.summer),USD);
-  kv2('Total per year',{formula:`SUM(B${fa}:B${fc})`,result:num(T.intl.fall)+num(T.intl.spring)+num(T.intl.summer)},USD,true);
-  rr++;
-  sectionLabel(wr,rr++,6,'GRA hours');
-  const hy=kv2('Hours per year at 100%',num(T.hours.year),HRS);
-  kv2('Hours per month at 100%',{formula:`B${hy}/12`,result:num(T.hours.year)/12},'#,##0.00');
-  kv2('Hours per year at 50%',{formula:`B${hy}/2`,result:num(T.hours.year)/2},HRS);
-
-  /* ---------- Tuition Grid ---------- */
-  const ays=(T.years||[]).map(y=>num(y.ay)).filter(Boolean);
-  if(ays.length){
-    const gw=[12,12,...Array(12).fill(11)];
-    const wg=sheet('Tuition Grid',14,gw);
-    let gr=6;
-    note(wg,gr,14,'Cost of 12 months for a student who starts in the given month. Months that straddle September 1 blend two academic-year rates.',gw.reduce((s,w)=>s+w,0)); gr+=2;
-    head(wg,gr,['Calendar year','',...MON.map(m=>m.toUpperCase())],22); gr++;
-    const a=Math.min(...ays), b=Math.max(...ays);
-    for(let Y=a;Y<=b;Y++){
-      const r1=wg.getRow(gr), r3=wg.getRow(gr+1);
-      r1.getCell(1).value=Y; r1.getCell(2).value='Tuition'; r3.getCell(2).value='Insurance';
-      for(let M=0;M<12;M++){
-        const show=!(Y===a&&M<8)&&!(Y===b&&M>8);
-        const c1=r1.getCell(3+M), c2=r3.getCell(3+M);
-        if(show){ c1.value=Math.round(twelveMonthCost(T,Y,M,'tuition')); c2.value=Math.round(twelveMonthCost(T,Y,M,'insurance')); }
-        else { c1.fill=solid(K.soft); c2.fill=solid(K.soft); }
-        c1.numFmt=USD; c2.numFmt=USD;
-        c1.font=font({size:10.5,color:{argb:K.input}}); c2.font=font({size:10.5,italic:true,color:{argb:'FFB0306A'}});
-        c1.border=box(); c2.border=box();
-      }
-      r1.getCell(1).font=font({bold:true}); r1.getCell(2).font=font({size:10,color:{argb:K.input},bold:true}); r3.getCell(2).font=font({size:10,italic:true,color:{argb:'FFB0306A'},bold:true});
-      for(const c of [r1.getCell(1),r1.getCell(2),r3.getCell(1),r3.getCell(2)]) c.border=box();
-      gr+=2;
-    }
-  }
   return wb;
 }
 /*ENGINE-END*/
@@ -1659,7 +1912,7 @@ function F(o){
     control=`<textarea id="${id}" data-bind="${o.bind}" data-kind="text" rows="3" placeholder="${esc(o.ph||'')}">${esc(v)}</textarea>`;
   }else{
     const type=kind==='date'?'date':(kind==='url'?'url':'text');
-    control=`<input id="${id}" data-bind="${o.bind}" data-kind="${kind}" type="${type}"${isNumKind(kind)?' inputmode="decimal" class="n"':''} value="${esc(fmtIn(v,kind))}" placeholder="${esc(o.ph||'')}"${o.structural?' data-structural="1"':''}${o.req?' aria-required="true"':''} autocomplete="off" spellcheck="${kind==='text'?'true':'false'}">`;
+    control=`<input id="${id}" data-bind="${o.bind}" data-kind="${kind}" type="${type}"${type==='date'?' title="Pick, type or paste a date, such as 06/04/2027"':''}${isNumKind(kind)?' inputmode="decimal" class="n"':''} value="${esc(fmtIn(v,kind))}" placeholder="${esc(o.ph||'')}"${o.structural?' data-structural="1"':''}${o.req?' aria-required="true"':''} autocomplete="off" spellcheck="${kind==='text'?'true':'false'}">`;
   }
   const pre=kind==='money'?'$':(o.pre||''); const suf=kind==='pct'?'%':(o.suf||'');
   return `<div class="fld${o.wide?' wide':''}${o.span2?' span2':''}" data-fld="${o.bind}"><label class="fld-l" for="${id}">${esc(o.label)}${o.req?'<span class="req">required</span>':''}</label><div class="inp${o.options?' sel':''}">${pre?`<span class="pre">${pre}</span>`:''}${control}${suf?`<span class="suf">${suf}</span>`:''}</div>${o.hint?`<p class="fld-h">${o.hint}</p>`:''}</div>`;
@@ -1779,7 +2032,7 @@ info(){
   </div>
   <a class="quote-link" data-href="info.solicitationUrl" href="#" target="_blank" rel="noopener" hidden>Open the solicitation ↗</a>
   <div class="grp"><h3 class="grp-h">Project period & escalation</h3><div class="fgrid">
-    ${F({label:'Project start date',bind:'info.startDate',kind:'date',req:1,structural:1})}
+    ${F({label:'Project start date',bind:'info.startDate',kind:'date',req:1,structural:1,hint:'Pick from the calendar, type, or paste a date such as 06/04/2027.'})}
     ${F({label:'Project end date',bind:'info.endDate',kind:'date',req:1,structural:1})}
     ${F({label:'Salary escalation per year',bind:'rates.salaryEsc',kind:'pct',hint:'Faculty and postdocs. Applied each fiscal year start.'})}
     ${F({label:'Student escalation per year',bind:'rates.studentEsc',kind:'pct',hint:'Stipends and hourly wages, same timing'})}
@@ -1955,7 +2208,7 @@ function tripCard(i,t){
   <div class="fgrid c4 mt">${F({label:'Budget year',bind:`travel.${i}.year`,options:yearOpts(t.year)})}${F({label:'Trips per year',bind:`travel.${i}.count`,kind:'int'})}${F({label:'Travelers per trip',bind:`travel.${i}.travelers`,kind:'int'})}${F({label:'Days per trip',bind:`travel.${i}.days`,kind:'int'})}</div>
   <div class="fgrid c4 mt">${F({label:'Registration per person',bind:`travel.${i}.reg`,kind:'money'})}${F({label:'Meals per day',bind:`travel.${i}.mealDay`,kind:'money'})}${F({label:'Meals, first & last day',bind:`travel.${i}.mealFL`,kind:'money'})}${F({label:'Hotel per night',bind:`travel.${i}.hotel`,kind:'money'})}</div>
   <div class="fgrid c4 mt">${F({label:'Hotel nights',bind:`travel.${i}.nights`,kind:'int',ph:`Auto: ${Math.max(num(t.days)-1,0)}`,hint:'Days minus one. The checkout day is not a night.'})}${F({label:'Airfare per person',bind:`travel.${i}.flight`,kind:'money'})}${F({label:'Ground transport per person',bind:`travel.${i}.ground`,kind:'money'})}${F({label:'Miscellaneous per person',bind:`travel.${i}.misc`,kind:'money'})}</div>
-  <div class="fgrid c4 mt">${F({label:'Ground transport charged',bind:`travel.${i}.groundBasis`,options:[['day','Per day of travel'],['trip','Once per trip']]})}${F({label:'Registration budgeted under',bind:`travel.${i}.regTo`,options:[['travel','Travel'],['other','Other direct costs'],['none','Not budgeted']],hint:'The UAH travel worksheet lists registration but leaves it out of TOTAL TRIP. Pick Not budgeted to match it.'})}</div>
+  <div class="fgrid c4 mt">${F({label:'Ground transport charged',bind:`travel.${i}.groundBasis`,options:[['day','Per day of travel'],['trip','Once per trip']]})}${F({label:'Registration charged to',bind:`travel.${i}.regTo`,options:[['travel','Travel'],['other','Other direct costs'],['none','Not budgeted']],hint:'The UAH travel worksheet lists registration but leaves it out of TOTAL TRIP. Pick Not budgeted to match it.'})}</div>
   <div class="grid-wrap"><table class="eg tb"><thead><tr><th scope="col">Cost item</th><th scope="col">Per traveler</th><th scope="col">Travelers</th><th scope="col">Trip total</th></tr></thead><tbody>
   ${[['air','Airfare'],['lodge','Lodging'],['mfull','Meals, full days'],['mfl','Meals, first & last day'],['ground','Ground transport'],['reg','Registration'],['misc','Miscellaneous']].map(([k,l])=>`<tr><th scope="row">${l}<span class="yd" data-out="travel.${i}.${k}.lbl" data-fmt="text"></span></th><td data-out="travel.${i}.${k}.pp" data-fmt="money2"></td><td data-out="travel.${i}.n" data-fmt="hrs"></td><td data-out="travel.${i}.${k}.trip" data-fmt="money2"></td></tr>`).join('')}
   <tr class="o tot"><th scope="row">Trip total</th><td data-out="travel.${i}.pp" data-fmt="money2"></td><td data-out="travel.${i}.n" data-fmt="hrs"></td><td data-out="travel.${i}.trip" data-fmt="money2"></td></tr>
@@ -2111,7 +2364,18 @@ function recompute(){
   $('#navTotal').textContent=money(sumArr(R.total));
   scheduleSave();
 }
-function renderPanel(i){ slides[i].querySelector('.panel').innerHTML=RENDER[STEPS[i].id](); }
+function renderPanel(i){ slides[i].querySelector('.panel').innerHTML=RENDER[STEPS[i].id](); alignLabels(slides[i]); }
+/* Labels that wrap to two lines push their box down. Give the labels in one grid row the same height so the boxes line up. */
+function alignLabels(root){
+  const grids=[]; (root?[root]:slides).forEach(sl=>sl.querySelectorAll('.fgrid').forEach(g=>grids.push(g)));
+  const sets=grids.map(g=>[...g.children].filter(c=>c.classList.contains('fld')).map(f=>({f,l:f.querySelector(':scope>.fld-l')})).filter(x=>x.l));
+  sets.forEach(set=>set.forEach(x=>{ x.l.style.minHeight=''; }));
+  const plan=[];
+  sets.forEach(set=>{ const rows=new Map();
+    set.forEach(x=>{ const t=Math.round(x.f.offsetTop); if(!rows.has(t)) rows.set(t,[]); rows.get(t).push({l:x.l,h:x.l.getBoundingClientRect().height}); });
+    rows.forEach(r=>{ if(r.length<2) return; const h=Math.max(...r.map(o=>o.h)); r.forEach(o=>{ if(o.h<h-0.5) plan.push([o.l,h]); }); }); });
+  plan.forEach(([l,h])=>{ l.style.minHeight=h+'px'; });
+}
 function renderAll(except){ STEPS.forEach((s,i)=>{ if(i!==except) renderPanel(i); }); recompute(); if(step===0) startCore(); }
 
 /* ---------- navigation ---------- */
@@ -2195,6 +2459,32 @@ function applyBind(el){
   if(path.startsWith('rates.')) rememberRates();
   recompute();
 }
+/* Read a pasted date: 06/04/2027, 6/4/27, 2027-06-04, 06-04-2027, 06.04.2027, 20270604, June 4, 2027, 4 Jun 2027.
+   Slashed dates are month first, as in the US. A trailing time such as "0:00" (copied from Excel) is ignored. */
+function parseDateText(txt){
+  let t=String(txt||'').trim().replace(/\s+/g,' ');
+  t=t.replace(/[ T]\d{1,2}:\d{2}(:\d{2}(\.\d+)?)?( ?[AaPp]\.?[Mm]\.?)?Z?$/,'').trim();
+  const MONS=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+  const mon=w=>{ const k=MONS.indexOf(String(w).toLowerCase().slice(0,3)); return k<0?0:k+1; };
+  let y,m,d,x;
+  if((x=/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4}|\d{2})$/.exec(t))){ m=+x[1]; d=+x[2]; y=+x[3]; if(x[3].length===2) y+=2000; }
+  else if((x=/^(\d{4})[\/.\-](\d{1,2})[\/.\-](\d{1,2})$/.exec(t))){ y=+x[1]; m=+x[2]; d=+x[3]; }
+  else if((x=/^(\d{8})$/.exec(t))){ const s8=x[1]; if(/^(19|20|21)/.test(s8)&&+s8.slice(4,6)<=12){ y=+s8.slice(0,4); m=+s8.slice(4,6); d=+s8.slice(6); } else { m=+s8.slice(0,2); d=+s8.slice(2,4); y=+s8.slice(4); } }
+  else if((x=/^(?:[A-Za-z]+,? )?([A-Za-z]{3,9})\.? (\d{1,2})(?:st|nd|rd|th)?,? (\d{4})$/.exec(t))){ m=mon(x[1]); d=+x[2]; y=+x[3]; }
+  else if((x=/^(\d{1,2}) ([A-Za-z]{3,9})\.?,? (\d{4})$/.exec(t))){ d=+x[1]; m=mon(x[2]); y=+x[3]; }
+  else return null;
+  if(!(y>=1900&&y<=2200&&m>=1&&m<=12&&d>=1)) return null;
+  if(d>new Date(Date.UTC(y,m,0)).getUTCDate()) return null;
+  return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+document.addEventListener('paste',e=>{
+  const el=e.target; if(!(el instanceof HTMLInputElement)||el.type!=='date'||el.disabled||el.readOnly) return;
+  const txt=(e.clipboardData&&e.clipboardData.getData('text'))||''; e.preventDefault();
+  const iso=parseDateText(txt);
+  if(!iso){ toast(`Couldn't read "${txt.trim().slice(0,40)}" as a date. Paste it as MM/DD/YYYY, for example 06/04/2027.`); return; }
+  el.value=iso;
+  el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));
+});
 document.addEventListener('input',e=>{
   const el=e.target; if(!el.dataset||!el.dataset.bind) return;
   if(el.type==='checkbox'||el.tagName==='SELECT') return;
@@ -2399,7 +2689,9 @@ function boot(hot){
   renderAll();
   goTo(step,{instant:true});
   paintSaveState();
-  window.addEventListener('resize',()=>{ syncHeight(); if(step===0) startCore(); });
+  let alignT=0;
+  window.addEventListener('resize',()=>{ alignLabels(slides[step]); syncHeight(); if(step===0) startCore(); clearTimeout(alignT); alignT=setTimeout(()=>alignLabels(),200); });
+  if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{ alignLabels(); syncHeight(); });
   if(window.claude&&window.claude.hot&&window.claude.hot.snapshot) window.claude.hot.snapshot(()=>({store:JSON.parse(JSON.stringify(store)),step}));
 }
 if(window.claude&&window.claude.hot&&window.claude.hot.ready) window.claude.hot.ready(boot); else boot((window.claude&&window.claude.hot&&window.claude.hot.data)||{});
