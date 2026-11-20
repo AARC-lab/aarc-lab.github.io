@@ -656,7 +656,7 @@ function fyRange(fy,fs0){ const s=Date.UTC(fs0===0?fy:fy-1,fs0,1); const e=Date.
    GRA fringe 1.8% on the stipend only, no escalation on student pay. Faculty fringe 33.5%, and 1.405 converts a 9-month salary to a 12-month rate. */
 function defaultRates(){ return {fringe:33.5,postdocFringe:'',stuFringe:1.8,stuFringeTuition:false,stuFringeIns:false,stuFringeIntl:false,fyStart:10,baseFY:currentFY(9),idc:48,salaryEsc:3,studentEsc:0,equipThreshold:5000,equipCompare:'gte',subCap:25000,exclInsurance:false,exclIntl:false,
   springStartM:1,springStartD:10,summerStartM:5,summerStartD:8,summerEndM:8,summerEndD:18,terms:JSON.parse(JSON.stringify(UAH_TERMS)),quarterMonths:true,summerBasis:'template',
-  facMethod:'ninth',facFactor:1.405,uah:5}; }
+  facMethod:'ninth',facFactor:1.405,pdFactor:1.2,pdHours:1733,uah:5}; }
 function defaultDates(){
   const now=new Date(); const s=Date.UTC(now.getFullYear(),now.getMonth()+8,1); const e=addMonthsUTC(s,36)-DAY;
   const iso=t=>new Date(t).toISOString().slice(0,10);
@@ -801,6 +801,8 @@ function facText(r){
   if(m==='acad') return 'every month of academic or summer effort is paid at base ÷ the number of academic months.';
   return 'academic effort is charged against the full base salary and summer pay is one-ninth of base per summer month.';
 }
+function pdAdj(r){ return blankOr(r.pdFactor,1)*blankOr(r.pdHours,2080)/2080; }
+function pdText(r){ const f=blankOr(r.pdFactor,1), h=blankOr(r.pdHours,2080); return Math.abs(f*h/2080-1)<1e-12&&f===1?'Postdocs are paid base ÷ 12 per month.':`Postdocs are paid salary × ${+f.toFixed(4)} ÷ 2,080 an hour for ${h.toLocaleString('en-US')} hours a year, ${(f*h/2080*100).toFixed(3)}% of the salary.`; }
 function equipRuleText(r){ return `Unit cost ${r.equipCompare==='gt'?'above':'of'} ${usd(r.equipThreshold)}${r.equipCompare==='gt'?'':' or more'}`; }
 
 function calc(P){
@@ -841,7 +843,8 @@ function calc(P){
   /* 9-month appointments: academic effort is charged against the full base salary, spread over the academic months.
      Summer pay uses base ÷ 9 per summer month (or base ÷ academic months if that option is chosen).
      12-month appointments: base ÷ 12 for every calendar month. */
-  const people=(list,key,cat,divFn,frFn,nameFn,roleFn)=>{
+  const people=(list,key,cat,divFn,frFn,nameFn,roleFn,adj)=>{
+    adj=adj||1;
     (list||[]).forEach((p,i)=>{
       const fr=frFn(p); let tot=0, anyEff=false, over=false; const yrs=[];
       const nine=divFn(p)!==12;
@@ -855,7 +858,7 @@ function calc(P){
         let acad=0, cap=0, pmA=0, capMo=0;
         segs[k].forEach(g=>{
           const b=num(p.salary)*gSal(g.y,g.m);
-          let moA=b/12, moS=b/12;
+          let moA=b/12*adj, moS=b/12*adj;
           if(nine){
             if(meth==='ninth'){ moA=b*fac/12; moS=moA; }
             else if(meth==='acad'){ moA=b/acMo; moS=moA; }
@@ -894,7 +897,8 @@ function calc(P){
     });
   };
   people(P.senior,'senior','senior',p=>(+p.appt===12?12:9),p=>blankOr(p.fringe,num(r.fringe))/100,(p,i)=>i===0?info.pi:p.name,(p,i)=>i===0?'PI':roleLabel(p.role));
-  people(P.postdocs,'postdocs','postdoc',()=>12,p=>blankOr(p.fringe,fPD*100)/100,p=>p.name||'Postdoc',()=>'Postdoc');
+  /* UAH budgets a postdoc at salary × 1.2 ÷ 2,080 an hour for 1,733 hours a year (2,080 × 10/12, rounded down). */
+  people(P.postdocs,'postdocs','postdoc',()=>12,p=>blankOr(p.fringe,fPD*100)/100,p=>p.name||'Postdoc',()=>'Postdoc',pdAdj(r));
 
   const hrsMo=num((T.hours||{}).year||1040)/12;
   (P.grads||[]).forEach((g,i)=>{
@@ -1122,7 +1126,7 @@ function assumptions(P,R){
       ?`Summer runs from each year's summer start date to the day before fall starts, from the term calendar on the Rates step${R.cal.length?` (${R.cal.map(c=>`${c.y}: ${d(c.summer)} – ${d(c.fall-DAY)}`).join('; ')})`:''}.`
       :`Summer follows the UAH budget template: May 8 to Aug 23 every year, 3.5 months. In a June-start year that is 2.75 summer months before the October 1 raise and 0.75 after it.`)
       +` ${r.quarterMonths!==false?'Summer and academic months in each budget year are counted to the nearest quarter month, as in the UAH budget template.':'Partial months count in half-month steps.'}`,
-    `For 9-month appointments, ${facText(r)} 12-month appointments use base ÷ 12 for every month.`,
+    `For 9-month appointments, ${facText(r)} 12-month appointments use base ÷ 12 for every month. ${pdText(r)}`,
     `Base salaries, stipends and hourly rates are FY${R.baseFY} figures. On ${MONTHS_FULL[R.fs0]} 1 each year, when the fiscal year begins, faculty and postdoc salaries rise ${pctText(r.salaryEsc)} and student stipends and wages rise ${pctText(r.studentEsc)}.`,
     `Fringe benefits are ${pctText(r.fringe)} on faculty and senior personnel and ${pctText(blankOr(r.postdocFringe,num(r.fringe)))} on postdocs unless a person carries an override. Graduate stipends and undergraduate pay carry ${pctText(r.stuFringe)} fringe${stuFringeExtras(r).length?`, and so do GRA ${stuFringeExtras(r).join(' and ')}`:'. GRA tuition, health insurance and international fees carry none'}.`,
     `Tuition and GRA health insurance use monthly rates by academic year, with each academic year starting September 1. They're charged for months a student holds an appointment. Years past the rate table rise ${pctText(T.esc)} per year.`,
@@ -1327,6 +1331,8 @@ function buildWorkbook(ExcelJS,P,R){
   kv('Raises take effect',`${MONTHS_FULL[fs0]} 1 each year (fiscal year start). Base figures are ${fyB}.`);
   kv('Pay rate, 9-month appointments',facText(r).replace(/^./,c=>c.toUpperCase()));
   kv('Salary factor, 9-month to 12-month rate',num(r.facFactor)||12/9,FAC,'Factor9to12',true);
+  kv('Postdoc salary factor (hourly rate = salary × factor ÷ 2,080)',blankOr(r.pdFactor,1),FAC,'PostdocFactor',true);
+  kv('Postdoc hours per year',blankOr(r.pdHours,2080),HRS,'PostdocHours',true);
   kv('Equipment rule',equipRuleText(r));
   const capFinite=isFinite(R.subCap);
   if(capFinite) kv('Subaward amount in the indirect base (first $ of each subaward)',R.subCap,USD,'SubawardCap',true);
@@ -1397,8 +1403,8 @@ function buildWorkbook(ExcelJS,P,R){
       const c=key=>`${pcol[key]}${rw}`;
       const baseRef=k===0?null:`$${pcol.base}$${a}`;
       /* Monthly pay at 100% effort in each fiscal-year part. */
-      const payExpr=s=>nine?(meth==='ninth'?`${c('base')}*Factor9to12/12${esc('SalaryEscalation',s)}`:`${c('base')}/${fx(acMo)}${esc('SalaryEscalation',s)}`):`${c('base')}/12${esc('SalaryEscalation',s)}`;
-      const payVal=s=>{ const b=x.salary*Math.pow(salG,s); return nine?(meth==='ninth'?b*facV/12:b/acMo):b/12; };
+      const payExpr=s=>nine?(meth==='ninth'?`${c('base')}*Factor9to12/12${esc('SalaryEscalation',s)}`:`${c('base')}/${fx(acMo)}${esc('SalaryEscalation',s)}`):(isPD?`${c('base')}*PostdocFactor/2080*PostdocHours/12${esc('SalaryEscalation',s)}`:`${c('base')}/12${esc('SalaryEscalation',s)}`);
+      const payVal=s=>{ const b=x.salary*Math.pow(salG,s); return nine?(meth==='ninth'?b*facV/12:b/acMo):(isPD?b/12*pdAdj(r):b/12); };
       const sumPayExpr=(g,s)=>split?`${c('base')}/9${esc('SalaryEscalation',s)}`:c('mp'+g);
       const sumPayVal=s=>split?x.salary*Math.pow(salG,s)/9:payVal(s);
       const eA=y.a/100, eS=y.s/100;
@@ -1443,7 +1449,7 @@ function buildWorkbook(ExcelJS,P,R){
   }
   if(people.length){
     pr++;
-    note(wp,pr,pc.length,`Blue cells are inputs. Months come from the budget calendar (${r.summerBasis==='calendar'?'term dates':'UAH template: summer May 8 – Aug 23'}), split at the ${MONTHS_FULL[fs0]} 1 raise. Monthly pay at 100% is ${meth==='ninth'?'the 9-month base × Factor9to12 ÷ 12':'the base ÷ the academic months'} for 9-month appointments and base ÷ 12 for 12-month appointments, raised by SalaryEscalation once per fiscal year after ${fyB}. Salary = monthly pay × months × effort. Salary + fringe is rounded as one figure, so fringe = ROUND(salary before rounding × (1 + fringe rate)) − salary requested.${anyAmt?' Where a salary amount was entered, summer effort is solved from it.':''} Rates live on the Budget Summary sheet.`,pc.reduce((s,c)=>s+c.width,0)); pr++;
+    note(wp,pr,pc.length,`Blue cells are inputs. Months come from the budget calendar (${r.summerBasis==='calendar'?'term dates':'UAH template: summer May 8 – Aug 23'}), split at the ${MONTHS_FULL[fs0]} 1 raise. Monthly pay at 100% is ${meth==='ninth'?'the 9-month base × Factor9to12 ÷ 12':'the base ÷ the academic months'} for 9-month appointments, base ÷ 12 for 12-month appointments and base × PostdocFactor ÷ 2,080 × PostdocHours ÷ 12 for postdocs, raised by SalaryEscalation once per fiscal year after ${fyB}. Salary = monthly pay × months × effort. Salary + fringe is rounded as one figure, so fringe = ROUND(salary before rounding × (1 + fringe rate)) − salary requested.${anyAmt?' Where a salary amount was entered, summer effort is solved from it.':''} Rates live on the Budget Summary sheet.`,pc.reduce((s,c)=>s+c.width,0)); pr++;
   }
 
   /* ---------- Students ---------- */
@@ -1894,7 +1900,7 @@ function freshProposal(){
   return normalize(blankProposal({rates:rd,tuition:store.tuitionDefaultV>=4?store.tuitionDefault:null})); }
 function applyUAH(){
   const d=defaultRates();
-  ['fringe','postdocFringe','stuFringe','stuFringeTuition','stuFringeIns','stuFringeIntl','fyStart','idc','salaryEsc','studentEsc','equipThreshold','equipCompare','subCap','springStartM','springStartD','summerStartM','summerStartD','summerEndM','summerEndD','terms','quarterMonths','summerBasis','exclInsurance','exclIntl','facMethod','facFactor','uah'].forEach(k=>{ P.rates[k]=d[k]; });
+  ['fringe','postdocFringe','stuFringe','stuFringeTuition','stuFringeIns','stuFringeIntl','fyStart','idc','salaryEsc','studentEsc','equipThreshold','equipCompare','subCap','springStartM','springStartD','summerStartM','summerStartD','summerEndM','summerEndD','terms','quarterMonths','summerBasis','exclInsurance','exclIntl','facMethod','facFactor','pdFactor','pdHours','uah'].forEach(k=>{ P.rates[k]=d[k]; });
   P.tuition=defaultTuition();
   rememberRates(); rememberTuition();
 }
@@ -2070,6 +2076,10 @@ rates(){
     ${F({label:'Monthly rate, 9-month appointments',bind:'rates.facMethod',options:[['ninth','Base × factor ÷ 12, every month (UAH template)'],['split','Full base over the academic months, base ÷ 9 in summer'],['acad','Base ÷ academic months, every month']],rerender:1,hint:'Applies to academic and summer effort for faculty on 9-month appointments.'})}
     ${(P.rates.facMethod||'ninth')==='ninth'?F({label:'9-month to 12-month factor',bind:'rates.facFactor',kind:'num',hint:'UAH converts a 9-month salary to a 12-month rate with 1.405. Salaries on the PI step are 9-month salaries.'}):''}
   </div></div>
+  <div class="grp"><h3 class="grp-h">Postdoc pay</h3><div class="fgrid">
+    ${F({label:'Postdoc salary factor',bind:'rates.pdFactor',kind:'num',ph:'1',hint:'Hourly rate = salary × factor ÷ 2,080. UAH uses 1.2.'})}
+    ${F({label:'Postdoc hours per year',bind:'rates.pdHours',kind:'num',ph:'2,080',hint:'UAH uses 1,733. Set the factor to 1 and hours to 2,080 to pay salary ÷ 12 a month.'})}
+  </div><p class="fld-h" data-live="pdnote" style="margin-top:8px"></p></div>
   <div class="grp"><h3 class="grp-h">Equipment rule</h3>${equipRuleFields('r')}</div>
   <div class="grp"><h3 class="grp-h">Subawards</h3><div class="fgrid">
     ${F({label:'Subaward amount in the indirect base',bind:'rates.subCap',kind:'money',ph:'No limit',hint:'Your institution charges its indirect rate on this much of each subaward over the whole project. The 2024 Uniform Guidance raised it to $50,000. Older rate agreements use $25,000.'})}
@@ -2246,6 +2256,7 @@ function equipRuleFields(prefix){
 /* ---------- live regions ---------- */
 function summaryRows(R){ return summaryModel(P,R); }
 const LIVE={
+pdnote(R){ const a=pdAdj(P.rates); return `${pdText(P.rates)} A $60,000 postdoc is budgeted at $${(60000*a).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} a year before raises.`; },
 ledger(R){
   const tot=sumArr(R.total), tdc=sumArr(R.tdc), idc=sumArr(R.idc);
   const max=Math.max(1,...R.total);
